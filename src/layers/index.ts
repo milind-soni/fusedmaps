@@ -1,0 +1,147 @@
+/**
+ * Layer management - add, remove, toggle visibility
+ */
+
+import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, RasterLayerConfig, FusedMapsConfig } from '../types';
+import { hexToGeoJSON, addStaticHexLayer, setHexLayerVisibility } from './hex';
+import { addVectorLayer, addMVTLayer, setVectorLayerVisibility } from './vector';
+import { addRasterLayer, setRasterLayerVisibility } from './raster';
+
+// Store computed GeoJSONs for legend/tooltip access
+const layerGeoJSONs: Record<string, GeoJSON.FeatureCollection> = {};
+
+/**
+ * Get all computed layer GeoJSONs
+ */
+export function getLayerGeoJSONs(): Record<string, GeoJSON.FeatureCollection> {
+  return layerGeoJSONs;
+}
+
+/**
+ * Add all layers to the map
+ */
+export function addAllLayers(
+  map: mapboxgl.Map,
+  layers: LayerConfig[],
+  visibilityState: Record<string, boolean>,
+  config: FusedMapsConfig
+): { deckOverlay: unknown } {
+  // Clear existing layers
+  removeAllLayers(map, layers);
+  
+  // Process layers in reverse order (top of menu renders on top)
+  const renderOrder = [...layers].reverse();
+  
+  renderOrder.forEach(layer => {
+    const visible = visibilityState[layer.id] !== false;
+    
+    switch (layer.layerType) {
+      case 'hex': {
+        const hexLayer = layer as HexLayerConfig;
+        if (hexLayer.isTileLayer) {
+          // Tile layers are handled by Deck.gl overlay
+          // Skip here - they'll be set up separately
+        } else if (hexLayer.data?.length) {
+          // Convert hex data to GeoJSON
+          const geojson = hexToGeoJSON(hexLayer.data);
+          layerGeoJSONs[layer.id] = geojson;
+          addStaticHexLayer(map, hexLayer, geojson, visible);
+        }
+        break;
+      }
+      
+      case 'vector': {
+        const vectorLayer = layer as VectorLayerConfig;
+        if (vectorLayer.geojson) {
+          layerGeoJSONs[layer.id] = vectorLayer.geojson;
+          addVectorLayer(map, vectorLayer, visible);
+        }
+        break;
+      }
+      
+      case 'mvt': {
+        const mvtLayer = layer as MVTLayerConfig;
+        addMVTLayer(map, mvtLayer, visible);
+        break;
+      }
+      
+      case 'raster': {
+        const rasterLayer = layer as RasterLayerConfig;
+        addRasterLayer(map, rasterLayer, visible);
+        break;
+      }
+    }
+  });
+  
+  // TODO: Set up Deck.gl overlay for tile layers
+  const deckOverlay = null;
+  
+  return { deckOverlay };
+}
+
+/**
+ * Remove all layers from the map
+ */
+function removeAllLayers(map: mapboxgl.Map, layers: LayerConfig[]): void {
+  layers.forEach(layer => {
+    const layerIds = [
+      `${layer.id}-fill`,
+      `${layer.id}-extrusion`,
+      `${layer.id}-outline`,
+      `${layer.id}-circle`,
+      `${layer.id}-line`,
+      `${layer.id}-raster`
+    ];
+    
+    layerIds.forEach(id => {
+      try {
+        if (map.getLayer(id)) map.removeLayer(id);
+      } catch (e) {}
+    });
+    
+    try {
+      if (map.getSource(layer.id)) map.removeSource(layer.id);
+    } catch (e) {}
+  });
+}
+
+/**
+ * Set visibility for a single layer
+ */
+export function setLayerVisibility(
+  map: mapboxgl.Map,
+  layerId: string,
+  visible: boolean,
+  layers: LayerConfig[],
+  deckOverlay: unknown
+): void {
+  const layer = layers.find(l => l.id === layerId);
+  if (!layer) return;
+  
+  switch (layer.layerType) {
+    case 'hex': {
+      const hexLayer = layer as HexLayerConfig;
+      if (hexLayer.isTileLayer) {
+        // TODO: Handle Deck.gl tile layer visibility
+      } else {
+        setHexLayerVisibility(map, layerId, visible, hexLayer.hexLayer?.extruded === true);
+      }
+      break;
+    }
+    
+    case 'vector':
+    case 'mvt':
+      setVectorLayerVisibility(map, layerId, visible);
+      break;
+    
+    case 'raster':
+      setRasterLayerVisibility(map, layerId, visible);
+      break;
+  }
+}
+
+// Re-export layer utilities
+export * from './hex';
+export * from './vector';
+export * from './raster';
+

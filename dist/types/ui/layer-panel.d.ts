@@ -1,5 +1,6 @@
 /**
  * Layer visibility toggle panel
+ * Matching the original map_utils.py design with eye icons and gradient strips
  */
 import type { LayerConfig } from '../types';
 type VisibilityCallback = (layerId: string, visible: boolean) => void;

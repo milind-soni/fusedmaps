@@ -25,6 +25,12 @@ const layerVisibilityState: Record<string, boolean> = {};
  */
 export function init(config: FusedMapsConfig): FusedMapsInstance {
   const containerId = config.containerId || 'map';
+
+  // Theme (match map_utils.py: <html data-theme="dark|light">)
+  try {
+    const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (_) {}
   
   // Initialize visibility state
   config.layers.forEach(layer => {

@@ -165,24 +165,36 @@ function getTooltipColumns(layer: LayerConfig): string[] {
  * Build tooltip HTML lines
  */
 function buildTooltipLines(props: Record<string, unknown>, cols: string[]): string[] {
+  const lines: string[] = [];
+
+  // Match map_utils.py behavior: show hex first if present (even when cols are provided)
+  if ((props as any).hex != null) {
+    lines.push(
+      `<span class="tt-row"><span class="tt-key">hex</span><span class="tt-val">${String((props as any).hex).slice(0, 12)}...</span></span>`
+    );
+  }
+
+  // If columns specified, render them (skipping hex)
   if (cols.length) {
-    return cols
-      .map(k => {
-        const val = props[k];
-        if (val == null) return '';
-        const formatted = typeof val === 'number' ? val.toFixed(2) : String(val);
-        return `<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${formatted}</span></span>`;
-      })
-      .filter(Boolean);
+    cols.forEach((k) => {
+      if (k === 'hex') return;
+      const val = (props as any)[k];
+      if (val == null) return;
+      const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+      lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${formatted}</span></span>`);
+    });
+    return lines;
   }
-  
-  // Default: show hex or first 5 properties
-  if (props.hex) {
-    return [`<span class="tt-row"><span class="tt-key">hex</span><span class="tt-val">${String(props.hex).slice(0, 12)}...</span></span>`];
+
+  // Default fallback: if we didn't add anything yet, show first 5 properties
+  if (lines.length === 0) {
+    Object.keys(props)
+      .slice(0, 5)
+      .forEach((k) => {
+        lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${(props as any)[k]}</span></span>`);
+      });
   }
-  
-  return Object.keys(props)
-    .slice(0, 5)
-    .map(k => `<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${props[k]}</span></span>`);
+
+  return lines;
 }
 

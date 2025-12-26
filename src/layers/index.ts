@@ -6,6 +6,7 @@ import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, Ra
 import { hexToGeoJSON, addStaticHexLayer, setHexLayerVisibility } from './hex';
 import { addVectorLayer, addMVTLayer, setVectorLayerVisibility } from './vector';
 import { addRasterLayer, setRasterLayerVisibility } from './raster';
+import { createHexTileOverlay } from './hex-tiles';
 
 // Store computed GeoJSONs for legend/tooltip access
 const layerGeoJSONs: Record<string, GeoJSON.FeatureCollection> = {};
@@ -73,8 +74,17 @@ export function addAllLayers(
     }
   });
   
-  // TODO: Set up Deck.gl overlay for tile layers
-  const deckOverlay = null;
+  // Set up Deck.gl overlay for hex tile layers (if any)
+  const hasHexTileLayers = layers.some(l => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl);
+  let deckOverlay: unknown = null;
+  if (hasHexTileLayers) {
+    const state = createHexTileOverlay(map, layers, visibilityState);
+    deckOverlay = state?.overlay || null;
+    if (deckOverlay && state) {
+      // Attach a small shim so visibility toggles can rebuild the overlay layers.
+      (deckOverlay as any).__fused_hex_tiles__ = state;
+    }
+  }
   
   return { deckOverlay };
 }
@@ -122,7 +132,11 @@ export function setLayerVisibility(
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
       if (hexLayer.isTileLayer) {
-        // TODO: Handle Deck.gl tile layer visibility
+        // Rebuild deck overlay layers so visibility takes effect
+        const state = (deckOverlay as any)?.__fused_hex_tiles__;
+        try {
+          state?.rebuild?.();
+        } catch (e) {}
       } else {
         setHexLayerVisibility(map, layerId, visible, hexLayer.hexLayer?.extruded === true);
       }

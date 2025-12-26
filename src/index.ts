@@ -53,10 +53,6 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     setupLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
   }
   
-  if (config.ui?.tooltip !== false) {
-    setupTooltip(map, config.layers, layerVisibilityState);
-  }
-  
   // Add layers when map loads
   map.on('load', () => {
     const result = addAllLayers(map, config.layers, layerVisibilityState, config);
@@ -65,6 +61,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // Update UI
     updateLayerPanel(config.layers, layerVisibilityState);
     updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+
+    // Setup tooltip (needs deckOverlay for tile layers)
+    if (config.ui?.tooltip !== false) {
+      setupTooltip(map, config.layers, layerVisibilityState, deckOverlay);
+    }
     
     // Setup interactions
     if (config.highlightOnClick !== false) {

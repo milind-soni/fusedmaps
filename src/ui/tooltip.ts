@@ -15,7 +15,8 @@ interface QueryableLayer {
 export function setupTooltip(
   map: mapboxgl.Map,
   layers: LayerConfig[],
-  visibilityState: Record<string, boolean>
+  visibilityState: Record<string, boolean>,
+  deckOverlay?: unknown
 ): void {
   // Create tooltip element if it doesn't exist
   let tt = document.getElementById('tooltip');
@@ -29,7 +30,7 @@ export function setupTooltip(
   const allQueryableLayers: QueryableLayer[] = [];
   
   layers.forEach(layer => {
-    // Skip tile layers (they're handled by Deck.gl)
+    // Skip tile layers for Mapbox querying (handled by Deck.gl pick)
     if ((layer as any).isTileLayer) return;
     
     const layerIds: string[] = [];
@@ -69,45 +70,68 @@ export function setupTooltip(
       .map(x => x.layerId)
       .filter(id => map.getLayer(id));
     
-    if (!queryIds.length) return;
-    
-    const features = map.queryRenderedFeatures(e.point, { layers: queryIds });
-    
-    if (!features?.length) {
-      tt!.style.display = 'none';
-      map.getCanvas().style.cursor = '';
-      return;
-    }
-    
-    // Find the top visible feature
-    let topFeature: any = null;
-    let topLayerDef: LayerConfig | null = null;
-    
-    for (const f of features) {
-      const match = allQueryableLayers.find(x => x.layerId === (f as any).layer?.id);
-      if (match && visibilityState[match.layerDef.id] !== false) {
-        topFeature = f;
-        topLayerDef = match.layerDef;
-        break;
+    const layerOrderIndex = (layerId: string) => {
+      const idx = layers.findIndex(l => l.id === layerId);
+      return idx === -1 ? Number.POSITIVE_INFINITY : idx;
+    };
+
+    let best: { type: 'mapbox' | 'deck'; layerDef: LayerConfig; props: Record<string, any> } | null = null;
+    let bestIdx = Number.POSITIVE_INFINITY;
+
+    // 1) Mapbox layers
+    if (queryIds.length) {
+      const features = map.queryRenderedFeatures(e.point, { layers: queryIds });
+      for (const f of features || []) {
+        const match = allQueryableLayers.find(x => x.layerId === (f as any).layer?.id);
+        if (!match) continue;
+        if (visibilityState[match.layerDef.id] === false) continue;
+        const idx = layerOrderIndex(match.layerDef.id);
+        if (idx < bestIdx) {
+          bestIdx = idx;
+          best = { type: 'mapbox', layerDef: match.layerDef, props: (f as any).properties || {} };
+        }
+        break; // queryRenderedFeatures returns in z-order; take first visible
       }
     }
-    
-    if (!topFeature || !topLayerDef) {
+
+    // 2) Deck tile layers
+    if (deckOverlay) {
+      const state = (deckOverlay as any).__fused_hex_tiles__;
+      const picker = state?.pickObject || (deckOverlay as any)?.pickObject;
+      try {
+        const info = picker?.({ x: e.point.x, y: e.point.y, radius: 4 });
+        if (info?.object) {
+          // Tile layer id looks like "<layerId>-tiles-..."; normalize
+          const rawLayerId = String(info.layer?.id || '');
+          const baseId = rawLayerId.includes('-tiles') ? rawLayerId.split('-tiles')[0] : rawLayerId;
+          const layerDef = layers.find(l => l.id === baseId);
+          if (layerDef && visibilityState[layerDef.id] !== false) {
+            const idx = layerOrderIndex(layerDef.id);
+            if (idx < bestIdx) {
+              bestIdx = idx;
+              best = { type: 'deck', layerDef, props: info.object.properties || info.object || {} };
+            }
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    if (!best) {
       tt!.style.display = 'none';
       map.getCanvas().style.cursor = '';
       return;
     }
-    
+
     map.getCanvas().style.cursor = 'pointer';
-    
+
     // Build tooltip content
-    const props = topFeature.properties || {};
-    const tooltipCols = getTooltipColumns(topLayerDef);
-    
-    const lines = buildTooltipLines(props, tooltipCols);
+    const tooltipCols = getTooltipColumns(best.layerDef);
+    const lines = buildTooltipLines(best.props, tooltipCols);
     
     if (lines.length) {
-      tt!.innerHTML = `<strong class="tt-title">${topLayerDef.name}</strong>` + lines.join('');
+      tt!.innerHTML = `<strong class="tt-title">${best.layerDef.name}</strong>` + lines.join('');
       tt!.style.left = `${e.point.x + 10}px`;
       tt!.style.top = `${e.point.y + 10}px`;
       tt!.style.display = 'block';

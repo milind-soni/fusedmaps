@@ -476,16 +476,20 @@ function buildHexTileDeckLayers(
   const H3HexagonLayer = deck.H3HexagonLayer || deck?.GeoLayers?.H3HexagonLayer;
   if (!TileLayer || !H3HexagonLayer) return [];
 
+  // IMPORTANT: Only include visible tile layers.
+  // Using `visible: false` on Deck layers can still leave stale tiles/picking artifacts in some setups.
+  // Filtering them out ensures the layer is truly removed from rendering + picking (matches map_utils.py).
   const tileLayers = layers
     .filter((l) => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl)
-    .map((l) => l as HexLayerConfig);
+    .map((l) => l as HexLayerConfig)
+    .filter((l) => visibility[l.id] !== false);
 
   // Reverse to keep UI order consistent (top of menu renders on top)
   return tileLayers
     .slice()
     .reverse()
     .map((layer) => {
-      const visible = visibility[layer.id] !== false;
+      const visible = true;
       const tileUrl = layer.tileUrl!;
       const tileCfg = getTileConfig(layer);
       const rawHexCfg: any = layer.hexLayer || {};

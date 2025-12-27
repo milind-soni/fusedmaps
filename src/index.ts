@@ -47,6 +47,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   
   // Deck.gl overlay (for tile layers)
   let deckOverlay: unknown = null;
+  let legendUpdateHandler: any = null;
   
   // Setup UI components
   if (config.ui?.layerPanel !== false) {
@@ -67,6 +68,14 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // Update UI
     updateLayerPanel(config.layers, layerVisibilityState);
     updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+
+    // Allow tile autoDomain to trigger legend refresh without tight coupling
+    legendUpdateHandler = () => {
+      updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+    };
+    try {
+      window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
+    } catch (_) {}
 
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
@@ -110,6 +119,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     },
     destroy: () => {
       // Cleanup
+      try {
+        // remove any overlay-specific listeners
+        (deckOverlay as any)?.__fused_hex_tiles__?.destroy?.();
+      } catch (_) {}
+      try {
+        if (legendUpdateHandler) {
+          window.removeEventListener('fusedmaps:legend:update', legendUpdateHandler);
+        }
+      } catch (_) {}
       map.remove?.();
     }
   };

@@ -19,12 +19,14 @@ export interface DeckTileOverlayState {
   overlay: any; // deck.MapboxOverlay instance
   rebuild: () => void;
   pickObject: (opts: { x: number; y: number; radius?: number }) => any;
+  destroy: () => void;
 }
 
 interface TileRuntime {
   cache: Map<string, any[]>;
   inflight: Map<string, Promise<any[] | null>>;
   tilesLoading: number;
+  tileStore: Record<string, Record<string, any[]>>; // layerId -> "z/x/y" -> rows
 }
 
 const DEFAULT_MAX_REQUESTS = 10;
@@ -236,8 +238,149 @@ function createTileRuntime(): TileRuntime {
   return {
     cache: new Map(),
     inflight: new Map(),
-    tilesLoading: 0
+    tilesLoading: 0,
+    tileStore: {}
   };
+}
+
+// --- AutoDomain (ported from map_utils.py; simplified to v1) ---
+const AUTO_DOMAIN_MAX_SAMPLES = 5000;
+const AUTO_DOMAIN_MIN_ZOOM = 10;
+const AUTO_DOMAIN_MIN_COUNT = 30;
+const AUTO_DOMAIN_PCT_LOW = 0.02;
+const AUTO_DOMAIN_PCT_HIGH = 0.98;
+const AUTO_DOMAIN_ZOOM_TOLERANCE = 1;
+const AUTO_DOMAIN_REBUILD_REL_TOL = 0.05;
+
+function tileToBounds(x: number, y: number, z: number) {
+  const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z);
+  const west = (x / Math.pow(2, z)) * 360 - 180;
+  const north = (180 / Math.PI) * Math.atan(Math.sinh(n));
+
+  const n2 = Math.PI - (2 * Math.PI * (y + 1)) / Math.pow(2, z);
+  const east = ((x + 1) / Math.pow(2, z)) * 360 - 180;
+  const south = (180 / Math.PI) * Math.atan(Math.sinh(n2));
+
+  return { west, south, east, north };
+}
+
+function boundsIntersect(a: any, b: any) {
+  return !(a.east < b.west || a.west > b.east || a.north < b.south || a.south > b.north);
+}
+
+function wantsAutoDomain(layer: HexLayerConfig): { enabled: boolean; attr: string | null } {
+  const fc: any = (layer.hexLayer as any)?.getFillColor;
+  if (!fc || typeof fc !== 'object' || Array.isArray(fc)) return { enabled: false, attr: null };
+  if (fc['@@function'] !== 'colorContinuous') return { enabled: false, attr: null };
+  const attr = fc.attr || null;
+  if (!attr) return { enabled: false, attr: null };
+  const hasDomain = Array.isArray(fc.domain) && fc.domain.length >= 2;
+  const enabled = fc.autoDomain === true || !hasDomain;
+  return { enabled, attr };
+}
+
+function calculateDomainFromTiles(
+  map: mapboxgl.Map,
+  runtime: TileRuntime,
+  layer: HexLayerConfig,
+  attr: string,
+  expectedZ: number
+): [number, number] | null {
+  // Only calculate when zoomed in enough
+  if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
+
+  const store = runtime.tileStore[layer.id];
+  if (!store) return null;
+
+  const b = map.getBounds();
+  const viewportBounds = {
+    west: b.getWest(),
+    east: b.getEast(),
+    south: b.getSouth(),
+    north: b.getNorth()
+  };
+
+  // First pass: count + collect viewport tiles
+  let totalCount = 0;
+  const viewportTiles: any[][] = [];
+
+  for (const [tileKey, rows] of Object.entries(store)) {
+    const [z, x, y] = tileKey.split('/').map(Number);
+    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+    // Only consider tiles near the current effective zoom (respect zoomOffset)
+    if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
+
+    const tb = tileToBounds(x, y, z);
+    if (!boundsIntersect(tb, viewportBounds)) continue;
+
+    viewportTiles.push(rows);
+    totalCount += rows.length;
+  }
+
+  if (totalCount < AUTO_DOMAIN_MIN_COUNT) return null;
+
+  // Deterministic stride sampling
+  const stride = Math.max(1, Math.floor(totalCount / AUTO_DOMAIN_MAX_SAMPLES));
+  const values: number[] = [];
+  let seen = 0;
+
+  for (const rows of viewportTiles) {
+    for (const item of rows) {
+      seen++;
+      if (stride > 1 && (seen % stride) !== 0) continue;
+
+      const p = item?.properties || item || {};
+      const raw = p[attr];
+      let v: number | null = null;
+      if (typeof raw === 'number') v = raw;
+      else if (typeof raw === 'string') {
+        const n = parseFloat(raw);
+        v = Number.isFinite(n) ? n : null;
+      }
+      if (v != null && Number.isFinite(v)) values.push(v);
+      if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
+    }
+    if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
+  }
+
+  if (values.length < AUTO_DOMAIN_MIN_COUNT) return null;
+
+  values.sort((a, b) => a - b);
+  const loIdx = Math.max(0, Math.min(values.length - 1, Math.floor(values.length * AUTO_DOMAIN_PCT_LOW)));
+  const hiIdx = Math.max(0, Math.min(values.length - 1, Math.floor(values.length * AUTO_DOMAIN_PCT_HIGH)));
+  let minVal = values[loIdx];
+  let maxVal = values[Math.max(hiIdx, loIdx)];
+
+  // 1% padding
+  const span = maxVal - minVal;
+  if (Number.isFinite(span) && span > 0) {
+    const pad = span * 0.01;
+    minVal -= pad;
+    maxVal += pad;
+  }
+  if (minVal >= maxVal) return [minVal - 1, maxVal + 1];
+  return [minVal, maxVal];
+}
+
+function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number]): boolean {
+  const fc: any = (layer.hexLayer as any)?.getFillColor;
+  if (!fc || typeof fc !== 'object') return false;
+  const old: any = fc._dynamicDomain;
+
+  const changedEnough = !Array.isArray(old) || old.length < 2
+    ? true
+    : (() => {
+        const denom = (old[1] - old[0]) ? (old[1] - old[0]) : 1;
+        return (
+          Math.abs(next[0] - old[0]) / denom > AUTO_DOMAIN_REBUILD_REL_TOL ||
+          Math.abs(next[1] - old[1]) / denom > AUTO_DOMAIN_REBUILD_REL_TOL
+        );
+      })();
+
+  if (!changedEnough) return false;
+  fc._dynamicDomain = next;
+  return true;
 }
 
 function getTileConfig(layer: HexLayerConfig): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number } {
@@ -278,8 +421,18 @@ function buildHexTileDeckLayers(
       const tileCfg = getTileConfig(layer);
       const rawHexCfg: any = layer.hexLayer || {};
 
-      const getFillColor = buildColorAccessor(rawHexCfg.getFillColor);
-      const getLineColor = buildColorAccessor(rawHexCfg.getLineColor);
+      // Prefer dynamic domain (autoDomain) when present
+      const fillCfg: any = rawHexCfg.getFillColor;
+      if (fillCfg && typeof fillCfg === 'object' && !Array.isArray(fillCfg) && Array.isArray(fillCfg._dynamicDomain)) {
+        fillCfg.domain = fillCfg._dynamicDomain;
+      }
+      const lineCfg: any = rawHexCfg.getLineColor;
+      if (lineCfg && typeof lineCfg === 'object' && !Array.isArray(lineCfg) && Array.isArray(lineCfg._dynamicDomain)) {
+        lineCfg.domain = lineCfg._dynamicDomain;
+      }
+
+      const getFillColor = buildColorAccessor(fillCfg);
+      const getLineColor = buildColorAccessor(lineCfg);
 
       const stroked = rawHexCfg.stroked !== false;
       const filled = rawHexCfg.filled !== false;
@@ -304,6 +457,7 @@ function buildHexTileDeckLayers(
           const { x, y, z } = index;
           const url = tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
           const cacheKey = url;
+          const tileKey = `${z}/${x}/${y}`;
 
           if (runtime.cache.has(cacheKey)) return runtime.cache.get(cacheKey);
           if (runtime.inflight.has(cacheKey)) {
@@ -357,6 +511,9 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
+              // Track for autoDomain sampling
+              if (!runtime.tileStore[layer.id]) runtime.tileStore[layer.id] = {};
+              runtime.tileStore[layer.id][tileKey] = normalized;
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
@@ -442,7 +599,51 @@ export function createHexTileOverlay(
     }
   };
 
-  return { overlay, rebuild, pickObject };
+  // AutoDomain scheduler (only for layers that request it)
+  const autoLayers = layers.filter((l) => l.layerType === 'hex' && (l as any).isTileLayer) as HexLayerConfig[];
+  const autoCandidates = autoLayers
+    .map((l) => ({ layer: l, ...wantsAutoDomain(l), tileCfg: getTileConfig(l) }))
+    .filter((x) => x.enabled && x.attr);
+
+  let autoTimer: any = null;
+  const scheduleAuto = (delayMs: number) => {
+    if (!autoCandidates.length) return;
+    if (autoTimer) clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      let changed = false;
+      for (const c of autoCandidates) {
+        const expectedZ = Math.round(map.getZoom()) + (c.tileCfg.zoomOffset || 0);
+        const dom = calculateDomainFromTiles(map, runtime, c.layer, c.attr!, expectedZ);
+        if (dom) {
+          const did = maybeUpdateDynamicDomain(c.layer, dom);
+          if (did) changed = true;
+        }
+      }
+      if (changed) {
+        rebuild();
+        // Ask host to refresh legend (index.ts listens)
+        try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
+      }
+    }, delayMs);
+  };
+
+  const onMoveEnd = () => scheduleAuto(800);
+  const onIdle = () => scheduleAuto(1200);
+  if (autoCandidates.length) {
+    map.on('moveend', onMoveEnd);
+    map.on('idle', onIdle);
+    // Initial attempt after some tiles arrive
+    scheduleAuto(1500);
+  }
+
+  const destroy = () => {
+    if (autoTimer) clearTimeout(autoTimer);
+    try { map.off('moveend', onMoveEnd); } catch {}
+    try { map.off('idle', onIdle); } catch {}
+    try { map.removeControl(overlay); } catch {}
+  };
+
+  return { overlay, rebuild, pickObject, destroy };
 }
 
 

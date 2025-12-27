@@ -158,9 +158,11 @@ function buildContinuousLegend(
   colorCfg: ColorContinuousConfig,
   paletteName: string
 ): string {
-  if (!colorCfg.domain?.length) return '';
+  // Prefer dynamic domain (autoDomain) when present
+  const domain: any = (colorCfg as any)._dynamicDomain || colorCfg.domain;
+  if (!domain?.length) return '';
   
-  const [d0, d1] = colorCfg.domain;
+  const [d0, d1] = domain;
   const isReversed = d0 > d1;
   const steps = colorCfg.steps || 7;
   

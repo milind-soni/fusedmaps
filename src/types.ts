@@ -292,25 +292,35 @@ declare global {
       getZoom(): number;
       getPitch(): number;
       getBearing(): number;
+      zoomIn(options?: unknown): void;
+      zoomOut(options?: unknown): void;
       setCenter(center: [number, number]): void;
       setZoom(zoom: number): void;
       setPitch(pitch: number): void;
       setBearing(bearing: number): void;
+      easeTo(options: unknown): void;
       jumpTo(options: unknown): void;
       fitBounds(bounds: unknown, options?: unknown): void;
       resize(): void;
       loaded(): boolean;
       getCanvas(): HTMLCanvasElement;
+      getCanvasContainer(): HTMLElement;
       getStyle(): { layers?: unknown[] };
-      addControl(control: unknown): void;
+      addControl(control: unknown, position?: string): void;
       removeControl(control: unknown): void;
       queryRenderedFeatures(point: { x: number; y: number }, options?: unknown): unknown[];
       moveLayer(layerId: string, beforeId?: string): void;
+      dragPan: { enable(): void; disable(): void };
+      triggerRepaint?: () => void;
     }
     
     class LngLatBounds {
       extend(coord: [number, number]): void;
       isEmpty(): boolean;
+    }
+
+    class ScaleControl {
+      constructor(options?: unknown);
     }
   }
   

@@ -7,6 +7,7 @@ interface MapInitOptions {
     mapboxToken: string;
     styleUrl: string;
     initialViewState: ViewState;
+    screenshotEnabled?: boolean;
 }
 /**
  * Initialize a Mapbox GL map

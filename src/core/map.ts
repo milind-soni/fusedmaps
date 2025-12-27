@@ -9,13 +9,14 @@ interface MapInitOptions {
   mapboxToken: string;
   styleUrl: string;
   initialViewState: ViewState;
+  screenshotEnabled?: boolean;
 }
 
 /**
  * Initialize a Mapbox GL map
  */
 export function initMap(options: MapInitOptions): mapboxgl.Map {
-  const { containerId, mapboxToken, styleUrl, initialViewState } = options;
+  const { containerId, mapboxToken, styleUrl, initialViewState, screenshotEnabled } = options;
   
   // Set access token
   (window.mapboxgl as any).accessToken = mapboxToken;
@@ -28,7 +29,11 @@ export function initMap(options: MapInitOptions): mapboxgl.Map {
     zoom: initialViewState.zoom,
     pitch: initialViewState.pitch || 0,
     bearing: initialViewState.bearing || 0,
-    projection: 'mercator'
+    projection: 'mercator',
+    // Match map_utils.py: enable pitch behavior; Cmd+drag orbit is implemented separately.
+    pitchWithRotate: true,
+    // Needed for reliable canvas capture (screenshot button). May increase GPU memory usage.
+    ...(screenshotEnabled ? { preserveDrawingBuffer: true } : {})
   });
   
   return map;

@@ -11,6 +11,7 @@ import { addAllLayers, setLayerVisibility, getLayerGeoJSONs } from './layers';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
+import { setupWidgets } from './ui/widgets';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 
@@ -42,8 +43,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     containerId,
     mapboxToken: config.mapboxToken,
     styleUrl: config.styleUrl,
-    initialViewState: config.initialViewState
+    initialViewState: config.initialViewState,
+    screenshotEnabled: config.ui?.screenshot !== false
   });
+
+  // Widgets (zoom/home + optional screenshot + cmd-drag orbit)
+  const widgets = setupWidgets(map, config.initialViewState, config.ui?.screenshot !== false);
   
   // Deck.gl overlay (for tile layers)
   let deckOverlay: unknown = null;
@@ -122,6 +127,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       try {
         // remove any overlay-specific listeners
         (deckOverlay as any)?.__fused_hex_tiles__?.destroy?.();
+      } catch (_) {}
+      try {
+        widgets?.destroy?.();
       } catch (_) {}
       try {
         if (legendUpdateHandler) {

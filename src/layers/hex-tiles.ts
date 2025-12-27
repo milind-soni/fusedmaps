@@ -26,7 +26,6 @@ interface TileRuntime {
   cache: Map<string, any[]>;
   inflight: Map<string, Promise<any[] | null>>;
   tilesLoading: number;
-  tileStore: Record<string, Record<string, any[]>>; // layerId -> "z/x/y" -> rows
   tileStats: Record<string, Record<string, { min: number; max: number }>>; // layerId -> "z/x/y" -> min/max
 }
 
@@ -249,17 +248,12 @@ function createTileRuntime(): TileRuntime {
     cache: new Map(),
     inflight: new Map(),
     tilesLoading: 0,
-    tileStore: {},
     tileStats: {}
   };
 }
 
-// --- AutoDomain (ported from map_utils.py; simplified to v1) ---
-const AUTO_DOMAIN_MAX_SAMPLES = 5000;
+// --- AutoDomain (Parquet stats-only) ---
 const AUTO_DOMAIN_MIN_ZOOM = 10;
-const AUTO_DOMAIN_MIN_COUNT = 30;
-const AUTO_DOMAIN_PCT_LOW = 0.02;
-const AUTO_DOMAIN_PCT_HIGH = 0.98;
 const AUTO_DOMAIN_ZOOM_TOLERANCE = 1;
 const AUTO_DOMAIN_REBUILD_REL_TOL = 0.05;
 
@@ -397,88 +391,11 @@ function calculateDomainFromTiles(
   map: mapboxgl.Map,
   runtime: TileRuntime,
   layer: HexLayerConfig,
-  attr: string,
+  _attr: string,
   expectedZ: number
 ): [number, number] | null {
-  // Prefer Parquet metadata stats if available (fast path)
-  const statsDom = calculateDomainFromTileStats(map, runtime, layer, expectedZ);
-  if (statsDom) return statsDom;
-
-  // Only calculate when zoomed in enough
-  if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
-
-  const store = runtime.tileStore[layer.id];
-  if (!store) return null;
-
-  const b = map.getBounds();
-  const viewportBounds = {
-    west: b.getWest(),
-    east: b.getEast(),
-    south: b.getSouth(),
-    north: b.getNorth()
-  };
-
-  // First pass: count + collect viewport tiles
-  let totalCount = 0;
-  const viewportTiles: any[][] = [];
-
-  for (const [tileKey, rows] of Object.entries(store)) {
-    const [z, x, y] = tileKey.split('/').map(Number);
-    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-
-    // Only consider tiles near the current effective zoom (respect zoomOffset)
-    if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
-
-    const tb = tileToBounds(x, y, z);
-    if (!boundsIntersect(tb, viewportBounds)) continue;
-
-    viewportTiles.push(rows);
-    totalCount += rows.length;
-  }
-
-  if (totalCount < AUTO_DOMAIN_MIN_COUNT) return null;
-
-  // Deterministic stride sampling
-  const stride = Math.max(1, Math.floor(totalCount / AUTO_DOMAIN_MAX_SAMPLES));
-  const values: number[] = [];
-  let seen = 0;
-
-  for (const rows of viewportTiles) {
-    for (const item of rows) {
-      seen++;
-      if (stride > 1 && (seen % stride) !== 0) continue;
-
-      const p = item?.properties || item || {};
-      const raw = p[attr];
-      let v: number | null = null;
-      if (typeof raw === 'number') v = raw;
-      else if (typeof raw === 'string') {
-        const n = parseFloat(raw);
-        v = Number.isFinite(n) ? n : null;
-      }
-      if (v != null && Number.isFinite(v)) values.push(v);
-      if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
-    }
-    if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
-  }
-
-  if (values.length < AUTO_DOMAIN_MIN_COUNT) return null;
-
-  values.sort((a, b) => a - b);
-  const loIdx = Math.max(0, Math.min(values.length - 1, Math.floor(values.length * AUTO_DOMAIN_PCT_LOW)));
-  const hiIdx = Math.max(0, Math.min(values.length - 1, Math.floor(values.length * AUTO_DOMAIN_PCT_HIGH)));
-  let minVal = values[loIdx];
-  let maxVal = values[Math.max(hiIdx, loIdx)];
-
-  // 1% padding
-  const span = maxVal - minVal;
-  if (Number.isFinite(span) && span > 0) {
-    const pad = span * 0.01;
-    minVal -= pad;
-    maxVal += pad;
-  }
-  if (minVal >= maxVal) return [minVal - 1, maxVal + 1];
-  return [minVal, maxVal];
+  // Stats-only (Parquet). If stats aren't there, we intentionally don't update.
+  return calculateDomainFromTileStats(map, runtime, layer, expectedZ);
 }
 
 function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number]): boolean {
@@ -661,9 +578,6 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
-              // Track for autoDomain sampling
-              if (!runtime.tileStore[layer.id]) runtime.tileStore[layer.id] = {};
-              runtime.tileStore[layer.id][tileKey] = normalized;
 
               // Parquet metadata min/max (instant autoDomain)
               try {

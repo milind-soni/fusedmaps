@@ -86,6 +86,37 @@ function normalizeTileData(raw: any): any[] {
     .filter(Boolean);
 }
 
+function sanitizeProperties(obj: Record<string, any>): Record<string, any> {
+  // Mirrors the workbench approach: avoid BigInt leaking into Deck/tooltip.
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(obj || {})) {
+    const v = (obj as any)[k];
+    if (typeof v === 'bigint') {
+      const lk = String(k).toLowerCase();
+      if (lk === 'hex' || lk === 'h3' || lk === 'index' || lk === 'id') {
+        // Likely an H3 index stored as int64
+        out[k] = v.toString(16);
+      } else if (v <= BigInt(Number.MAX_SAFE_INTEGER) && v >= BigInt(Number.MIN_SAFE_INTEGER)) {
+        out[k] = Number(v);
+      } else {
+        // Fallback: stringify to avoid breaking render/tooltip
+        out[k] = v.toString();
+      }
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function sanitizeRows(rows: any[]): any[] {
+  return (rows || []).map((r: any) => {
+    const p = r?.properties ? sanitizeProperties(r.properties) : sanitizeProperties(r || {});
+    // Ensure both root and properties exist (Deck picks often look at object.properties)
+    return { ...p, properties: { ...p } };
+  });
+}
+
 function coerceKnownIdsToStrings(jsonText: string): string {
   // IMPORTANT: H3 indexes are often > 2^53 and will lose precision if parsed as JS numbers.
   // Coerce known id fields to strings before JSON.parse.
@@ -278,7 +309,8 @@ function buildHexTileDeckLayers(
           if (runtime.inflight.has(cacheKey)) {
             try {
               const data = await runtime.inflight.get(cacheKey);
-              return data || [];
+              // IMPORTANT: preserve null (abort) so the tileset doesn't think we loaded data.
+              return data;
             } catch {
               return runtime.cache.get(cacheKey) || [];
             }
@@ -289,7 +321,7 @@ function buildHexTileDeckLayers(
             try {
               const res = await fetch(url, { signal });
               if (signal?.aborted) return null;
-              if (!res.ok) return [];
+              if (!res.ok) throw new Error(`tile http ${res.status}`);
 
               const ct = (res.headers.get('Content-Type') || '').toLowerCase();
               let data: any;
@@ -299,10 +331,12 @@ function buildHexTileDeckLayers(
                 const hp = (window as any).hyparquet;
                 if (!hp?.parquetMetadataAsync || !hp?.parquetReadObjects) {
                   // Not available: return empty (caller should ensure hyparquet is loaded)
-                  return [];
+                  // IMPORTANT: don't mark tile as loaded; allow retry after hyparquet becomes available.
+                  return null;
                 }
                 const buf = await res.arrayBuffer();
                 if (signal?.aborted) return null;
+                if (!buf || (buf as ArrayBuffer).byteLength === 0) return [];
                 const file = {
                   byteLength: buf.byteLength,
                   async slice(start: number, end: number) {
@@ -320,12 +354,14 @@ function buildHexTileDeckLayers(
                 data = JSON.parse(text);
               }
 
-              const normalized = normalizeTileData(data);
+              // Normalize + sanitize
+              const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
-              return runtime.cache.get(cacheKey) || [];
+              // IMPORTANT: do NOT cache failures; return null so the tileset may retry.
+              return null;
             } finally {
               runtime.inflight.delete(cacheKey);
               onLoadingDelta(-1);
@@ -334,11 +370,13 @@ function buildHexTileDeckLayers(
 
           runtime.inflight.set(cacheKey, p);
           const out = await p;
-          return out || [];
+          // Preserve null for abort/failure semantics (prevents "holes stuck forever")
+          return out;
         },
         renderSubLayers: (props: any) => {
           const data = props.data || [];
-          if (!data.length) return null;
+          // If aborted/failed, props.data can be null; return nothing so parent placeholders can show
+          if (!data || !data.length) return null;
 
           return new H3HexagonLayer({
             id: `${props.id}-h3`,

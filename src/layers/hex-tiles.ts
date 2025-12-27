@@ -27,6 +27,7 @@ interface TileRuntime {
   inflight: Map<string, Promise<any[] | null>>;
   tilesLoading: number;
   tileStore: Record<string, Record<string, any[]>>; // layerId -> "z/x/y" -> rows
+  tileStats: Record<string, Record<string, { min: number; max: number }>>; // layerId -> "z/x/y" -> min/max
 }
 
 const DEFAULT_MAX_REQUESTS = 10;
@@ -239,7 +240,8 @@ function createTileRuntime(): TileRuntime {
     cache: new Map(),
     inflight: new Map(),
     tilesLoading: 0,
-    tileStore: {}
+    tileStore: {},
+    tileStats: {}
   };
 }
 
@@ -279,6 +281,109 @@ function wantsAutoDomain(layer: HexLayerConfig): { enabled: boolean; attr: strin
   return { enabled, attr };
 }
 
+function parseMaybeNumber(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'bigint') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof v === 'string') {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function extractParquetMinMaxFromMetadata(metadata: any, columnName: string): { min: number; max: number } | null {
+  // Hyparquet metadata shape varies across builds; be defensive:
+  const rowGroups = metadata?.row_groups || metadata?.rowGroups || metadata?.row_groups_list || null;
+  if (!Array.isArray(rowGroups) || rowGroups.length === 0) return null;
+
+  let minAll = Number.POSITIVE_INFINITY;
+  let maxAll = Number.NEGATIVE_INFINITY;
+  let found = false;
+
+  for (const rg of rowGroups) {
+    const cols = rg?.columns || rg?.columns_list || null;
+    if (!Array.isArray(cols)) continue;
+
+    for (const c of cols) {
+      const md = c?.meta_data || c?.metaData || c?.metadata || null;
+      const path = md?.path_in_schema || md?.pathInSchema || md?.path || null;
+      const leaf = Array.isArray(path) ? String(path[path.length - 1]) : (typeof path === 'string' ? path : null);
+      if (!leaf || leaf !== columnName) continue;
+
+      const stats = md?.statistics || md?.stats || c?.statistics || null;
+      if (!stats) continue;
+
+      const mn = parseMaybeNumber(stats.min_value ?? stats.min ?? stats.minimum ?? stats.minValue);
+      const mx = parseMaybeNumber(stats.max_value ?? stats.max ?? stats.maximum ?? stats.maxValue);
+      if (mn == null || mx == null) continue;
+
+      found = true;
+      if (mn < minAll) minAll = mn;
+      if (mx > maxAll) maxAll = mx;
+    }
+  }
+
+  if (!found || !Number.isFinite(minAll) || !Number.isFinite(maxAll)) return null;
+  if (minAll === maxAll) return { min: minAll - 1, max: maxAll + 1 };
+  return { min: minAll, max: maxAll };
+}
+
+function calculateDomainFromTileStats(
+  map: mapboxgl.Map,
+  runtime: TileRuntime,
+  layer: HexLayerConfig,
+  expectedZ: number
+): [number, number] | null {
+  if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
+
+  const store = runtime.tileStats[layer.id];
+  if (!store) return null;
+
+  const b = map.getBounds();
+  const viewportBounds = {
+    west: b.getWest(),
+    east: b.getEast(),
+    south: b.getSouth(),
+    north: b.getNorth()
+  };
+
+  let minAll = Number.POSITIVE_INFINITY;
+  let maxAll = Number.NEGATIVE_INFINITY;
+  let count = 0;
+
+  for (const [tileKey, st] of Object.entries(store)) {
+    const [z, x, y] = tileKey.split('/').map(Number);
+    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
+    const tb = tileToBounds(x, y, z);
+    if (!boundsIntersect(tb, viewportBounds)) continue;
+
+    if (Number.isFinite(st.min)) {
+      minAll = Math.min(minAll, st.min);
+      count++;
+    }
+    if (Number.isFinite(st.max)) {
+      maxAll = Math.max(maxAll, st.max);
+    }
+  }
+
+  if (count < 2 || !Number.isFinite(minAll) || !Number.isFinite(maxAll)) return null;
+
+  // 1% padding
+  const span = maxAll - minAll;
+  if (Number.isFinite(span) && span > 0) {
+    const pad = span * 0.01;
+    minAll -= pad;
+    maxAll += pad;
+  }
+  if (minAll >= maxAll) return [minAll - 1, maxAll + 1];
+  return [minAll, maxAll];
+}
+
 function calculateDomainFromTiles(
   map: mapboxgl.Map,
   runtime: TileRuntime,
@@ -286,6 +391,10 @@ function calculateDomainFromTiles(
   attr: string,
   expectedZ: number
 ): [number, number] | null {
+  // Prefer Parquet metadata stats if available (fast path)
+  const statsDom = calculateDomainFromTileStats(map, runtime, layer, expectedZ);
+  if (statsDom) return statsDom;
+
   // Only calculate when zoomed in enough
   if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
 
@@ -479,6 +588,7 @@ function buildHexTileDeckLayers(
 
               const ct = (res.headers.get('Content-Type') || '').toLowerCase();
               let data: any;
+              let parquetMetadata: any = null;
 
               // Parquet tiles
               if (ct.includes('application/octet-stream') || ct.includes('application/parquet') || url.endsWith('.parquet')) {
@@ -498,6 +608,7 @@ function buildHexTileDeckLayers(
                   }
                 };
                 const metadata = await hp.parquetMetadataAsync(file);
+                parquetMetadata = metadata;
                 if (signal?.aborted) return null;
                 const rows = await hp.parquetReadObjects({ file, utf8: false, metadata });
                 data = rows;
@@ -514,6 +625,20 @@ function buildHexTileDeckLayers(
               // Track for autoDomain sampling
               if (!runtime.tileStore[layer.id]) runtime.tileStore[layer.id] = {};
               runtime.tileStore[layer.id][tileKey] = normalized;
+
+              // Parquet metadata min/max (instant autoDomain)
+              try {
+                const auto = wantsAutoDomain(layer);
+                if (auto.enabled && auto.attr && parquetMetadata) {
+                  const mm = extractParquetMinMaxFromMetadata(parquetMetadata, auto.attr);
+                  if (mm) {
+                    if (!runtime.tileStats[layer.id]) runtime.tileStats[layer.id] = {};
+                    runtime.tileStats[layer.id][tileKey] = { min: mm.min, max: mm.max };
+                    // Trigger a quick autoDomain recompute (listener is in createHexTileOverlay)
+                    try { window.dispatchEvent(new CustomEvent('fusedmaps:autodomain:dirty')); } catch {}
+                  }
+                }
+              } catch (_) {}
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
@@ -629,9 +754,11 @@ export function createHexTileOverlay(
 
   const onMoveEnd = () => scheduleAuto(800);
   const onIdle = () => scheduleAuto(1200);
+  const onDirty = () => scheduleAuto(150);
   if (autoCandidates.length) {
     map.on('moveend', onMoveEnd);
     map.on('idle', onIdle);
+    try { window.addEventListener('fusedmaps:autodomain:dirty', onDirty as any); } catch {}
     // Initial attempt after some tiles arrive
     scheduleAuto(1500);
   }
@@ -640,6 +767,7 @@ export function createHexTileOverlay(
     if (autoTimer) clearTimeout(autoTimer);
     try { map.off('moveend', onMoveEnd); } catch {}
     try { map.off('idle', onIdle); } catch {}
+    try { window.removeEventListener('fusedmaps:autodomain:dirty', onDirty as any); } catch {}
     try { map.removeControl(overlay); } catch {}
   };
 

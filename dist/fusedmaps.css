@@ -82,6 +82,113 @@ html, body {
 
 body { background: var(--ui-bg); }
 
+/* Debug Panel (minimal) */
+#debug-shell {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100%;
+  z-index: 200;
+  --debug-panel-w: 280px;
+}
+#debug-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 280px;
+  min-width: 240px;
+  max-width: 520px;
+  height: 100%;
+  background: var(--ui-panel-bg);
+  border-right: 1px solid var(--ui-border);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  z-index: 199;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#debug-panel, #debug-panel * { box-sizing: border-box; }
+#debug-panel.collapsed { transform: translateX(-100%); }
+#debug-toggle {
+  position: fixed;
+  top: 12px;
+  width: 24px;
+  height: 24px;
+  background: var(--ui-float-bg-2);
+  border: 1px solid var(--ui-border);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-muted);
+  font-size: 14px;
+  z-index: 200;
+  transition: background 0.15s, color 0.15s;
+  left: var(--debug-panel-w, 280px);
+}
+#debug-toggle:hover { background: var(--ui-float-bg); color: var(--ui-text); }
+#debug-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb) var(--ui-scroll-track);
+}
+#debug-content::-webkit-scrollbar { width: 6px; }
+#debug-content::-webkit-scrollbar-track { background: var(--ui-scroll-track); border-radius: 6px; }
+#debug-content::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 6px; }
+#debug-content::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
+.debug-section { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 6px; padding: 10px; }
+.debug-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ui-category); margin-bottom: 8px; }
+.debug-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
+.debug-row:last-child { margin-bottom: 0; }
+.debug-label { font-size: 11px; color: var(--ui-muted-2); width: 84px; flex: 0 0 84px; }
+.debug-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  outline: none;
+}
+.debug-input:focus { border-color: var(--ui-border-2); }
+.debug-output {
+  width: 100%;
+  height: 120px;
+  background: var(--ui-output-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  resize: vertical;
+}
+.debug-btn {
+  background: var(--ui-float-bg);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.debug-btn:hover { border-color: var(--ui-border-2); }
+.debug-btn-secondary {
+  background: transparent;
+  color: var(--ui-text-2);
+}
+
 /* Tooltip */
 #tooltip {
   position: absolute;

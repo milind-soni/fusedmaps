@@ -12,6 +12,7 @@ import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
 import { setupWidgets } from './ui/widgets';
+import { setupDebugPanel } from './ui/debug';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 
@@ -49,6 +50,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   // Widgets (zoom/home + optional screenshot + cmd-drag orbit)
   const widgets = setupWidgets(map, config.initialViewState, config.ui?.screenshot !== false);
+
+  // Debug panel (minimal)
+  const debugHandle = config.debug ? setupDebugPanel(map, config) : null;
   
   // Deck.gl overlay (for tile layers)
   let deckOverlay: unknown = null;
@@ -130,6 +134,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       } catch (_) {}
       try {
         widgets?.destroy?.();
+      } catch (_) {}
+      try {
+        debugHandle?.destroy?.();
       } catch (_) {}
       try {
         if (legendUpdateHandler) {

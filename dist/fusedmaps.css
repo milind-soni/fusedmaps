@@ -150,6 +150,34 @@ body { background: var(--ui-bg); }
 .debug-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
 .debug-row:last-child { margin-bottom: 0; }
 .debug-label { font-size: 11px; color: var(--ui-muted-2); width: 84px; flex: 0 0 84px; }
+.debug-toggles { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.debug-checkbox { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ui-muted-2); cursor: pointer; }
+html[data-theme="dark"] .debug-checkbox input { width: 14px; height: 14px; cursor: pointer; accent-color: #666; }
+html[data-theme="light"] .debug-checkbox input { width: 14px; height: 14px; cursor: pointer; accent-color: var(--ui-elements); }
+.debug-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  outline: none;
+  cursor: pointer;
+}
+.debug-select:focus { border-color: var(--ui-border-2); }
+.debug-input-sm { flex: 0 0 56px; width: 56px; min-width: 56px; text-align: center; }
+.debug-slider { flex: 1 1 auto; min-width: 0; height: 4px; background: var(--ui-border); border-radius: 2px; -webkit-appearance: none; cursor: pointer; }
+html[data-theme="dark"] .debug-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #888; border-radius: 50%; cursor: pointer; }
+html[data-theme="dark"] .debug-slider::-webkit-slider-thumb:hover { background: #aaa; }
+html[data-theme="light"] .debug-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--ui-elements); border-radius: 50%; cursor: pointer; }
+html[data-theme="light"] .debug-slider::-webkit-slider-thumb:hover { background: var(--ui-accent); }
+.debug-color { width: 34px; height: 22px; padding: 0; border: 1px solid var(--ui-border); border-radius: 4px; background: transparent; cursor: pointer; }
+.debug-color-label { font-size: 11px; color: var(--ui-muted-2); }
+#debug-resize-handle { position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; background: transparent; }
+#debug-resize-handle:hover { background: linear-gradient(to left, rgba(232,255,89,0.95) 0 2px, rgba(255,255,255,0.04) 2px 100%); }
 .debug-input {
   flex: 1 1 auto;
   min-width: 0;

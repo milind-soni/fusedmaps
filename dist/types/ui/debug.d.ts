@@ -1,7 +1,8 @@
 /**
- * Debug panel (minimal) - ported from map_utils.py.
+ * Debug panel (ported toward map_utils.py).
  *
- * Goal: quick view-state editing + JSON dumps for debugging.
+ * In fusedmaps we focus on the deck/tile hex ecosystem; debug panel edits the in-memory
+ * `config.layers` objects and triggers a Deck rebuild so changes apply immediately.
  */
 import type { FusedMapsConfig } from '../types';
 export interface DebugHandle {

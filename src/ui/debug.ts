@@ -1,10 +1,11 @@
 /**
- * Debug panel (minimal) - ported from map_utils.py.
+ * Debug panel (ported toward map_utils.py).
  *
- * Goal: quick view-state editing + JSON dumps for debugging.
+ * In fusedmaps we focus on the deck/tile hex ecosystem; debug panel edits the in-memory
+ * `config.layers` objects and triggers a Deck rebuild so changes apply immediately.
  */
 
-import type { FusedMapsConfig, ViewState } from '../types';
+import type { FusedMapsConfig, HexLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
 
 export interface DebugHandle {
@@ -25,14 +26,150 @@ function isEditingInputs(root: HTMLElement) {
   return !!a.closest?.('#debug-panel') && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
 }
 
+function updateDebugTogglePosition(shell: HTMLElement, panel: HTMLElement, toggle: HTMLElement) {
+  try {
+    const w = panel.getBoundingClientRect().width || 280;
+    shell.style.setProperty('--debug-panel-w', `${w}px`);
+    const collapsed = panel.classList.contains('collapsed');
+    toggle.style.left = collapsed ? '0px' : `var(--debug-panel-w, ${w}px)`;
+  } catch (_) {}
+}
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function ensureColorContinuousCfg(obj: any) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj['@@function'] !== 'colorContinuous') return null;
+  return obj;
+}
+
+function getAttrCandidates(layer: HexLayerConfig): string[] {
+  const out = new Set<string>();
+  try {
+    const fc: any = (layer.hexLayer as any)?.getFillColor;
+    const lc: any = (layer.hexLayer as any)?.getLineColor;
+    if (fc?.attr) out.add(String(fc.attr));
+    if (lc?.attr) out.add(String(lc.attr));
+    const tta: any = (layer.hexLayer as any)?.tooltipAttrs;
+    if (Array.isArray(tta)) tta.forEach((x) => out.add(String(x)));
+  } catch (_) {}
+  return [...out].filter(Boolean);
+}
+
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
-  let shell = document.getElementById('debug-shell');
+  let shell = document.getElementById('debug-shell') as HTMLElement | null;
   if (!shell) {
     shell = document.createElement('div');
     shell.id = 'debug-shell';
     shell.innerHTML = `
       <div id="debug-panel">
         <div id="debug-content">
+          <div class="debug-section">
+            <div class="debug-section-title">Editing Layer</div>
+            <div class="debug-row">
+              <span class="debug-label">Layer</span>
+              <select class="debug-select" id="dbg-layer-select"></select>
+            </div>
+          </div>
+
+          <div class="debug-section">
+            <div class="debug-section-title">Hex Layer</div>
+            <div class="debug-toggles">
+              <label class="debug-checkbox"><input type="checkbox" id="dbg-filled" checked /> Filled</label>
+              <label class="debug-checkbox"><input type="checkbox" id="dbg-stroked" checked /> Stroked</label>
+              <label class="debug-checkbox"><input type="checkbox" id="dbg-extruded" /> Extruded</label>
+            </div>
+            <div class="debug-row" style="margin-top:8px;">
+              <span class="debug-label">Opacity</span>
+              <input type="range" class="debug-slider" id="dbg-opacity-slider" min="0" max="1" step="0.05" value="1" />
+              <input type="number" class="debug-input debug-input-sm" id="dbg-opacity" step="0.1" min="0" max="1" value="1" />
+            </div>
+          </div>
+
+          <div class="debug-section" id="fill-color-section">
+            <div class="debug-section-title">Fill Color</div>
+            <div class="debug-row">
+              <span class="debug-label">Function</span>
+              <select class="debug-select" id="dbg-fill-fn">
+                <option value="colorContinuous">colorContinuous</option>
+                <option value="static">Static Color</option>
+              </select>
+            </div>
+            <div id="fill-fn-options">
+              <div class="debug-row">
+                <span class="debug-label">Attribute</span>
+                <select class="debug-select" id="dbg-attr"></select>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Palette</span>
+                <select class="debug-select" id="dbg-palette"></select>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Domain</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-domain-min" step="0.1" placeholder="min" />
+                <span style="color:#666;">–</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-domain-max" step="0.1" placeholder="max" />
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Steps</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-steps" step="1" min="2" max="20" value="7" />
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Null Color</span>
+                <input type="color" class="debug-color" id="dbg-null-color" value="#b8b8b8" />
+                <span class="debug-color-label" id="dbg-null-color-label">#b8b8b8</span>
+              </div>
+            </div>
+            <div id="fill-static-options" style="display:none;">
+              <div class="debug-row">
+                <span class="debug-label">Color</span>
+                <input type="color" class="debug-color" id="dbg-fill-static" value="#0090ff" />
+                <span class="debug-color-label" id="dbg-fill-static-label">#0090ff</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="debug-section" id="line-color-section">
+            <div class="debug-section-title">Line Color</div>
+            <div class="debug-row">
+              <span class="debug-label">Function</span>
+              <select class="debug-select" id="dbg-line-fn">
+                <option value="colorContinuous">colorContinuous</option>
+                <option value="static" selected>Static Color</option>
+              </select>
+            </div>
+            <div id="line-fn-options" style="display:none;">
+              <div class="debug-row">
+                <span class="debug-label">Attribute</span>
+                <select class="debug-select" id="dbg-line-attr"></select>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Palette</span>
+                <select class="debug-select" id="dbg-line-palette"></select>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Domain</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-line-domain-min" step="0.1" placeholder="min" />
+                <span style="color:#666;">–</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-line-domain-max" step="0.1" placeholder="max" />
+              </div>
+            </div>
+            <div id="line-static-options">
+              <div class="debug-row">
+                <span class="debug-label">Color</span>
+                <input type="color" class="debug-color" id="dbg-line-static" value="#ffffff" />
+                <span class="debug-color-label" id="dbg-line-static-label">#ffffff</span>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Line Width</span>
+                <input type="range" class="debug-slider" id="dbg-line-width-slider" min="0" max="5" step="0.5" value="1" />
+                <input type="number" class="debug-input debug-input-sm" id="dbg-line-width" step="0.5" min="0" max="10" value="1" />
+              </div>
+            </div>
+          </div>
+
           <div class="debug-section">
             <div class="debug-section-title">View State</div>
             <div class="debug-row">
@@ -68,10 +205,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           </div>
 
           <div class="debug-section">
-            <div class="debug-section-title">Config</div>
-            <textarea id="dbg-config-output" class="debug-output" readonly></textarea>
+            <div class="debug-section-title">Layer Config</div>
+            <textarea id="dbg-output" class="debug-output" readonly></textarea>
           </div>
         </div>
+        <div id="debug-resize-handle" title="Drag to resize"></div>
       </div>
       <div id="debug-toggle" title="Toggle debug panel">&#x2039;</div>
     `;
@@ -80,6 +218,40 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const panel = document.getElementById('debug-panel') as HTMLElement;
   const toggle = document.getElementById('debug-toggle') as HTMLElement;
+  const resizeHandle = document.getElementById('debug-resize-handle') as HTMLElement;
+
+  const layerSelect = document.getElementById('dbg-layer-select') as HTMLSelectElement;
+
+  const filledEl = document.getElementById('dbg-filled') as HTMLInputElement;
+  const strokedEl = document.getElementById('dbg-stroked') as HTMLInputElement;
+  const extrudedEl = document.getElementById('dbg-extruded') as HTMLInputElement;
+  const opacitySliderEl = document.getElementById('dbg-opacity-slider') as HTMLInputElement;
+  const opacityEl = document.getElementById('dbg-opacity') as HTMLInputElement;
+
+  const fillFnEl = document.getElementById('dbg-fill-fn') as HTMLSelectElement;
+  const fillFnOptions = document.getElementById('fill-fn-options') as HTMLElement;
+  const fillStaticOptions = document.getElementById('fill-static-options') as HTMLElement;
+  const fillAttrEl = document.getElementById('dbg-attr') as HTMLSelectElement;
+  const fillPaletteEl = document.getElementById('dbg-palette') as HTMLSelectElement;
+  const fillDomainMinEl = document.getElementById('dbg-domain-min') as HTMLInputElement;
+  const fillDomainMaxEl = document.getElementById('dbg-domain-max') as HTMLInputElement;
+  const fillStepsEl = document.getElementById('dbg-steps') as HTMLInputElement;
+  const fillNullEl = document.getElementById('dbg-null-color') as HTMLInputElement;
+  const fillNullLabel = document.getElementById('dbg-null-color-label') as HTMLElement;
+  const fillStaticEl = document.getElementById('dbg-fill-static') as HTMLInputElement;
+  const fillStaticLabel = document.getElementById('dbg-fill-static-label') as HTMLElement;
+
+  const lineFnEl = document.getElementById('dbg-line-fn') as HTMLSelectElement;
+  const lineFnOptions = document.getElementById('line-fn-options') as HTMLElement;
+  const lineStaticOptions = document.getElementById('line-static-options') as HTMLElement;
+  const lineAttrEl = document.getElementById('dbg-line-attr') as HTMLSelectElement;
+  const linePaletteEl = document.getElementById('dbg-line-palette') as HTMLSelectElement;
+  const lineDomainMinEl = document.getElementById('dbg-line-domain-min') as HTMLInputElement;
+  const lineDomainMaxEl = document.getElementById('dbg-line-domain-max') as HTMLInputElement;
+  const lineStaticEl = document.getElementById('dbg-line-static') as HTMLInputElement;
+  const lineStaticLabel = document.getElementById('dbg-line-static-label') as HTMLElement;
+  const lineWidthSliderEl = document.getElementById('dbg-line-width-slider') as HTMLInputElement;
+  const lineWidthEl = document.getElementById('dbg-line-width') as HTMLInputElement;
 
   const lngEl = document.getElementById('dbg-lng') as HTMLInputElement;
   const latEl = document.getElementById('dbg-lat') as HTMLInputElement;
@@ -87,24 +259,213 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const pitchEl = document.getElementById('dbg-pitch') as HTMLInputElement;
   const bearingEl = document.getElementById('dbg-bearing') as HTMLInputElement;
   const viewOut = document.getElementById('dbg-view-output') as HTMLTextAreaElement;
-  const cfgOut = document.getElementById('dbg-config-output') as HTMLTextAreaElement;
+  const layerOut = document.getElementById('dbg-output') as HTMLTextAreaElement;
 
   const initial: ViewState = config.initialViewState;
-  cfgOut.value = JSON.stringify(
-    {
-      initialViewState: config.initialViewState,
-      styleUrl: config.styleUrl,
-      layers: config.layers
-    },
-    null,
-    2
-  );
 
-  const updateFromMap = () => {
+  const palettes = Object.keys((window as any).cartocolor || {}).sort((a, b) => a.localeCompare(b));
+  const setPaletteOptions = (sel: HTMLSelectElement) => {
+    sel.innerHTML = palettes.map((p) => `<option value="${p}">${p}</option>`).join('');
+  };
+  setPaletteOptions(fillPaletteEl);
+  setPaletteOptions(linePaletteEl);
+
+  // Find editable layers (for now: hex layers; especially tile layers)
+  const editableLayers = config.layers.filter((l) => l.layerType === 'hex') as HexLayerConfig[];
+  layerSelect.innerHTML = editableLayers.map((l) => `<option value="${l.id}">${l.name || l.id}</option>`).join('');
+  if (!layerSelect.value && editableLayers.length) layerSelect.value = editableLayers[0].id;
+
+  const getActiveLayer = (): HexLayerConfig | null => {
+    const id = layerSelect.value;
+    const l = editableLayers.find((x) => x.id === id) || null;
+    return l;
+  };
+
+  const rebuildDeck = () => {
+    try {
+      // hex tile overlay stores a rebuild helper on the MapboxOverlay instance
+      const overlay = (config as any).__deckOverlay || null;
+      const state = (overlay as any)?.__fused_hex_tiles__;
+      state?.rebuild?.();
+    } catch (_) {}
+    try {
+      window.dispatchEvent(new CustomEvent('fusedmaps:legend:update'));
+    } catch (_) {}
+  };
+
+  // We don't have direct access to deckOverlay in config; instead we locate it on the map's controls list.
+  const findDeckOverlayOnMap = () => {
+    try {
+      const controls = (map as any)._controls || [];
+      const deck = controls.find((c: any) => c && c.__fused_hex_tiles__);
+      (config as any).__deckOverlay = deck || (config as any).__deckOverlay;
+    } catch (_) {}
+  };
+  findDeckOverlayOnMap();
+
+  const updateLayerOutput = () => {
+    try {
+      layerOut.value = JSON.stringify(getActiveLayer(), null, 2);
+    } catch (_) {
+      layerOut.value = '';
+    }
+  };
+
+  const updateFillFnOptions = () => {
+    const fn = fillFnEl.value;
+    fillFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
+    fillStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
+  };
+
+  const updateLineFnOptions = () => {
+    const fn = lineFnEl.value;
+    lineFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
+    lineStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
+  };
+
+  const readLayerToUI = () => {
+    const layer = getActiveLayer();
+    if (!layer) return;
+    const hexCfg: any = layer.hexLayer || {};
+
+    filledEl.checked = hexCfg.filled !== false;
+    strokedEl.checked = hexCfg.stroked !== false;
+    extrudedEl.checked = hexCfg.extruded === true;
+    const op = typeof hexCfg.opacity === 'number' ? hexCfg.opacity : 1;
+    opacitySliderEl.value = String(op);
+    opacityEl.value = String(op);
+
+    // Fill
+    const fc: any = hexCfg.getFillColor;
+    const cc = ensureColorContinuousCfg(fc);
+    if (cc) {
+      fillFnEl.value = 'colorContinuous';
+      fillAttrEl.innerHTML = getAttrCandidates(layer).map((a) => `<option value="${a}">${a}</option>`).join('');
+      if (cc.attr) fillAttrEl.value = String(cc.attr);
+      if (cc.colors) fillPaletteEl.value = String(cc.colors);
+      const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
+      fillDomainMinEl.value = fmt(Number(dom[0]), 2);
+      fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
+      fillStepsEl.value = String(cc.steps ?? 7);
+      const nc = Array.isArray(cc.nullColor) ? cc.nullColor : [184, 184, 184];
+      const hex = `#${nc.slice(0, 3).map((x: any) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+      fillNullEl.value = hex;
+      fillNullLabel.textContent = hex;
+    } else if (Array.isArray(fc)) {
+      fillFnEl.value = 'static';
+      const arr = fc as any[];
+      const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+      fillStaticEl.value = hex;
+      fillStaticLabel.textContent = hex;
+    } else {
+      fillFnEl.value = 'colorContinuous';
+    }
+
+    // Line
+    const lc: any = hexCfg.getLineColor;
+    const lcCC = ensureColorContinuousCfg(lc);
+    if (lcCC) {
+      lineFnEl.value = 'colorContinuous';
+      lineAttrEl.innerHTML = getAttrCandidates(layer).map((a) => `<option value="${a}">${a}</option>`).join('');
+      if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
+      if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
+      const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
+      lineDomainMinEl.value = fmt(Number(dom[0]), 2);
+      lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
+    } else if (Array.isArray(lc)) {
+      lineFnEl.value = 'static';
+      const arr = lc as any[];
+      const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+      lineStaticEl.value = hex;
+      lineStaticLabel.textContent = hex;
+    } else {
+      lineFnEl.value = 'static';
+    }
+
+    const lw = hexCfg.lineWidthMinPixels ?? 1;
+    lineWidthSliderEl.value = String(lw);
+    lineWidthEl.value = String(lw);
+
+    updateFillFnOptions();
+    updateLineFnOptions();
+    updateLayerOutput();
+  };
+
+  const applyUIToLayer = () => {
+    const layer = getActiveLayer();
+    if (!layer) return;
+    layer.hexLayer = layer.hexLayer || {};
+    const hexCfg: any = layer.hexLayer;
+
+    hexCfg.filled = !!filledEl.checked;
+    hexCfg.stroked = !!strokedEl.checked;
+    hexCfg.extruded = !!extrudedEl.checked;
+    const op = parseFloat(opacityEl.value);
+    if (Number.isFinite(op)) hexCfg.opacity = clamp(op, 0, 1);
+
+    // Fill
+    if (fillFnEl.value === 'static') {
+      const c = fillStaticEl.value || '#0090ff';
+      const r = parseInt(c.slice(1, 3), 16);
+      const g = parseInt(c.slice(3, 5), 16);
+      const b = parseInt(c.slice(5, 7), 16);
+      hexCfg.getFillColor = [r, g, b];
+    } else {
+      const attr = fillAttrEl.value || 'data_avg';
+      const colors = fillPaletteEl.value || 'Earth';
+      const d0 = parseFloat(fillDomainMinEl.value);
+      const d1 = parseFloat(fillDomainMaxEl.value);
+      const steps = parseInt(fillStepsEl.value || '7', 10);
+      const nc = fillNullEl.value || '#b8b8b8';
+      const nr = parseInt(nc.slice(1, 3), 16);
+      const ng = parseInt(nc.slice(3, 5), 16);
+      const nb = parseInt(nc.slice(5, 7), 16);
+      hexCfg.getFillColor = {
+        '@@function': 'colorContinuous',
+        attr,
+        domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
+        colors,
+        steps: Number.isFinite(steps) ? steps : 7,
+        nullColor: [nr, ng, nb],
+        autoDomain: true
+      };
+    }
+
+    // Line
+    if (lineFnEl.value === 'static') {
+      const c = lineStaticEl.value || '#ffffff';
+      const r = parseInt(c.slice(1, 3), 16);
+      const g = parseInt(c.slice(3, 5), 16);
+      const b = parseInt(c.slice(5, 7), 16);
+      hexCfg.getLineColor = [r, g, b];
+    } else {
+      const attr = lineAttrEl.value || 'data_avg';
+      const colors = linePaletteEl.value || 'Earth';
+      const d0 = parseFloat(lineDomainMinEl.value);
+      const d1 = parseFloat(lineDomainMaxEl.value);
+      hexCfg.getLineColor = {
+        '@@function': 'colorContinuous',
+        attr,
+        domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
+        colors,
+        steps: parseInt(fillStepsEl.value || '7', 10) || 7,
+        autoDomain: true
+      };
+    }
+
+    const lw = parseFloat(lineWidthEl.value);
+    if (Number.isFinite(lw)) hexCfg.lineWidthMinPixels = clamp(lw, 0, 10);
+
+    updateLayerOutput();
+    findDeckOverlayOnMap();
+    rebuildDeck();
+  };
+
+  // ViewState updates: update output on map stop (moveend/rotateend/pitchend)
+  const updateFromMapStop = () => {
     try {
       const vs = getViewState(map);
       viewOut.value = JSON.stringify(vs, null, 2);
-      // Don't stomp inputs while user is typing
       if (shell && isEditingInputs(shell)) return;
       lngEl.value = fmt(vs.longitude, 5);
       latEl.value = fmt(vs.latitude, 5);
@@ -114,7 +475,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     } catch (_) {}
   };
 
-  const apply = () => {
+  const applyView = () => {
     const lng = parseFloat(lngEl.value);
     const lat = parseFloat(latEl.value);
     const zoom = parseFloat(zoomEl.value);
@@ -136,69 +497,102 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const copyCurrent = async () => {
     try {
       await navigator.clipboard.writeText(viewOut.value || '');
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   };
 
   const onToggle = () => {
     const collapsed = panel.classList.toggle('collapsed');
     toggle.innerHTML = collapsed ? '&#x203A;' : '&#x2039;';
+    updateDebugTogglePosition(shell!, panel, toggle);
   };
 
-  const onApply = (e: any) => {
-    try {
-      e.preventDefault();
-      e.stopPropagation();
-    } catch (_) {}
-    apply();
+  const onApplyView = (e: any) => {
+    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    applyView();
   };
-
   const onCopy = async (e: any) => {
-    try {
-      e.preventDefault();
-      e.stopPropagation();
-    } catch (_) {}
+    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
     await copyCurrent();
   };
 
+  // Resize handle (sticky toggle)
+  let resizing = false;
+  let startX = 0;
+  let startW = 280;
+  const onResizeMove = (e: PointerEvent) => {
+    if (!resizing) return;
+    const dx = e.clientX - startX;
+    const w = clamp(startW + dx, 240, 520);
+    panel.style.width = `${w}px`;
+    updateDebugTogglePosition(shell!, panel, toggle);
+    e.preventDefault();
+  };
+  const onResizeUp = (_e: PointerEvent) => {
+    if (!resizing) return;
+    resizing = false;
+    window.removeEventListener('pointermove', onResizeMove as any);
+    window.removeEventListener('pointerup', onResizeUp as any);
+  };
+  const onResizeDown = (e: PointerEvent) => {
+    resizing = true;
+    startX = e.clientX;
+    startW = panel.getBoundingClientRect().width || 280;
+    window.addEventListener('pointermove', onResizeMove as any, { passive: false });
+    window.addEventListener('pointerup', onResizeUp as any);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // Event wiring
   toggle.addEventListener('click', onToggle);
-  (document.getElementById('dbg-apply') as HTMLElement).addEventListener('click', onApply);
+  (document.getElementById('dbg-apply') as HTMLElement).addEventListener('click', onApplyView);
   (document.getElementById('dbg-copy') as HTMLElement).addEventListener('click', onCopy);
+  resizeHandle.addEventListener('pointerdown', onResizeDown as any, { passive: false });
 
-  // Keep the panel width in sync with the toggle position
+  // Layer editor events
+  layerSelect.addEventListener('change', () => readLayerToUI());
+  fillFnEl.addEventListener('change', () => { updateFillFnOptions(); applyUIToLayer(); });
+  lineFnEl.addEventListener('change', () => { updateLineFnOptions(); applyUIToLayer(); });
+  [filledEl, strokedEl, extrudedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
+  opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
+  [fillAttrEl, fillPaletteEl, fillDomainMinEl, fillDomainMaxEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
+  fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
+  [lineAttrEl, linePaletteEl, lineDomainMinEl, lineDomainMaxEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
+  lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
+  lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });
+
+  // Update viewstate only on "stop"
   try {
-    (shell as any).style.setProperty('--debug-panel-w', `${panel.getBoundingClientRect().width}px`);
+    map.on('moveend', updateFromMapStop);
+    map.on('rotateend', updateFromMapStop);
+    map.on('pitchend', updateFromMapStop);
   } catch (_) {}
 
-  const onMove = () => updateFromMap();
-  try {
-    map.on('move', onMove);
-    map.on('moveend', onMove);
-    map.on('pitch', onMove);
-    map.on('rotate', onMove);
-  } catch (_) {}
-
-  updateFromMap();
+  // Initial render
+  updateFillFnOptions();
+  updateLineFnOptions();
+  readLayerToUI();
+  updateFromMapStop();
+  updateDebugTogglePosition(shell!, panel, toggle);
+  window.addEventListener('resize', () => updateDebugTogglePosition(shell!, panel, toggle));
 
   return {
     destroy: () => {
+      try { toggle.removeEventListener('click', onToggle); } catch (_) {}
       try {
-        toggle.removeEventListener('click', onToggle);
-      } catch (_) {}
-      try {
-        (document.getElementById('dbg-apply') as HTMLElement).removeEventListener('click', onApply);
+        (document.getElementById('dbg-apply') as HTMLElement).removeEventListener('click', onApplyView);
         (document.getElementById('dbg-copy') as HTMLElement).removeEventListener('click', onCopy);
       } catch (_) {}
+      try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
       try {
-        map.off('move', onMove);
-        map.off('moveend', onMove);
-        map.off('pitch', onMove);
-        map.off('rotate', onMove);
+        map.off('moveend', updateFromMapStop);
+        map.off('rotateend', updateFromMapStop);
+        map.off('pitchend', updateFromMapStop);
       } catch (_) {}
-      try {
-        shell?.remove();
-      } catch (_) {}
+      try { shell?.remove(); } catch (_) {}
     }
   };
 }

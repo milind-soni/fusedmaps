@@ -104,7 +104,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               </div>
               <div class="debug-row">
                 <span class="debug-label">Palette</span>
-                <select class="debug-select" id="dbg-palette"></select>
+                <select class="debug-select pal-hidden" id="dbg-palette"></select>
+                <div class="pal-dd" id="dbg-palette-dd">
+                  <button type="button" class="pal-trigger" id="dbg-palette-trigger" title="Palette">
+                    <span class="pal-name" id="dbg-palette-name">Palette</span>
+                    <span class="pal-swatch" id="dbg-palette-swatch"></span>
+                  </button>
+                  <div class="pal-menu" id="dbg-palette-menu" style="display:none;"></div>
+                </div>
               </div>
               <div class="debug-row">
                 <span class="debug-label">Domain</span>
@@ -147,7 +154,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               </div>
               <div class="debug-row">
                 <span class="debug-label">Palette</span>
-                <select class="debug-select" id="dbg-line-palette"></select>
+                <select class="debug-select pal-hidden" id="dbg-line-palette"></select>
+                <div class="pal-dd" id="dbg-line-palette-dd">
+                  <button type="button" class="pal-trigger" id="dbg-line-palette-trigger" title="Palette">
+                    <span class="pal-name" id="dbg-line-palette-name">Palette</span>
+                    <span class="pal-swatch" id="dbg-line-palette-swatch"></span>
+                  </button>
+                  <div class="pal-menu" id="dbg-line-palette-menu" style="display:none;"></div>
+                </div>
               </div>
               <div class="debug-row">
                 <span class="debug-label">Domain</span>
@@ -233,6 +247,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const fillStaticOptions = document.getElementById('fill-static-options') as HTMLElement;
   const fillAttrEl = document.getElementById('dbg-attr') as HTMLSelectElement;
   const fillPaletteEl = document.getElementById('dbg-palette') as HTMLSelectElement;
+  const fillPalTrigger = document.getElementById('dbg-palette-trigger') as HTMLButtonElement;
+  const fillPalSwatch = document.getElementById('dbg-palette-swatch') as HTMLElement;
+  const fillPalMenu = document.getElementById('dbg-palette-menu') as HTMLElement;
   const fillDomainMinEl = document.getElementById('dbg-domain-min') as HTMLInputElement;
   const fillDomainMaxEl = document.getElementById('dbg-domain-max') as HTMLInputElement;
   const fillStepsEl = document.getElementById('dbg-steps') as HTMLInputElement;
@@ -246,6 +263,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const lineStaticOptions = document.getElementById('line-static-options') as HTMLElement;
   const lineAttrEl = document.getElementById('dbg-line-attr') as HTMLSelectElement;
   const linePaletteEl = document.getElementById('dbg-line-palette') as HTMLSelectElement;
+  const linePalTrigger = document.getElementById('dbg-line-palette-trigger') as HTMLButtonElement;
+  const linePalSwatch = document.getElementById('dbg-line-palette-swatch') as HTMLElement;
+  const linePalMenu = document.getElementById('dbg-line-palette-menu') as HTMLElement;
   const lineDomainMinEl = document.getElementById('dbg-line-domain-min') as HTMLInputElement;
   const lineDomainMaxEl = document.getElementById('dbg-line-domain-max') as HTMLInputElement;
   const lineStaticEl = document.getElementById('dbg-line-static') as HTMLInputElement;
@@ -269,6 +289,87 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   };
   setPaletteOptions(fillPaletteEl);
   setPaletteOptions(linePaletteEl);
+
+  const getPaletteColors = (name: string, steps: number): string[] | null => {
+    try {
+      const pal = (window as any).cartocolor?.[name];
+      if (!pal) return null;
+      const keys = Object.keys(pal)
+        .map((x: any) => Number(x))
+        .filter((n: number) => Number.isFinite(n))
+        .sort((a: number, b: number) => a - b);
+      const best = keys.find((n: number) => n >= steps) ?? keys[keys.length - 1];
+      const cols = pal[best];
+      return Array.isArray(cols) ? [...cols] : null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const paletteGradient = (paletteName: string, steps = 9): string => {
+    const cols = getPaletteColors(paletteName, Math.max(steps, 3));
+    if (!cols?.length) return 'linear-gradient(90deg, #555, #999)';
+    const g = cols.map((c: string, i: number) => `${c} ${(i / Math.max(1, cols.length - 1)) * 100}%`).join(', ');
+    return `linear-gradient(90deg, ${g})`;
+  };
+
+  const updatePalSwatch = (sel: HTMLSelectElement, swatchEl: HTMLElement, triggerEl: HTMLButtonElement) => {
+    const name = sel.value || 'Palette';
+    swatchEl.style.background = paletteGradient(name);
+    triggerEl.title = name;
+  };
+
+  const closeMenus = () => {
+    try { fillPalMenu.style.display = 'none'; } catch (_) {}
+    try { linePalMenu.style.display = 'none'; } catch (_) {}
+  };
+
+  const buildPalMenu = (
+    sel: HTMLSelectElement,
+    menuEl: HTMLElement,
+    swatchEl: HTMLElement,
+    triggerEl: HTMLButtonElement
+  ) => {
+    menuEl.innerHTML = palettes
+      .map((p) => {
+        const bg = paletteGradient(p);
+        return `<div class="pal-item" data-pal="${p}" title="${p}">
+          <div class="pal-item-swatch" style="background:${bg};"></div>
+        </div>`;
+      })
+      .join('');
+    menuEl.querySelectorAll('.pal-item').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        const pal = (el as HTMLElement).getAttribute('data-pal') || '';
+        if (pal) sel.value = pal;
+        updatePalSwatch(sel, swatchEl, triggerEl);
+        menuEl.style.display = 'none';
+        applyUIToLayer();
+      });
+    });
+  };
+
+  const attachPalDropdown = (
+    sel: HTMLSelectElement,
+    menuEl: HTMLElement,
+    swatchEl: HTMLElement,
+    triggerEl: HTMLButtonElement
+  ) => {
+    buildPalMenu(sel, menuEl, swatchEl, triggerEl);
+    updatePalSwatch(sel, swatchEl, triggerEl);
+    triggerEl.addEventListener('click', (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      const isOpen = menuEl.style.display !== 'none';
+      closeMenus();
+      menuEl.style.display = isOpen ? 'none' : 'block';
+    });
+  };
+
+  // Close palette menus when clicking elsewhere
+  const onDocClick = () => closeMenus();
+  document.addEventListener('click', onDocClick);
+  window.addEventListener('blur', onDocClick);
 
   // Find editable layers (for now: hex layers; especially tile layers)
   const editableLayers = config.layers.filter((l) => l.layerType === 'hex') as HexLayerConfig[];
@@ -343,6 +444,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       fillAttrEl.innerHTML = getAttrCandidates(layer).map((a) => `<option value="${a}">${a}</option>`).join('');
       if (cc.attr) fillAttrEl.value = String(cc.attr);
       if (cc.colors) fillPaletteEl.value = String(cc.colors);
+      updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger);
       const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
       fillDomainMinEl.value = fmt(Number(dom[0]), 2);
       fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -369,6 +471,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       lineAttrEl.innerHTML = getAttrCandidates(layer).map((a) => `<option value="${a}">${a}</option>`).join('');
       if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
       if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
+      updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger);
       const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
       lineDomainMinEl.value = fmt(Number(dom[0]), 2);
       lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -556,10 +659,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   [filledEl, strokedEl, extrudedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
-  [fillAttrEl, fillPaletteEl, fillDomainMinEl, fillDomainMaxEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [fillAttrEl, fillDomainMinEl, fillDomainMaxEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
   fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
-  [lineAttrEl, linePaletteEl, lineDomainMinEl, lineDomainMaxEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [lineAttrEl, lineDomainMinEl, lineDomainMaxEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });
@@ -574,6 +677,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   // Initial render
   updateFillFnOptions();
   updateLineFnOptions();
+  attachPalDropdown(fillPaletteEl, fillPalMenu, fillPalSwatch, fillPalTrigger);
+  attachPalDropdown(linePaletteEl, linePalMenu, linePalSwatch, linePalTrigger);
   readLayerToUI();
   updateFromMapStop();
   updateDebugTogglePosition(shell!, panel, toggle);
@@ -581,6 +686,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   return {
     destroy: () => {
+      try { document.removeEventListener('click', onDocClick); } catch (_) {}
+      try { window.removeEventListener('blur', onDocClick); } catch (_) {}
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
       try {
         (document.getElementById('dbg-apply') as HTMLElement).removeEventListener('click', onApplyView);

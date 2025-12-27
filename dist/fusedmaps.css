@@ -168,6 +168,49 @@ html[data-theme="light"] .debug-checkbox input { width: 14px; height: 14px; curs
   cursor: pointer;
 }
 .debug-select:focus { border-color: var(--ui-border-2); }
+.pal-hidden { display: none; }
+/* Palette dropdown (map_utils.py style: swatch-only) */
+.pal-dd { flex: 1 1 auto; min-width: 0; width: 100%; position: relative; }
+.pal-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 0;
+  color: var(--ui-text-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.pal-trigger:hover { border-color: var(--ui-border-2); }
+.pal-name { display: none; }
+.pal-swatch { width: 100%; height: 12px; border-radius: 3px; border: 1px solid var(--ui-border); background: linear-gradient(90deg, #555, #999); }
+.pal-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--ui-output-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  max-height: 220px;
+  overflow: auto;
+  z-index: 9999;
+  box-shadow: 0 8px 24px var(--ui-shadow-2);
+  width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb) var(--ui-scroll-track);
+}
+.pal-menu::-webkit-scrollbar { width: 6px; }
+.pal-menu::-webkit-scrollbar-track { background: var(--ui-scroll-track); border-radius: 6px; }
+.pal-menu::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 6px; }
+.pal-menu::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
+.pal-item { display: flex; align-items: center; justify-content: center; padding: 6px 0; cursor: pointer; }
+.pal-item:hover { background: rgba(124,155,182,0.14); }
+.pal-item-name { display: none; }
+.pal-item-swatch { width: 100%; height: 12px; border-radius: 3px; border: 1px solid var(--ui-border); }
 .debug-input-sm { flex: 0 0 56px; width: 56px; min-width: 56px; text-align: center; }
 .debug-slider { flex: 1 1 auto; min-width: 0; height: 4px; background: var(--ui-border); border-radius: 2px; -webkit-appearance: none; cursor: pointer; }
 html[data-theme="dark"] .debug-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #888; border-radius: 50%; cursor: pointer; }

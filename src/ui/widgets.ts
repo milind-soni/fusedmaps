@@ -10,12 +10,41 @@ export interface WidgetsHandle {
 }
 
 function downloadScreenshot(map: mapboxgl.Map) {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `map-screenshot-${ts}.png`;
+
   try {
     const canvas = map.getCanvas();
-    const dataUrl = canvas.toDataURL('image/png');
     const a = document.createElement('a');
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `map-screenshot-${ts}.png`;
+    a.download = filename;
+
+    // Prefer Blob download: more reliable filename/extension across browsers than data URLs.
+    if (typeof canvas.toBlob === 'function') {
+      canvas.toBlob(
+        (blob) => {
+          try {
+            if (!blob) throw new Error('toBlob returned null');
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Screenshot failed:', e);
+            alert(
+              'Screenshot blocked (likely due to CORS/tainted canvas from raster tiles). Try using only CORS-enabled layers/tiles.'
+            );
+          }
+        },
+        'image/png'
+      );
+      return;
+    }
+
+    // Fallback: data URL
+    const dataUrl = canvas.toDataURL('image/png');
     a.href = dataUrl;
     document.body.appendChild(a);
     a.click();

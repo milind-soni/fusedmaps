@@ -30,6 +30,37 @@ interface TileRuntime {
 }
 
 const DEFAULT_MAX_REQUESTS = 10;
+const DEFAULT_HYPARQUET_ESM_URL = 'https://cdn.jsdelivr.net/npm/hyparquet@1.23.3/+esm';
+
+let HYPARQUET_LOAD_PROMISE: Promise<any> | null = null;
+
+async function ensureHyparquetLoaded(): Promise<any> {
+  const w = window as any;
+  if (w.hyparquet?.parquetMetadataAsync && w.hyparquet?.parquetReadObjects) {
+    return w.hyparquet;
+  }
+  if (HYPARQUET_LOAD_PROMISE) return HYPARQUET_LOAD_PROMISE;
+
+  // Important: keep Rollup from trying to bundle/transform dynamic import in UMD.
+  const dynamicImport = (u: string) => (new Function('u', 'return import(u)') as any)(u);
+
+  HYPARQUET_LOAD_PROMISE = (async () => {
+    const mod = await dynamicImport(DEFAULT_HYPARQUET_ESM_URL);
+    // hyparquet exports vary: use module itself if functions are present, else default/named.
+    const candidate = mod?.default && (mod.default.parquetReadObjects || mod.default.parquetMetadataAsync)
+      ? mod.default
+      : mod;
+    w.hyparquet = candidate;
+    return w.hyparquet;
+  })()
+    .catch((e: any) => {
+      // allow retry on next tile
+      HYPARQUET_LOAD_PROMISE = null;
+      throw e;
+    });
+
+  return HYPARQUET_LOAD_PROMISE;
+}
 
 function hashString(s: string): string {
   // Small stable hash (djb2-ish) for IDs; not crypto.
@@ -548,11 +579,15 @@ function buildHexTileDeckLayers(
 
               // Parquet tiles
               if (ct.includes('application/octet-stream') || ct.includes('application/parquet') || url.endsWith('.parquet')) {
-                const hp = (window as any).hyparquet;
+                let hp = (window as any).hyparquet;
                 if (!hp?.parquetMetadataAsync || !hp?.parquetReadObjects) {
-                  // Not available: return empty (caller should ensure hyparquet is loaded)
-                  // IMPORTANT: don't mark tile as loaded; allow retry after hyparquet becomes available.
-                  return null;
+                  try {
+                    hp = await ensureHyparquetLoaded();
+                  } catch (e) {
+                    console.error('[tiles] failed to auto-load hyparquet', e);
+                    // IMPORTANT: don't mark tile as loaded; allow retry after hyparquet becomes available.
+                    return null;
+                  }
                 }
                 const buf = await res.arrayBuffer();
                 if (signal?.aborted) return null;

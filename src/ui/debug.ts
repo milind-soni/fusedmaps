@@ -119,6 +119,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
                 <span style="color:#666;">–</span>
                 <input type="number" class="debug-input debug-input-sm" id="dbg-domain-max" step="0.1" placeholder="max" />
               </div>
+            <div class="debug-row">
+              <span class="debug-label"></span>
+              <div class="debug-dual-range" aria-label="Domain range">
+                <input type="range" class="debug-range-min" id="dbg-domain-range-min" min="0" max="100" step="0.1" value="0" />
+                <input type="range" class="debug-range-max" id="dbg-domain-range-max" min="0" max="100" step="0.1" value="100" />
+              </div>
+            </div>
               <div class="debug-row">
                 <span class="debug-label">Steps</span>
                 <input type="number" class="debug-input debug-input-sm" id="dbg-steps" step="1" min="2" max="20" value="7" />
@@ -252,6 +259,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const fillPalMenu = document.getElementById('dbg-palette-menu') as HTMLElement;
   const fillDomainMinEl = document.getElementById('dbg-domain-min') as HTMLInputElement;
   const fillDomainMaxEl = document.getElementById('dbg-domain-max') as HTMLInputElement;
+  const fillRangeMinEl = document.getElementById('dbg-domain-range-min') as HTMLInputElement;
+  const fillRangeMaxEl = document.getElementById('dbg-domain-range-max') as HTMLInputElement;
   const fillStepsEl = document.getElementById('dbg-steps') as HTMLInputElement;
   const fillNullEl = document.getElementById('dbg-null-color') as HTMLInputElement;
   const fillNullLabel = document.getElementById('dbg-null-color-label') as HTMLElement;
@@ -448,6 +457,21 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
       fillDomainMinEl.value = fmt(Number(dom[0]), 2);
       fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
+      // Keep dual slider aligned with inputs (map_utils style)
+      try {
+        const dmin = Math.min(Number(dom[0]), Number(dom[1]));
+        const dmax = Math.max(Number(dom[0]), Number(dom[1]));
+        if (Number.isFinite(dmin) && Number.isFinite(dmax)) {
+          fillRangeMinEl.min = String(dmin);
+          fillRangeMinEl.max = String(dmax);
+          fillRangeMaxEl.min = String(dmin);
+          fillRangeMaxEl.max = String(dmax);
+          fillRangeMinEl.step = '0.1';
+          fillRangeMaxEl.step = '0.1';
+          fillRangeMinEl.value = String(Number(dom[0]));
+          fillRangeMaxEl.value = String(Number(dom[1]));
+        }
+      } catch (_) {}
       fillStepsEl.value = String(cc.steps ?? 7);
       const nc = Array.isArray(cc.nullColor) ? cc.nullColor : [184, 184, 184];
       const hex = `#${nc.slice(0, 3).map((x: any) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
@@ -530,7 +554,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         colors,
         steps: Number.isFinite(steps) ? steps : 7,
         nullColor: [nr, ng, nb],
-        autoDomain: true
+        // Default to autoDomain unless user explicitly overrides the domain (see domain handlers below).
+        autoDomain: (hexCfg.getFillColor?.autoDomain !== false)
       };
     }
 
@@ -552,7 +577,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
         colors,
         steps: parseInt(fillStepsEl.value || '7', 10) || 7,
-        autoDomain: true
+        autoDomain: (hexCfg.getLineColor?.autoDomain !== false)
       };
     }
 
@@ -562,6 +587,53 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateLayerOutput();
     findDeckOverlayOnMap();
     rebuildDeck();
+  };
+
+  // Domain slider behavior (map_utils style)
+  const syncDomainSliderFromInputs = () => {
+    const minV = parseFloat(fillDomainMinEl.value);
+    const maxV = parseFloat(fillDomainMaxEl.value);
+    if (Number.isFinite(minV)) fillRangeMinEl.value = String(minV);
+    if (Number.isFinite(maxV)) fillRangeMaxEl.value = String(maxV);
+  };
+
+  const syncDomainInputsFromSlider = () => {
+    let a = parseFloat(fillRangeMinEl.value);
+    let b = parseFloat(fillRangeMaxEl.value);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+    if (a > b) [a, b] = [b, a];
+    fillRangeMinEl.value = String(a);
+    fillRangeMaxEl.value = String(b);
+    fillDomainMinEl.value = String(a);
+    fillDomainMaxEl.value = String(b);
+  };
+
+  const markDomainFromUser = () => {
+    const layer = getActiveLayer();
+    if (!layer) return;
+    // This flag is checked by the tile autoDomain logic to avoid overwriting user edits.
+    (layer as any).fillDomainFromUser = true;
+    const hc: any = layer.hexLayer || {};
+    if (hc.getFillColor && typeof hc.getFillColor === 'object') {
+      hc.getFillColor.autoDomain = false;
+      try { delete hc.getFillColor._dynamicDomain; } catch (_) {}
+    }
+    if (hc.getLineColor && typeof hc.getLineColor === 'object') {
+      hc.getLineColor.autoDomain = false;
+      try { delete hc.getLineColor._dynamicDomain; } catch (_) {}
+    }
+  };
+
+  const onDomainSliderInput = () => {
+    // While dragging: update only the input boxes
+    syncDomainInputsFromSlider();
+  };
+
+  const onDomainSliderChange = () => {
+    // On mouseup/touchend: apply once + lock out autoDomain
+    syncDomainInputsFromSlider();
+    markDomainFromUser();
+    applyUIToLayer();
   };
 
   // ViewState updates: update output on map stop (moveend/rotateend/pitchend)
@@ -659,7 +731,18 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   [filledEl, strokedEl, extrudedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
-  [fillAttrEl, fillDomainMinEl, fillDomainMaxEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [fillAttrEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  // Domain inputs -> slider (no repaint while typing)
+  fillDomainMinEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
+  fillDomainMaxEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
+  // Enter/blur -> apply + disable autoDomain so it won't revert
+  fillDomainMinEl.addEventListener('change', () => { markDomainFromUser(); applyUIToLayer(); });
+  fillDomainMaxEl.addEventListener('change', () => { markDomainFromUser(); applyUIToLayer(); });
+  // Slider -> inputs (no repaint while dragging; repaint once on change)
+  fillRangeMinEl.addEventListener('input', onDomainSliderInput);
+  fillRangeMaxEl.addEventListener('input', onDomainSliderInput);
+  fillRangeMinEl.addEventListener('change', onDomainSliderChange);
+  fillRangeMaxEl.addEventListener('change', onDomainSliderChange);
   fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
   fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
   [lineAttrEl, lineDomainMinEl, lineDomainMaxEl].forEach((el) => el.addEventListener('change', applyUIToLayer));

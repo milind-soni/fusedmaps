@@ -310,6 +310,10 @@ function wantsAutoDomain(layer: HexLayerConfig): { enabled: boolean; attr: strin
   if (fc['@@function'] !== 'colorContinuous') return { enabled: false, attr: null };
   const attr = fc.attr || null;
   if (!attr) return { enabled: false, attr: null };
+  // If the user explicitly set a domain (e.g. via debug UI), never override it.
+  if ((layer as any).fillDomainFromUser === true || (fc as any).fillDomainFromUser === true) {
+    return { enabled: false, attr };
+  }
   const hasDomain = Array.isArray(fc.domain) && fc.domain.length >= 2;
   const enabled = fc.autoDomain === true || !hasDomain;
   return { enabled, attr };

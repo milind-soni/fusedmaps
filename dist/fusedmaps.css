@@ -219,6 +219,78 @@ html[data-theme="light"] .debug-slider::-webkit-slider-thumb { -webkit-appearanc
 html[data-theme="light"] .debug-slider::-webkit-slider-thumb:hover { background: var(--ui-accent); }
 .debug-color { width: 34px; height: 22px; padding: 0; border: 1px solid var(--ui-border); border-radius: 4px; background: transparent; cursor: pointer; }
 .debug-color-label { font-size: 11px; color: var(--ui-muted-2); }
+#debug-content { color-scheme: light dark; }
+
+/* Dual-thumb range (map_utils style) */
+.debug-dual-range { position: relative; flex: 1 1 auto; min-width: 0; height: 18px; }
+.debug-dual-range::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 4px;
+  background: var(--ui-border);
+  border-radius: 2px;
+}
+.debug-dual-range input[type="range"] {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  z-index: 2;
+}
+.debug-dual-range input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; border-radius: 2px; }
+html[data-theme="dark"] .debug-dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  background: #888;
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  z-index: 3;
+}
+html[data-theme="dark"] .debug-dual-range input[type="range"]::-webkit-slider-thumb:hover { background: #aaa; }
+html[data-theme="light"] .debug-dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  background: var(--ui-elements);
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  z-index: 3;
+}
+html[data-theme="light"] .debug-dual-range input[type="range"]::-webkit-slider-thumb:hover { background: var(--ui-accent); }
+.debug-dual-range input[type="range"]::-moz-range-track { height: 4px; background: transparent; border-radius: 2px; }
+html[data-theme="dark"] .debug-dual-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  background: #888;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  background: var(--ui-elements);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
 #debug-resize-handle { position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; background: transparent; }
 #debug-resize-handle:hover { background: linear-gradient(to left, rgba(232,255,89,0.95) 0 2px, rgba(255,255,255,0.04) 2px 100%); }
 .debug-input {

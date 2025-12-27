@@ -32,6 +32,15 @@ interface TileRuntime {
 
 const DEFAULT_MAX_REQUESTS = 10;
 
+function hashString(s: string): string {
+  // Small stable hash (djb2-ish) for IDs; not crypto.
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) ^ s.charCodeAt(i);
+  }
+  return (h >>> 0).toString(16);
+}
+
 function getDeck(): DeckGlobal | null {
   return (window as any).deck || null;
 }
@@ -492,14 +501,17 @@ function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number])
   return true;
 }
 
-function getTileConfig(layer: HexLayerConfig): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number } {
+function getTileConfig(
+  layer: HexLayerConfig
+): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number; refinementStrategy: string } {
   const cfg = layer.tileLayerConfig || {};
   return {
     tileSize: cfg.tileSize ?? 256,
     minZoom: cfg.minZoom ?? 0,
     maxZoom: cfg.maxZoom ?? 19,
     zoomOffset: (cfg as any).zoomOffset ?? 0,
-    maxRequests: (cfg as any).maxRequests ?? DEFAULT_MAX_REQUESTS
+    maxRequests: (cfg as any).maxRequests ?? DEFAULT_MAX_REQUESTS,
+    refinementStrategy: (cfg as any).refinementStrategy ?? 'best-available'
   };
 }
 
@@ -530,18 +542,40 @@ function buildHexTileDeckLayers(
       const tileCfg = getTileConfig(layer);
       const rawHexCfg: any = layer.hexLayer || {};
 
-      // Prefer dynamic domain (autoDomain) when present
+      // Prefer dynamic domain (autoDomain) when present (without mutating config object)
       const fillCfg: any = rawHexCfg.getFillColor;
-      if (fillCfg && typeof fillCfg === 'object' && !Array.isArray(fillCfg) && Array.isArray(fillCfg._dynamicDomain)) {
-        fillCfg.domain = fillCfg._dynamicDomain;
-      }
-      const lineCfg: any = rawHexCfg.getLineColor;
-      if (lineCfg && typeof lineCfg === 'object' && !Array.isArray(lineCfg) && Array.isArray(lineCfg._dynamicDomain)) {
-        lineCfg.domain = lineCfg._dynamicDomain;
-      }
+      const fillCfgEffective =
+        fillCfg && typeof fillCfg === 'object' && !Array.isArray(fillCfg) && Array.isArray(fillCfg._dynamicDomain)
+          ? { ...fillCfg, domain: fillCfg._dynamicDomain }
+          : fillCfg;
 
-      const getFillColor = buildColorAccessor(fillCfg);
-      const getLineColor = buildColorAccessor(lineCfg);
+      const lineCfg: any = rawHexCfg.getLineColor;
+      const lineCfgEffective =
+        lineCfg && typeof lineCfg === 'object' && !Array.isArray(lineCfg) && Array.isArray(lineCfg._dynamicDomain)
+          ? { ...lineCfg, domain: lineCfg._dynamicDomain }
+          : lineCfg;
+
+      const getFillColor = buildColorAccessor(fillCfgEffective);
+      const getLineColor = buildColorAccessor(lineCfgEffective);
+
+      // IMPORTANT: When autoDomain updates, we must force TileLayer + its sublayers to fully update.
+      // Otherwise, some already-loaded tiles can keep old attribute buffers and you see "tile seams".
+      const domKey = JSON.stringify({
+        fd: (fillCfgEffective && typeof fillCfgEffective === 'object') ? (fillCfgEffective.domain || fillCfgEffective._dynamicDomain) : null,
+        ld: (lineCfgEffective && typeof lineCfgEffective === 'object') ? (lineCfgEffective.domain || lineCfgEffective._dynamicDomain) : null
+      });
+      const styleKey = JSON.stringify({
+        f: fillCfgEffective,
+        l: lineCfgEffective,
+        stroked: rawHexCfg.stroked !== false,
+        filled: rawHexCfg.filled !== false,
+        extruded: rawHexCfg.extruded === true,
+        opacity: rawHexCfg.opacity,
+        elevationScale: rawHexCfg.elevationScale,
+        coverage: rawHexCfg.coverage,
+        lineWidthMinPixels: rawHexCfg.lineWidthMinPixels
+      });
+      const idHash = hashString(`${domKey}|${styleKey}`);
 
       const stroked = rawHexCfg.stroked !== false;
       const filled = rawHexCfg.filled !== false;
@@ -551,15 +585,20 @@ function buildHexTileDeckLayers(
       const elevationScale = rawHexCfg.elevationScale ?? 1;
       const coverage = rawHexCfg.coverage ?? 0.9;
 
+      const auto = wantsAutoDomain(layer);
+      const refinementStrategy =
+        (tileCfg as any).refinementStrategy ||
+        (auto.enabled ? 'no-overlap' : 'best-available');
+
       return new TileLayer({
-        id: `${layer.id}-tiles`,
+        id: `${layer.id}-tiles-${idHash}`,
         data: tileUrl,
         tileSize: tileCfg.tileSize,
         minZoom: tileCfg.minZoom,
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
-        refinementStrategy: 'best-available',
+        refinementStrategy,
         pickable: true,
         visible,
         getTileData: async ({ index, signal }: any) => {

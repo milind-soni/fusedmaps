@@ -67,6 +67,9 @@ export interface TileLayerConfig {
     tileSize?: number;
     minZoom?: number;
     maxZoom?: number;
+    zoomOffset?: number;
+    maxRequests?: number;
+    refinementStrategy?: 'best-available' | 'no-overlap' | string;
 }
 export interface BaseLayerConfig {
     id: string;

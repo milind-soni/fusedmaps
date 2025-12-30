@@ -600,6 +600,29 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   display: flex;
 }
 
+/* DuckDB (SQL) loader */
+#sql-loader {
+  position: fixed;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 15, 15, 0.9);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #fff;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 200;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
+}
+
+#sql-loader.active {
+  display: flex;
+}
+
 .loader-spinner {
   width: 12px;
   height: 12px;

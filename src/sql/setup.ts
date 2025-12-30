@@ -6,8 +6,69 @@ import { buildColorExpr } from '../color/expressions';
 import { toRgba } from '../color/palettes';
 import type { FeatureCollection } from 'geojson';
 
+let sqlLoader: { setStatus: (layerId: string, status: string) => void } | null = null;
+let sqlLayerNames: Record<string, string> = {};
+
 function isSqlHexLayer(l: LayerConfig): l is HexLayerConfig {
   return l.layerType === 'hex' && !(l as any).isTileLayer && (!!(l as any).parquetData || !!(l as any).parquetUrl);
+}
+
+function ensureSqlLoader(): { setStatus: (layerId: string, status: string) => void } {
+  let el = document.getElementById('sql-loader');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sql-loader';
+    el.innerHTML = `<div class="loader-spinner"></div><span id="sql-loader-text">DuckDB…</span>`;
+    document.body.appendChild(el);
+  }
+
+  const textEl = document.getElementById('sql-loader-text');
+  let hideTimeout: any = null;
+  const statusByLayer = new Map<string, string>();
+
+  const isBusy = (s: string) => {
+    const t = (s || '').toLowerCase();
+    if (!t) return false;
+    if (t.startsWith('error:')) return false;
+    if (t.includes(' rows')) return false;
+    return t.includes('initializ') || t.includes('running') || t.includes('loading') || t.includes('fetch');
+  };
+
+  const refresh = () => {
+    if (!el) return;
+    const busy = [...statusByLayer.entries()].filter(([, s]) => isBusy(s));
+    if (busy.length) {
+      if (hideTimeout) clearTimeout(hideTimeout);
+      el.classList.add('active');
+
+      const [layerId, st] = busy[0];
+      const name = sqlLayerNames[layerId] || layerId;
+      const label = busy.length > 1 ? `DuckDB: ${st} (${busy.length} layers)` : `DuckDB: ${st} (${name})`;
+      if (textEl) textEl.textContent = label;
+      return;
+    }
+
+    // If there are no busy layers, show the most recent error briefly (if any).
+    const errors = [...statusByLayer.entries()].filter(([, s]) => String(s || '').toLowerCase().startsWith('error:'));
+    if (errors.length) {
+      const [layerId, st] = errors[0];
+      const name = sqlLayerNames[layerId] || layerId;
+      if (hideTimeout) clearTimeout(hideTimeout);
+      el.classList.add('active');
+      if (textEl) textEl.textContent = `DuckDB: ${st} (${name})`;
+      hideTimeout = setTimeout(() => el?.classList.remove('active'), 1800);
+      return;
+    }
+
+    hideTimeout = setTimeout(() => el?.classList.remove('active'), 300);
+  };
+
+  const setStatus = (layerId: string, status: string) => {
+    statusByLayer.set(layerId, String(status || ''));
+    refresh();
+  };
+
+  return { setStatus };
 }
 
 function safeSetGeoJsonSource(map: mapboxgl.Map, sourceId: string, geojson: FeatureCollection): boolean {
@@ -63,6 +124,10 @@ function dispatchSqlStatus(layerId: string, status: string): void {
   try {
     window.dispatchEvent(new CustomEvent('fusedmaps:sql:status', { detail: { layerId, status } }));
   } catch (_) {}
+  try {
+    if (!sqlLoader) sqlLoader = ensureSqlLoader();
+    sqlLoader?.setStatus(layerId, status);
+  } catch (_) {}
 }
 
 function dispatchLegendUpdate(): void {
@@ -77,6 +142,15 @@ export function setupDuckDbSql(
 ): { destroy: () => void } | null {
   const sqlLayers = (config.layers || []).filter(isSqlHexLayer);
   if (!sqlLayers.length) return null;
+
+  // For the global DuckDB loader label.
+  try {
+    sqlLayerNames = {};
+    for (const l of sqlLayers) sqlLayerNames[l.id] = l.name || l.id;
+  } catch (_) {}
+  try {
+    if (!sqlLoader) sqlLoader = ensureSqlLoader();
+  } catch (_) {}
 
   const runtime = new DuckDbSqlRuntime();
   let destroyed = false;

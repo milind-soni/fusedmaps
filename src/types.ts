@@ -105,6 +105,7 @@ export interface HexLayerConfig extends BaseLayerConfig {
   hexLayer?: HexLayerStyle;
   tileLayerConfig?: TileLayerConfig;
   parquetData?: string; // base64 encoded parquet
+  parquetUrl?: string; // optional URL to Parquet (preferred over base64 for larger payloads)
   sql?: string;
   fillDomainFromUser?: boolean;
 }

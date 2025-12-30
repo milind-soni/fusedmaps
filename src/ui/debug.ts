@@ -220,6 +220,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
             </div>
           </div>
 
+          <div class="debug-section" id="sql-section" style="display:none;">
+            <div class="debug-section-title">SQL Filter <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
+            <textarea id="dbg-sql" class="debug-output" style="height:60px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="SELECT * FROM data"></textarea>
+          </div>
+
           <div class="debug-section">
             <div class="debug-section-title">Current ViewState</div>
             <textarea id="dbg-view-output" class="debug-output" readonly></textarea>
@@ -289,6 +294,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const bearingEl = document.getElementById('dbg-bearing') as HTMLInputElement;
   const viewOut = document.getElementById('dbg-view-output') as HTMLTextAreaElement;
   const layerOut = document.getElementById('dbg-output') as HTMLTextAreaElement;
+
+  const sqlSection = document.getElementById('sql-section') as HTMLElement;
+  const sqlStatusEl = document.getElementById('sql-status') as HTMLElement;
+  const sqlInputEl = document.getElementById('dbg-sql') as HTMLTextAreaElement;
 
   const initial: ViewState = config.initialViewState;
 
@@ -516,6 +525,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateFillFnOptions();
     updateLineFnOptions();
     updateLayerOutput();
+
+    // SQL (DuckDB) section: only for non-tile hex layers that have parquetData/parquetUrl
+    try {
+      const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
+      if (sqlSection) sqlSection.style.display = isSql ? 'block' : 'none';
+      if (sqlInputEl && isSql) {
+        sqlInputEl.value = String((layer as any).sql || 'SELECT * FROM data');
+      }
+      if (sqlStatusEl) sqlStatusEl.textContent = '';
+    } catch (_) {}
   };
 
   const applyUIToLayer = () => {
@@ -750,6 +769,42 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });
 
+  // SQL editor (debounced, live)
+  let sqlTypingTimer: any = null;
+  const scheduleSql = () => {
+    const layer = getActiveLayer();
+    if (!layer) return;
+    const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
+    if (!isSql) return;
+    const sql = String(sqlInputEl?.value || 'SELECT * FROM data');
+    (layer as any).sql = sql;
+    if (sqlStatusEl) sqlStatusEl.textContent = 'typing...';
+    clearTimeout(sqlTypingTimer);
+    sqlTypingTimer = setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', { detail: { layerId: layer.id, sql } }));
+      } catch (_) {}
+    }, 500);
+  };
+  try {
+    sqlInputEl?.addEventListener('input', scheduleSql);
+  } catch (_) {}
+
+  // SQL status updates from runtime
+  const onSqlStatus = (evt: any) => {
+    try {
+      const d = evt?.detail || {};
+      const layerId = String(d.layerId || '');
+      const status = String(d.status || '');
+      const active = getActiveLayer();
+      if (!active || active.id !== layerId) return;
+      if (sqlStatusEl) sqlStatusEl.textContent = status;
+    } catch (_) {}
+  };
+  try {
+    window.addEventListener('fusedmaps:sql:status', onSqlStatus as any);
+  } catch (_) {}
+
   // Update viewstate only on "stop"
   try {
     map.on('moveend', updateFromMapStop);
@@ -782,6 +837,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         map.off('rotateend', updateFromMapStop);
         map.off('pitchend', updateFromMapStop);
       } catch (_) {}
+      try { window.removeEventListener('fusedmaps:sql:status', onSqlStatus as any); } catch (_) {}
       try { shell?.remove(); } catch (_) {}
     }
   };

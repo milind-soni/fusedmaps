@@ -15,6 +15,7 @@ import { setupWidgets } from './ui/widgets';
 import { setupDebugPanel } from './ui/debug';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
+import { setupDuckDbSql } from './sql/setup';
 
 // Re-export types
 export * from './types';
@@ -57,6 +58,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Deck.gl overlay (for tile layers)
   let deckOverlay: unknown = null;
   let legendUpdateHandler: any = null;
+  let duckHandle: any = null;
   
   // Setup UI components
   if (config.ui?.layerPanel !== false) {
@@ -100,6 +102,17 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     if (config.messaging) {
       setupMessaging(map, config.messaging, config.layers);
     }
+
+    // DuckDB-WASM SQL layers (non-tile Parquet-backed hex layers)
+    duckHandle = setupDuckDbSql(
+      map,
+      config,
+      layerVisibilityState,
+      () => {
+        try { updateLayerPanel(config.layers, layerVisibilityState); } catch (_) {}
+        try { updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs()); } catch (_) {}
+      }
+    );
     
     // Auto-fit to bounds if no custom view
     if (!config.hasCustomView) {
@@ -137,6 +150,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       } catch (_) {}
       try {
         debugHandle?.destroy?.();
+      } catch (_) {}
+      try {
+        duckHandle?.destroy?.();
       } catch (_) {}
       try {
         if (legendUpdateHandler) {

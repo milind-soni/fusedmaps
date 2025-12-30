@@ -19,6 +19,14 @@ export function getLayerGeoJSONs(): Record<string, GeoJSON.FeatureCollection> {
 }
 
 /**
+ * Update (or create) a computed GeoJSON for a layer.
+ * Useful for dynamic sources (e.g. DuckDB SQL filtered layers) without rebuilding all layers.
+ */
+export function setLayerGeoJSON(layerId: string, geojson: GeoJSON.FeatureCollection): void {
+  layerGeoJSONs[layerId] = geojson;
+}
+
+/**
  * Add all layers to the map
  */
 export function addAllLayers(

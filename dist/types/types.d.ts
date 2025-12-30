@@ -85,6 +85,7 @@ export interface HexLayerConfig extends BaseLayerConfig {
     hexLayer?: HexLayerStyle;
     tileLayerConfig?: TileLayerConfig;
     parquetData?: string;
+    parquetUrl?: string;
     sql?: string;
     fillDomainFromUser?: boolean;
 }

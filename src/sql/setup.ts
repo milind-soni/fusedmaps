@@ -59,6 +59,20 @@ function updateHexPaint(map: mapboxgl.Map, layer: HexLayerConfig): void {
   } catch (_) {}
 }
 
+function computeMinMaxFromRows(rows: Array<Record<string, unknown>>, attr: string): { min: number; max: number } | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const r of rows) {
+    const v: any = (r as any)[attr];
+    const n = typeof v === 'number' ? v : (typeof v === 'string' ? Number(v) : NaN);
+    if (!Number.isFinite(n)) continue;
+    if (n < min) min = n;
+    if (n > max) max = n;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { min, max };
+}
+
 function dispatchSqlStatus(layerId: string, status: string): void {
   try {
     window.dispatchEvent(new CustomEvent('fusedmaps:sql:status', { detail: { layerId, status } }));
@@ -108,6 +122,27 @@ export function setupDuckDbSql(
       layer.data = rows;
       // Keep the layer's config in sync so debug panel + downstream consumers see it.
       layer.sql = sqlText || layer.sql || 'SELECT * FROM data';
+
+      // Live domain/legend stats: if autoDomain is enabled and user hasn't overridden,
+      // recompute min/max from the filtered result set.
+      try {
+        const fc: any = layer.hexLayer?.getFillColor;
+        if (fc && typeof fc === 'object' && !Array.isArray(fc) && fc['@@function'] === 'colorContinuous') {
+          const attr = String(fc.attr || '');
+          if (attr && fc.autoDomain === true && (layer as any).fillDomainFromUser !== true) {
+            const mm = computeMinMaxFromRows(rows, attr);
+            if (mm) fc.domain = [mm.min, mm.max];
+          }
+        }
+        const lc: any = layer.hexLayer?.getLineColor;
+        if (lc && typeof lc === 'object' && !Array.isArray(lc) && lc['@@function'] === 'colorContinuous') {
+          const attr = String(lc.attr || '');
+          if (attr && lc.autoDomain === true && (layer as any).fillDomainFromUser !== true) {
+            const mm = computeMinMaxFromRows(rows, attr);
+            if (mm) lc.domain = [mm.min, mm.max];
+          }
+        }
+      } catch (_) {}
 
       const geojson = rowsToHexGeoJSON(rows);
       setLayerGeoJSON(layer.id, geojson);

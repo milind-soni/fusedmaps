@@ -778,6 +778,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     if (!isSql) return;
     const sql = String(sqlInputEl?.value || 'SELECT * FROM data');
     (layer as any).sql = sql;
+    try { updateLayerOutput(); } catch (_) {}
     if (sqlStatusEl) sqlStatusEl.textContent = 'typing...';
     clearTimeout(sqlTypingTimer);
     sqlTypingTimer = setTimeout(() => {

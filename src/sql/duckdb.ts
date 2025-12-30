@@ -1,5 +1,5 @@
 import type { HexLayerConfig } from '../types';
-import { toH3, hexToGeoJSON } from '../layers/hex';
+import { toH3 } from '../layers/hex';
 import type { FeatureCollection } from 'geojson';
 
 // Default pinned DuckDB-WASM ESM version (can be overridden per runtime instance).
@@ -11,6 +11,15 @@ type DuckDb = any;
 type DuckConn = any;
 
 const duckModulePromisesByVersion = new Map<string, Promise<DuckModule>>();
+
+function isSafeStructKey(name: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+}
+
+function quoteIdent(name: string): string {
+  // DuckDB uses standard SQL identifier quoting with double quotes.
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
 
 async function ensureDuckModule(version: string = DEFAULT_DUCKDB_WASM_VERSION): Promise<DuckModule> {
   const existing = duckModulePromisesByVersion.get(version);
@@ -53,6 +62,7 @@ export class DuckDbSqlRuntime {
   private tableByLayerId = new Map<string, string>(); // layer.id -> tableName
   private loadedTables = new Set<string>(); // tableName
   private version: string;
+  private hasSpatial = false;
 
   constructor(opts?: { version?: string }) {
     this.version = opts?.version || DEFAULT_DUCKDB_WASM_VERSION;
@@ -77,6 +87,16 @@ export class DuckDbSqlRuntime {
     // Optional: try to load H3 extension (ignored on failure).
     try { await conn.query('INSTALL h3 FROM community'); } catch (_) {}
     try { await conn.query('LOAD h3'); } catch (_) {}
+
+    // Optional: spatial extension enables ST_AsGeoJSON + ST_GeomFromText so we can build GeoJSON in DuckDB.
+    // (We still work without it; we just fall back to JS geometry.)
+    try { await conn.query('INSTALL spatial'); } catch (_) {}
+    try {
+      await conn.query('LOAD spatial');
+      this.hasSpatial = true;
+    } catch (_) {
+      this.hasSpatial = false;
+    }
 
     this.db = db;
     this.conn = conn;
@@ -135,6 +155,105 @@ export class DuckDbSqlRuntime {
     return { rows, count: rows.length };
   }
 
+  async getMinMaxFromQuery(
+    layer: HexLayerConfig,
+    attr: string,
+    sqlText: string
+  ): Promise<{ min: number; max: number } | null> {
+    await this.ensureLayerTable(layer);
+    if (!this.conn) return null;
+
+    const tableName = this.layerTableName(layer);
+    await this.conn.query(`CREATE OR REPLACE VIEW data AS SELECT * FROM ${tableName}`);
+
+    const sql = (sqlText || '').trim();
+    const isSelectLike = /^(with|select)\b/i.test(sql);
+    const query = isSelectLike ? sql : `SELECT * FROM data WHERE (${sql || '1=1'})`;
+
+    const col = quoteIdent(attr);
+    const res = await this.conn.query(`SELECT MIN(${col}) as min_val, MAX(${col}) as max_val FROM (${query}) AS q`);
+    const row: any = (res.toArray() as any[])[0];
+    if (!row) return null;
+    let minVal: any = row.min_val;
+    let maxVal: any = row.max_val;
+    if (typeof minVal === 'bigint') minVal = Number(minVal);
+    if (typeof maxVal === 'bigint') maxVal = Number(maxVal);
+    if (!Number.isFinite(minVal) || !Number.isFinite(maxVal)) return null;
+    return { min: minVal, max: maxVal };
+  }
+
+  /**
+   * Build a GeoJSON FeatureCollection inside DuckDB when possible.
+   *
+   * Requirements:
+   * - h3 extension available (h3_cell_to_boundary_wkt / h3_is_valid_cell)
+   * - spatial extension available (ST_GeomFromText / ST_AsGeoJSON)
+   * - H3 cell column is present and castable to BIGINT (typical for Parquet int64 hex ids)
+   * - Column names are "safe" identifiers (for struct_pack); otherwise we fall back to JS.
+   */
+  async runSqlGeoJSON(
+    layer: HexLayerConfig,
+    sqlText: string
+  ): Promise<{ geojson: FeatureCollection; count: number } | null> {
+    await this.ensureLayerTable(layer);
+    if (!this.conn) throw new Error('DuckDB not initialized');
+    if (!this.hasSpatial) return null;
+
+    const tableName = this.layerTableName(layer);
+    await this.conn.query(`CREATE OR REPLACE VIEW data AS SELECT * FROM ${tableName}`);
+
+    const sql = (sqlText || '').trim();
+    const isSelectLike = /^(with|select)\b/i.test(sql);
+    const query = isSelectLike ? sql : `SELECT * FROM data WHERE (${sql || '1=1'})`;
+
+    // Discover columns cheaply (LIMIT 0) so we can build properties JSON.
+    const schemaRes = await this.conn.query(`SELECT * FROM (${query}) AS q LIMIT 0`);
+    const fields: any[] = schemaRes?.schema?.fields || [];
+    const cols: string[] = fields.map((f: any) => String(f?.name || '')).filter(Boolean);
+
+    const h3Candidates = ['hex', 'h3', 'index', 'id'];
+    const h3Col = h3Candidates.find((c) => cols.includes(c)) || null;
+    if (!h3Col) return null;
+
+    // Only support simple identifier-like column names for now.
+    if (!cols.every(isSafeStructKey)) return null;
+
+    const propsExpr = `to_json(struct_pack(${cols.map((c) => `${c} := "${c}"`).join(', ')}))`;
+
+    // Build FeatureCollection as a single JSON string (map_utils.py style)
+    const q = `
+      WITH q AS (${query})
+      SELECT
+        count(*)::BIGINT AS cnt,
+        CASE
+          WHEN count(*) = 0 THEN '{"type":"FeatureCollection","features":[]}'
+          ELSE (
+            '{"type":"FeatureCollection","features":[' ||
+              string_agg(
+                '{"type":"Feature","geometry":' ||
+                  ST_AsGeoJSON(ST_GeomFromText(h3_cell_to_boundary_wkt(CAST("${h3Col}" AS BIGINT)))) ||
+                ',"properties":' || ${propsExpr} || '}',
+                ','
+              ) ||
+            ']}'
+          )
+        END AS gj
+      FROM q
+      WHERE "${h3Col}" IS NOT NULL
+        AND h3_is_valid_cell(CAST("${h3Col}" AS BIGINT))
+    `;
+
+    const res = await this.conn.query(q);
+    const row: any = (res.toArray() as any[])[0];
+    if (!row) return { geojson: { type: 'FeatureCollection', features: [] } as any, count: 0 };
+
+    let cnt: any = row.cnt;
+    if (typeof cnt === 'bigint') cnt = Number(cnt);
+    const gjStr: string = String(row.gj || '{"type":"FeatureCollection","features":[]}');
+    const gj = JSON.parse(gjStr);
+    return { geojson: gj as FeatureCollection, count: Number(cnt) || 0 };
+  }
+
   async getMinMax(layer: HexLayerConfig, attr: string): Promise<{ min: number; max: number } | null> {
     await this.ensureLayerTable(layer);
     if (!this.conn) return null;
@@ -152,8 +271,7 @@ export class DuckDbSqlRuntime {
   }
 }
 
-export function rowsToHexGeoJSON(rows: Array<Record<string, unknown>>): FeatureCollection {
-  return hexToGeoJSON(rows) as any;
-}
+// NOTE: We intentionally removed the JS geometry fallback for DuckDB SQL layers
+// to keep the implementation simple and fully DuckDB-driven.
 
 

@@ -9,6 +9,9 @@ import { getPaletteColors, toRgba } from '../color/palettes';
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
 
 let visibilityCallback: VisibilityCallback | null = null;
+let lastLayers: LayerConfig[] = [];
+let lastVisibilityState: Record<string, boolean> = {};
+let installedListeners = false;
 
 // Eye icon SVGs
 const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
@@ -23,6 +26,8 @@ export function setupLayerPanel(
   onVisibilityChange: VisibilityCallback
 ): void {
   visibilityCallback = onVisibilityChange;
+  lastLayers = layers;
+  lastVisibilityState = visibilityState;
   
   // Create panel container if it doesn't exist
   let panel = document.getElementById('layer-panel');
@@ -54,6 +59,17 @@ export function setupLayerPanel(
   };
   
   updateLayerPanel(layers, visibilityState);
+
+  // Keep the "gutter" gradient strips in sync when layer styles change (palette/domain/etc).
+  // We reuse the existing legend update event since it's already dispatched on style edits.
+  if (!installedListeners) {
+    installedListeners = true;
+    try {
+      window.addEventListener('fusedmaps:legend:update', () => {
+        try { updateLayerPanel(lastLayers, lastVisibilityState); } catch (_) {}
+      });
+    } catch (_) {}
+  }
 }
 
 /**
@@ -63,6 +79,8 @@ export function updateLayerPanel(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>
 ): void {
+  lastLayers = layers;
+  lastVisibilityState = visibilityState;
   const list = document.getElementById('layer-list');
   if (!list) return;
   

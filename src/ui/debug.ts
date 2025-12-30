@@ -8,6 +8,7 @@
 import type { FusedMapsConfig, HexLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
 import { hexToGeoJSON, updateStaticHexLayer } from '../layers/hex';
+import { getLayerGeoJSONs } from '../layers';
 
 export interface DebugHandle {
   destroy: () => void;
@@ -237,8 +238,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           </div>
 
           <div class="debug-section" id="sql-section" style="display:none;">
-            <div class="debug-section-title">SQL Filter <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
-            <textarea id="dbg-sql" class="debug-output" style="height:60px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="SELECT * FROM data"></textarea>
+            <div class="debug-section-title">SQL <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
+            <textarea id="dbg-sql" class="debug-output" style="height:60px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
           </div>
 
           <div class="debug-section">
@@ -440,7 +441,50 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const updateLayerOutput = () => {
     try {
-      layerOut.value = JSON.stringify(getActiveLayer(), null, 2);
+      const layer: any = getActiveLayer();
+      if (!layer) {
+        layerOut.value = '';
+        return;
+      }
+
+      // Avoid dumping huge payloads (esp. DuckDB SQL layers with tens of thousands of rows).
+      // Keep output stable + readable: show rowCount + a small preview instead of full `data`.
+      const MAX_PREVIEW_ROWS = 50;
+      const MAX_STRINGIFY_CHARS = 200_000;
+
+      const out: any = { ...layer };
+      // SQL UX: allow shorthand "WHERE ..." expressions but surface the resolved full query for clarity.
+      try {
+        const sqlRaw = typeof layer.sql === 'string' ? layer.sql.trim() : '';
+        if (sqlRaw) {
+          const isSelectLike = /^(with|select)\b/i.test(sqlRaw);
+          out.sql = sqlRaw;
+          out.sqlResolved = isSelectLike ? sqlRaw : `SELECT * FROM data WHERE (${sqlRaw || '1=1'})`;
+        }
+      } catch (_) {}
+
+      if (Array.isArray(layer.data)) {
+        out.rowCount = layer.data.length;
+        out.dataPreview = layer.data.slice(0, MAX_PREVIEW_ROWS);
+        if (layer.data.length > MAX_PREVIEW_ROWS) out.dataPreviewTruncated = true;
+        delete out.data;
+      }
+
+      // If any geojson snuck in, truncate similarly.
+      if (out.geojson && out.geojson.features && Array.isArray(out.geojson.features)) {
+        out.geojson = {
+          type: out.geojson.type,
+          rowCount: out.geojson.features.length,
+          featuresPreview: out.geojson.features.slice(0, Math.min(10, out.geojson.features.length))
+        };
+        out.geojsonPreviewTruncated = out.geojson.featuresPreview.length < (layer.geojson?.features?.length || 0);
+      }
+
+      let s = JSON.stringify(out, null, 2);
+      if (s.length > MAX_STRINGIFY_CHARS) {
+        s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
+      }
+      layerOut.value = s;
     } catch (_) {
       layerOut.value = '';
     }
@@ -627,7 +671,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     try {
       const isStaticHex = layer.layerType === 'hex' && !(layer as any).isTileLayer;
       if (isStaticHex) {
-        const g = hexToGeoJSON((layer as any).data || []);
+        // SQL-backed hex layers no longer keep `layer.data`; their latest geometry lives in `layerGeoJSONs`.
+        const isSql = !!(layer as any).parquetData || !!(layer as any).parquetUrl;
+        const g = isSql
+          ? (getLayerGeoJSONs()?.[layer.id] || ({ type: 'FeatureCollection', features: [] } as any))
+          : hexToGeoJSON((layer as any).data || []);
         const visible = getCurrentLayerVisibility(map, layer.id);
         updateStaticHexLayer(map, layer as HexLayerConfig, g, visible);
       }
@@ -802,7 +850,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     if (!layer) return;
     const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
     if (!isSql) return;
-    const sql = String(sqlInputEl?.value || 'SELECT * FROM data');
+    const sql = String(sqlInputEl?.value || '').trim() || 'SELECT * FROM data';
+    // Normalize away trailing newlines so the config output stays stable/readable.
+    try { if (sqlInputEl) sqlInputEl.value = sql; } catch (_) {}
     (layer as any).sql = sql;
     try { updateLayerOutput(); } catch (_) {}
     if (sqlStatusEl) sqlStatusEl.textContent = 'typing...';

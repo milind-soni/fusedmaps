@@ -41,22 +41,10 @@ function ensureSqlLoader(): { setStatus: (layerId: string, status: string) => vo
       if (hideTimeout) clearTimeout(hideTimeout);
       el.classList.add('active');
 
-      const [layerId, st] = busy[0];
-      const name = sqlLayerNames[layerId] || layerId;
-      const label = busy.length > 1 ? `DuckDB: ${st} (${busy.length} layers)` : `DuckDB: ${st} (${name})`;
-      if (textEl) textEl.textContent = label;
-      return;
-    }
-
-    // If there are no busy layers, show the most recent error briefly (if any).
-    const errors = [...statusByLayer.entries()].filter(([, s]) => String(s || '').toLowerCase().startsWith('error:'));
-    if (errors.length) {
-      const [layerId, st] = errors[0];
-      const name = sqlLayerNames[layerId] || layerId;
-      if (hideTimeout) clearTimeout(hideTimeout);
-      el.classList.add('active');
-      if (textEl) textEl.textContent = `DuckDB: ${st} (${name})`;
-      hideTimeout = setTimeout(() => el?.classList.remove('active'), 1800);
+      // Keep text intentionally simple (map_utils style).
+      // We only show "Initialising…" or "Loading…" regardless of layer/count.
+      const anyInit = busy.some(([, s]) => String(s || '').toLowerCase().includes('initializ'));
+      if (textEl) textEl.textContent = anyInit ? 'Initialising…' : 'Loading…';
       return;
     }
 

@@ -2,19 +2,23 @@ import type { HexLayerConfig } from '../types';
 import { toH3, hexToGeoJSON } from '../layers/hex';
 import type { FeatureCollection } from 'geojson';
 
-const DEFAULT_DUCKDB_WASM_VERSION = '1.29.1-dev132.0';
+// Default pinned DuckDB-WASM ESM version (can be overridden per runtime instance).
+// User requested: https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev13.0/+esm
+const DEFAULT_DUCKDB_WASM_VERSION = '1.33.1-dev13.0';
 
 type DuckModule = any;
 type DuckDb = any;
 type DuckConn = any;
 
-let duckModulePromise: Promise<DuckModule> | null = null;
+const duckModulePromisesByVersion = new Map<string, Promise<DuckModule>>();
 
 async function ensureDuckModule(version: string = DEFAULT_DUCKDB_WASM_VERSION): Promise<DuckModule> {
-  if (duckModulePromise) return duckModulePromise;
+  const existing = duckModulePromisesByVersion.get(version);
+  if (existing) return existing;
   const url = `https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@${version}/+esm`;
-  duckModulePromise = import(/* @vite-ignore */ url) as any;
-  return duckModulePromise;
+  const p = import(/* @vite-ignore */ url) as any;
+  duckModulePromisesByVersion.set(version, p);
+  return p;
 }
 
 function decodeBase64ToBytes(b64: string): Uint8Array {

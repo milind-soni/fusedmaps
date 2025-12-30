@@ -82,8 +82,19 @@ export function addStaticHexLayer(
   const cfg = layer.hexLayer || {};
   const data = layer.data || [];
   
-  // Add source
-  map.addSource(layer.id, { type: 'geojson', data: geojson });
+  // Add or update source (debug panel may call this repeatedly)
+  try {
+    const src: any = map.getSource(layer.id) as any;
+    if (src && typeof src.setData === 'function') {
+      src.setData(geojson);
+    } else if (!src) {
+      map.addSource(layer.id, { type: 'geojson', data: geojson });
+    }
+  } catch (_) {
+    // If we can't access the source (style not ready / race), we still try to proceed.
+    // Mapbox will throw again on addLayer if source truly doesn't exist, but this avoids
+    // the common "Source already exists" crash on debug edits.
+  }
   
   // Build fill color expression
   const fillColor = Array.isArray(cfg.getFillColor)

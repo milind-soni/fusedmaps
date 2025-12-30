@@ -7,6 +7,7 @@
 
 import type { FusedMapsConfig, HexLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
+import { hexToGeoJSON, updateStaticHexLayer } from '../layers/hex';
 
 export interface DebugHandle {
   destroy: () => void;
@@ -37,6 +38,21 @@ function updateDebugTogglePosition(shell: HTMLElement, panel: HTMLElement, toggl
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function getCurrentLayerVisibility(map: mapboxgl.Map, layerId: string): boolean {
+  try {
+    const style: any = map.getStyle?.();
+    const layers: any[] = style?.layers || [];
+    const ids = [`${layerId}-fill`, `${layerId}-extrusion`, `${layerId}-outline`];
+    for (const id of ids) {
+      const l = layers.find((x: any) => x && x.id === id);
+      if (!l) continue;
+      const vis = l.layout?.visibility;
+      return vis !== 'none';
+    }
+  } catch (_) {}
+  return true;
 }
 
 function ensureColorContinuousCfg(obj: any) {
@@ -606,6 +622,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateLayerOutput();
     findDeckOverlayOnMap();
     rebuildDeck();
+
+    // Non-tile hex layers are Mapbox GL layers, not Deck.gl. Rebuild them so UI edits apply.
+    try {
+      const isStaticHex = layer.layerType === 'hex' && !(layer as any).isTileLayer;
+      if (isStaticHex) {
+        const g = hexToGeoJSON((layer as any).data || []);
+        const visible = getCurrentLayerVisibility(map, layer.id);
+        updateStaticHexLayer(map, layer as HexLayerConfig, g, visible);
+      }
+    } catch (_) {}
   };
 
   // Domain slider behavior (map_utils style)

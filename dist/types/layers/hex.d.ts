@@ -20,3 +20,8 @@ export declare function addStaticHexLayer(map: mapboxgl.Map, layer: HexLayerConf
  * Toggle visibility of hex layer
  */
 export declare function setHexLayerVisibility(map: mapboxgl.Map, layerId: string, visible: boolean, isExtruded: boolean): void;
+/**
+ * Re-apply a static hex layer's structure + style (Mapbox GL).
+ * This is used by the debug panel (filled/stroked/extruded toggles, color changes).
+ */
+export declare function updateStaticHexLayer(map: mapboxgl.Map, layer: HexLayerConfig, geojson: GeoJSON.FeatureCollection, visible: boolean): void;

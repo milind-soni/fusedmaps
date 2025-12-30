@@ -135,17 +135,19 @@ export function addStaticHexLayer(
     }
   }
   
-  // Outline layer
-  map.addLayer({
-    id: `${layer.id}-outline`,
-    type: 'line',
-    source: layer.id,
-    paint: {
-      'line-color': lineColor,
-      'line-width': cfg.lineWidthMinPixels || 0.5
-    },
-    layout: { visibility: visible ? 'visible' : 'none' }
-  });
+  // Outline layer (honor stroked flag)
+  if (cfg.stroked !== false) {
+    map.addLayer({
+      id: `${layer.id}-outline`,
+      type: 'line',
+      source: layer.id,
+      paint: {
+        'line-color': lineColor,
+        'line-width': cfg.lineWidthMinPixels || 0.5
+      },
+      layout: { visibility: visible ? 'visible' : 'none' }
+    });
+  }
 }
 
 /**
@@ -170,5 +172,41 @@ export function setHexLayerVisibility(
       // Ignore errors
     }
   });
+}
+
+function removeStaticHexSublayers(map: mapboxgl.Map, layerId: string): void {
+  const ids = [`${layerId}-fill`, `${layerId}-extrusion`, `${layerId}-outline`];
+  for (const id of ids) {
+    try {
+      if (map.getLayer(id)) map.removeLayer(id);
+    } catch (_) {}
+  }
+}
+
+/**
+ * Re-apply a static hex layer's structure + style (Mapbox GL).
+ * This is used by the debug panel (filled/stroked/extruded toggles, color changes).
+ */
+export function updateStaticHexLayer(
+  map: mapboxgl.Map,
+  layer: HexLayerConfig,
+  geojson: GeoJSON.FeatureCollection,
+  visible: boolean
+): void {
+  // Ensure source exists and data is current
+  try {
+    const src: any = map.getSource(layer.id) as any;
+    if (src && typeof src.setData === 'function') {
+      src.setData(geojson);
+    } else {
+      map.addSource(layer.id, { type: 'geojson', data: geojson });
+    }
+  } catch (_) {
+    // If addSource fails due to race, we still try to proceed with layer rebuild.
+  }
+
+  // Rebuild sublayers so structural toggles (extruded/filled/stroked) take effect
+  removeStaticHexSublayers(map, layer.id);
+  addStaticHexLayer(map, layer, geojson, visible);
 }
 

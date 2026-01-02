@@ -550,76 +550,85 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const updateLayerOutput = () => {
     try {
-      const layer: any = getActiveLayer();
-      if (!layer) {
-        layerOut.value = '';
-        return;
-      }
-
-      // Paste-back config (short):
-      // show a minimal `{ vectorLayer: {...} }` / `{ hexLayer: {...}, tileLayer?: {...} }`
-      // that can be pasted back into the Python UDF as `config=...`.
+      // Paste-back config (short, combined):
+      // Emit a full `layers=[...]` list (map_utils style), where each layer's `config`
+      // is a delta against strong defaults.
       const MAX_STRINGIFY_CHARS = 200_000;
 
-      if (layer.layerType === 'vector') {
-        const vl = layer.vectorLayer || {};
-        const delta = deepDelta(DEFAULT_VECTOR_STYLE, vl) || {};
-        // Always keep output paste-back friendly
-        let s = JSON.stringify({ vectorLayer: delta }, null, 2);
-        if (s.length > MAX_STRINGIFY_CHARS) {
-          s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
-        }
-        layerOut.value = s;
-        return;
-      }
-
-      if (layer.layerType === 'hex') {
-        const hl = layer.hexLayer || {};
-        const outHex: any = { hexLayer: deepDelta(DEFAULT_HEX_STYLE, hl) || {} };
-        if ((layer as any).isTileLayer) {
-          const tl = (layer as any).tileLayerConfig || (layer as any).tileLayer || null;
-          if (tl && typeof tl === 'object') {
-            const dt = deepDelta(DEFAULT_TILE_LAYER, tl);
-            if (dt && Object.keys(dt).length) outHex.tileLayer = dt;
-          }
-        }
-        let s = JSON.stringify(outHex, null, 2);
-        if (s.length > MAX_STRINGIFY_CHARS) {
-          s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
-        }
-        layerOut.value = s;
-        return;
-      }
-
-      const out: any = { ...layer };
-      // SQL UX: allow shorthand "WHERE ..." expressions but surface the resolved full query for clarity.
-      try {
-        const sqlRaw = typeof layer.sql === 'string' ? layer.sql.trim() : '';
-        if (sqlRaw) {
-          const isSelectLike = /^(with|select)\b/i.test(sqlRaw);
-          out.sql = sqlRaw;
-          out.sqlResolved = isSelectLike ? sqlRaw : `SELECT * FROM data WHERE (${sqlRaw || '1=1'})`;
-        }
-      } catch (_) {}
-
-      if (Array.isArray(layer.data)) {
-        out.rowCount = layer.data.length;
-        out.dataPreview = layer.data.slice(0, 50);
-        if (layer.data.length > 50) out.dataPreviewTruncated = true;
-        delete out.data;
-      }
-
-      // If any geojson snuck in, truncate similarly.
-      if (out.geojson && out.geojson.features && Array.isArray(out.geojson.features)) {
-        out.geojson = {
-          type: out.geojson.type,
-          rowCount: out.geojson.features.length,
-          featuresPreview: out.geojson.features.slice(0, Math.min(10, out.geojson.features.length))
+      const toLayerDef = (l: any) => {
+        const base: any = {
+          name: l.name,
+          visible: l.visible !== false
         };
-        out.geojsonPreviewTruncated = out.geojson.featuresPreview.length < (layer.geojson?.features?.length || 0);
-      }
 
-      let s = JSON.stringify(out, null, 2);
+        // Hex (tile or static)
+        if (l.layerType === 'hex') {
+          const hl = l.hexLayer || {};
+          const cfg: any = { hexLayer: deepDelta(DEFAULT_HEX_STYLE, hl) || {} };
+          if (l.isTileLayer && l.tileUrl) {
+            base.type = 'hex';
+            base.tile_url = l.tileUrl;
+            const tl = l.tileLayerConfig || l.tileLayer || null;
+            if (tl && typeof tl === 'object') {
+              const dt = deepDelta(DEFAULT_TILE_LAYER, tl);
+              if (dt && Object.keys(dt).length) cfg.tileLayer = dt;
+            }
+          } else {
+            // Static hex data or DuckDB SQL-backed non-tile hex
+            base.type = 'hex';
+            if (l.parquetUrl) base.parquetUrl = l.parquetUrl;
+            if (l.sql) base.sql = l.sql;
+          }
+          base.config = cfg;
+          return base;
+        }
+
+        // Vector GeoJSON
+        if (l.layerType === 'vector') {
+          base.type = 'vector';
+          base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, l.vectorLayer || {}) || {} };
+          return base;
+        }
+
+        // MVT tiles
+        if (l.layerType === 'mvt') {
+          base.type = 'vector';
+          base.tile_url = l.tileUrl;
+          base.source_layer = l.sourceLayer || 'udf';
+          // For MVT, we accept styling via vectorLayer schema in map_utils_refactored
+          const vcfg: any = {};
+          if (l.fillColorConfig) vcfg.getFillColor = l.fillColorConfig;
+          else if (l.fillColor) vcfg.getFillColor = l.fillColor;
+          if (l.lineColorConfig) vcfg.getLineColor = l.lineColorConfig;
+          else if (l.lineColor) vcfg.getLineColor = l.lineColor;
+          if (typeof l.lineWidth === 'number') vcfg.lineWidthMinPixels = l.lineWidth;
+          if (typeof l.fillOpacity === 'number') vcfg.opacity = l.fillOpacity;
+          base.config = { vectorLayer: vcfg };
+          return base;
+        }
+
+        // Raster tiles / static raster overlay
+        if (l.layerType === 'raster') {
+          base.type = 'raster';
+          if (l.tileUrl) base.tile_url = l.tileUrl;
+          if (l.imageUrl) base.image_url = l.imageUrl;
+          if (l.imageBounds) base.bounds = l.imageBounds;
+          const op = l.opacity ?? l.rasterLayer?.opacity;
+          base.config = (typeof op === 'number' && Number.isFinite(op) && op !== 1)
+            ? { rasterLayer: { opacity: op } }
+            : {};
+          return base;
+        }
+
+        // Unknown
+        return base;
+      };
+
+      const layersOut = (config.layers || []).map(toLayerDef);
+      const outCombined: any = { layers: layersOut };
+      try { outCombined.initialViewState = getViewState(map); } catch (_) {}
+
+      let s = JSON.stringify(outCombined, null, 2);
       if (s.length > MAX_STRINGIFY_CHARS) {
         s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
       }

@@ -682,15 +682,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       };
 
       const layersOut = (config.layers || []).map(toLayerDef);
-      const outCombined: any = { layers: layersOut };
-      try { outCombined.initialViewState = getViewState(map); } catch (_) {}
-
-      const sBlocks: string[] = [];
-      if (outCombined.initialViewState) {
-        sBlocks.push(`initialViewState = ${toPyLiteral(outCombined.initialViewState, 0)}`);
-      }
-      sBlocks.push(`layers = ${toPyLiteral(outCombined.layers, 0)}`);
-      let s = sBlocks.join('\n\n');
+      // Layer Config output should only be the layers list (paste-back friendly).
+      let s = `layers = ${toPyLiteral(layersOut, 0)}`;
       if (s.length > MAX_STRINGIFY_CHARS) {
         s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
       }
@@ -1158,7 +1151,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const updateFromMapStop = () => {
     try {
       const vs = getViewState(map);
-      viewOut.value = JSON.stringify(vs, null, 2);
+      // Always show a paste-ready Python assignment.
+      viewOut.value = `initialViewState = ${toPyLiteral(vs, 0)}`;
       if (shell && isEditingInputs(shell)) return;
       lngEl.value = fmt(vs.longitude, 5);
       latEl.value = fmt(vs.latitude, 5);

@@ -116,6 +116,7 @@ const DEFAULT_HEX_STYLE: any = {
   stroked: true,
   pickable: true,
   extruded: false,
+  elevationScale: 1,
   opacity: 1,
   getHexagon: '@@=properties.hex',
   getFillColor: {
@@ -233,6 +234,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               <label class="debug-checkbox"><input type="checkbox" id="dbg-filled" checked /> Filled</label>
               <label class="debug-checkbox"><input type="checkbox" id="dbg-stroked" checked /> Stroked</label>
               <label class="debug-checkbox"><input type="checkbox" id="dbg-extruded" /> Extruded</label>
+            </div>
+            <div id="dbg-extrusion-controls" style="display:none;margin-top:8px;">
+              <div class="debug-row">
+                <span class="debug-label">Height attr</span>
+                <select class="debug-select" id="dbg-elev-attr"></select>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label">Height scale</span>
+                <input type="number" class="debug-input debug-input-sm" id="dbg-elev-scale" step="0.1" value="1" />
+              </div>
             </div>
             <div class="debug-row" style="margin-top:8px;">
               <span class="debug-label">Opacity</span>
@@ -401,6 +412,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const filledEl = document.getElementById('dbg-filled') as HTMLInputElement;
   const strokedEl = document.getElementById('dbg-stroked') as HTMLInputElement;
   const extrudedEl = document.getElementById('dbg-extruded') as HTMLInputElement;
+  const extrusionControls = document.getElementById('dbg-extrusion-controls') as HTMLElement;
+  const elevAttrEl = document.getElementById('dbg-elev-attr') as HTMLSelectElement;
+  const elevScaleEl = document.getElementById('dbg-elev-scale') as HTMLInputElement;
   const opacitySliderEl = document.getElementById('dbg-opacity-slider') as HTMLInputElement;
   const opacityEl = document.getElementById('dbg-opacity') as HTMLInputElement;
 
@@ -699,6 +713,26 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       extrudedEl.checked = false;
     }
 
+    // Extrusion controls (hex only)
+    try {
+      if (extrusionControls) extrusionControls.style.display = (isHex && extrudedEl.checked) ? 'block' : 'none';
+      if (isHex && elevAttrEl) {
+        const attrs = getAttrCandidates(layer as any);
+        const opts = [''].concat(attrs || []);
+        elevAttrEl.innerHTML = opts
+          .map((a) => a ? `<option value="${a}">${a}</option>` : `<option value="">(use fill attr)</option>`)
+          .join('');
+        elevAttrEl.value = String(hexCfg.elevationProperty || '');
+      }
+      if (isHex && elevScaleEl) {
+        elevScaleEl.value = String(
+          (typeof hexCfg.elevationScale === 'number' && Number.isFinite(hexCfg.elevationScale))
+            ? hexCfg.elevationScale
+            : 1
+        );
+      }
+    } catch (_) {}
+
     const op = isHex
       ? (typeof hexCfg.opacity === 'number' ? hexCfg.opacity : 1)
       : (typeof (layer as any).opacity === 'number' ? (layer as any).opacity : 0.9);
@@ -851,6 +885,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       hexCfg.stroked = !!strokedEl.checked;
       hexCfg.extruded = !!extrudedEl.checked;
       hexCfg.opacity = opClamped;
+
+      // Extrusion controls (hex only)
+      try {
+        if (extrusionControls) extrusionControls.style.display = hexCfg.extruded ? 'block' : 'none';
+        const s = parseFloat(elevScaleEl?.value || '1');
+        hexCfg.elevationScale = Number.isFinite(s) ? s : 1;
+        const ep = String(elevAttrEl?.value || '').trim();
+        if (ep) hexCfg.elevationProperty = ep;
+        else delete hexCfg.elevationProperty;
+      } catch (_) {}
     } else if (isVector) {
       (layer as any).isFilled = !!filledEl.checked;
       (layer as any).isStroked = !!strokedEl.checked;
@@ -1174,7 +1218,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   layerSelect.addEventListener('change', () => readLayerToUI());
   fillFnEl.addEventListener('change', () => { updateFillFnOptions(); applyUIToLayer(); });
   lineFnEl.addEventListener('change', () => { updateLineFnOptions(); applyUIToLayer(); });
-  [filledEl, strokedEl, extrudedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [filledEl, strokedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  extrudedEl.addEventListener('change', () => {
+    try { if (extrusionControls) extrusionControls.style.display = extrudedEl.checked ? 'block' : 'none'; } catch (_) {}
+    applyUIToLayer();
+  });
+  elevAttrEl.addEventListener('change', applyUIToLayer);
+  elevScaleEl.addEventListener('change', applyUIToLayer);
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
   [fillAttrEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));

@@ -116,14 +116,18 @@ export function addStaticHexLayer(
   // Handle extruded (3D) vs flat rendering
   if (cfg.extruded) {
     const elevScale = cfg.elevationScale || 1;
+    const elevProp =
+      (cfg as any).elevationProperty ||
+      (cfg.getFillColor as any)?.attr ||
+      null;
     map.addLayer({
       id: `${layer.id}-extrusion`,
       type: 'fill-extrusion',
       source: layer.id,
       paint: {
         'fill-extrusion-color': fillColor,
-        'fill-extrusion-height': (cfg.getFillColor as any)?.attr
-          ? ['*', ['get', (cfg.getFillColor as any).attr], elevScale]
+        'fill-extrusion-height': elevProp
+          ? ['*', ['to-number', ['get', elevProp], 0], elevScale]
           : 100,
         'fill-extrusion-base': 0,
         'fill-extrusion-opacity': layerOpacity

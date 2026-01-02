@@ -35,6 +35,7 @@ export interface HexLayerStyle {
     filled?: boolean;
     stroked?: boolean;
     extruded?: boolean;
+    elevationProperty?: string;
     elevationScale?: number;
     opacity?: number;
     pickable?: boolean;

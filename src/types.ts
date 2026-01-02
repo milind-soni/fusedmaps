@@ -46,6 +46,11 @@ export interface HexLayerStyle {
   filled?: boolean;
   stroked?: boolean;
   extruded?: boolean;
+  // When extruded=true:
+  // - In Deck.gl tile mode, this maps to H3HexagonLayer getElevation(d[elevationProperty]) * elevationScale
+  // - In Mapbox static mode, this maps to fill-extrusion-height based on feature.properties[elevationProperty]
+  // If omitted, we fall back to the fill-color attribute (getFillColor.attr) when available.
+  elevationProperty?: string;
   elevationScale?: number;
   opacity?: number;
   pickable?: boolean;

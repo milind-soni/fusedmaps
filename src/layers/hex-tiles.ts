@@ -540,6 +540,10 @@ function buildHexTileDeckLayers(
       const lineWidthMinPixels = rawHexCfg.lineWidthMinPixels ?? 1;
       const elevationScale = rawHexCfg.elevationScale ?? 1;
       const coverage = rawHexCfg.coverage ?? 0.9;
+      const elevationProperty =
+        rawHexCfg.elevationProperty ||
+        (fillCfgEffective && typeof fillCfgEffective === 'object' ? (fillCfgEffective as any).attr : null) ||
+        null;
 
       const auto = wantsAutoDomain(layer);
       const refinementStrategy =
@@ -668,6 +672,7 @@ function buildHexTileDeckLayers(
             coverage,
             lineWidthMinPixels,
             elevationScale,
+            ...(extruded && elevationProperty ? { getElevation: (d: any) => Number(d?.[elevationProperty] ?? 0) } : {}),
             ...(getFillColor ? { getFillColor } : {}),
             ...(getLineColor ? { getLineColor } : {})
           });

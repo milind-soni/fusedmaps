@@ -87,11 +87,14 @@ function buildCategoricalExpr(
   data?: Array<Record<string, unknown>>
 ): unknown {
   // Get categories - either from config or auto-detect from data
+  const domainCats: any[] = Array.isArray((cfg as any).domain) ? (cfg as any).domain : [];
   let catPairs: CategoryPair[] = cfg.categories
-    ? cfg.categories.map(c => 
+    ? cfg.categories.map(c =>
         typeof c === 'object' ? c : { value: c, label: String(c) }
       )
-    : getUniqueCategories(data, cfg.attr, cfg.labelAttr);
+    : domainCats.length
+      ? domainCats.map((c) => ({ value: c as any, label: String((c as any)?.label ?? c) }))
+      : getUniqueCategories(data, cfg.attr, cfg.labelAttr);
   
   if (!catPairs.length) return 'rgba(128,128,128,0.5)';
   

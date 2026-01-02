@@ -141,8 +141,14 @@ export function addMVTLayer(
     maxzoom: layer.maxzoom || 22
   });
   
-  const fillColor = layer.fillColor || '#FFF5CC';
-  const lineColor = layer.lineColor || '#FFFFFF';
+  // Dynamic color expressions are supported for MVT since Mapbox evaluates them per-feature.
+  const fillColorExpr = (layer.fillColorConfig as any)?.['@@function']
+    ? (buildColorExpr(layer.fillColorConfig as any, undefined) as any)
+    : (layer.fillColor || '#FFF5CC');
+  const lineColorExpr = (layer.lineColorConfig as any)?.['@@function']
+    ? (buildColorExpr(layer.lineColorConfig as any, undefined) as any)
+    : (layer.lineColor || '#FFFFFF');
+
   const fillOpacity = layer.fillOpacity ?? 0.8;
   const lineWidth = layer.lineWidth ?? 1;
   
@@ -154,7 +160,7 @@ export function addMVTLayer(
       source: layer.id,
       'source-layer': sourceLayer,
       paint: {
-        'fill-color': fillColor,
+        'fill-color': fillColorExpr as any,
         'fill-opacity': fillOpacity
       },
       layout: { visibility: visible ? 'visible' : 'none' }
@@ -168,7 +174,7 @@ export function addMVTLayer(
     source: layer.id,
     'source-layer': sourceLayer,
     paint: {
-      'line-color': lineColor,
+      'line-color': lineColorExpr as any,
       'line-width': lineWidth
     },
     layout: { visibility: visible ? 'visible' : 'none' }
@@ -182,7 +188,7 @@ export function addMVTLayer(
       source: layer.id,
       'source-layer': sourceLayer,
       paint: {
-        'fill-extrusion-color': fillColor,
+        'fill-extrusion-color': fillColorExpr as any,
         'fill-extrusion-height': ['*', ['get', layer.heightProperty || 'height'], layer.heightMultiplier || 1],
         'fill-extrusion-base': 0,
         'fill-extrusion-opacity': layer.extrusionOpacity ?? 0.9

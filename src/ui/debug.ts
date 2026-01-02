@@ -628,6 +628,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           } else {
             // Static hex data or DuckDB SQL-backed non-tile hex
             base.type = 'hex';
+            // Don't inline huge data arrays in the paste-back snippet.
+            // Use a placeholder so users can set `data = df` in Python.
+            base.data = null;
             if (l.parquetUrl) base.parquetUrl = l.parquetUrl;
             if (l.sql) base.sql = l.sql;
           }
@@ -638,6 +641,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         // Vector GeoJSON
         if (l.layerType === 'vector') {
           base.type = 'vector';
+          // Don't inline GeoJSON; keep paste-back snippet small and explicit.
+          base.data = null;
           base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, l.vectorLayer || {}) || {} };
           return base;
         }

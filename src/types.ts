@@ -100,6 +100,9 @@ export interface BaseLayerConfig {
   name: string;
   visible?: boolean;
   tooltipColumns?: string[];
+  // Optional hint used by the sidebar "Layer Config" export to print `data=<python var>`.
+  // The browser can't infer Python variable names automatically.
+  dataRef?: string;
 }
 
 export interface HexLayerConfig extends BaseLayerConfig {

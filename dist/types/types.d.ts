@@ -77,6 +77,7 @@ export interface BaseLayerConfig {
     name: string;
     visible?: boolean;
     tooltipColumns?: string[];
+    dataRef?: string;
 }
 export interface HexLayerConfig extends BaseLayerConfig {
     layerType: 'hex';

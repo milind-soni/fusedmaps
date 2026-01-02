@@ -192,7 +192,16 @@ function toPyLiteral(x: any, indent = 0): string {
   const t = typeof x;
   if (t === 'boolean') return x ? 'True' : 'False';
   if (t === 'number') return Number.isFinite(x) ? String(x) : 'None';
-  if (t === 'string') return JSON.stringify(x);
+  if (t === 'string') {
+    // Special marker: allow embedding a raw Python symbol in the export, e.g. "@@py:df".
+    // This lets users get `data=df` in the paste-back snippet (the browser can't infer var names).
+    if (x.startsWith('@@py:')) {
+      const sym = x.slice('@@py:'.length).trim();
+      // Safety: only allow simple identifiers / dotted paths.
+      if (/^[A-Za-z_][A-Za-z0-9_\\.]*$/.test(sym)) return sym;
+    }
+    return JSON.stringify(x);
+  }
   if (Array.isArray(x)) {
     if (!x.length) return '[]';
     const items = x.map((v) => `${pad(next)}${toPyLiteral(v, next)}`);
@@ -629,8 +638,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
             // Static hex data or DuckDB SQL-backed non-tile hex
             base.type = 'hex';
             // Don't inline huge data arrays in the paste-back snippet.
-            // Use a placeholder so users can set `data = df` in Python.
-            base.data = null;
+            // Use a placeholder (data=None) or a python symbol (data=df) if dataRef was provided.
+            base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
             if (l.parquetUrl) base.parquetUrl = l.parquetUrl;
             if (l.sql) base.sql = l.sql;
           }
@@ -642,7 +651,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (l.layerType === 'vector') {
           base.type = 'vector';
           // Don't inline GeoJSON; keep paste-back snippet small and explicit.
-          base.data = null;
+          base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
           base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, l.vectorLayer || {}) || {} };
           return base;
         }

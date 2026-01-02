@@ -182,16 +182,31 @@ function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[]) {
   const geojsons = getLayerGeoJSONs();
   
   layers.forEach(layer => {
+    // Hex tile layers are handled by Deck; don't auto-fit on their data.
     if ((layer as any).isTileLayer) return;
+
+    // Raster static overlays can provide explicit bounds.
+    if ((layer as any).layerType === 'raster') {
+      const b = (layer as any).imageBounds;
+      if (Array.isArray(b) && b.length === 4) {
+        const [west, south, east, north] = b;
+        if ([west, south, east, north].every((x) => typeof x === 'number' && Number.isFinite(x))) {
+          bounds.extend([west, south]);
+          bounds.extend([east, north]);
+        }
+      }
+      return;
+    }
+
     const geojson = geojsons[layer.id];
     if (!geojson?.features?.length) return;
-    
+
     geojson.features.forEach((f: any) => {
       if (f.geometry?.type === 'Point') {
         bounds.extend(f.geometry.coordinates);
       } else if (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon') {
-        const coords = f.geometry.type === 'Polygon' 
-          ? [f.geometry.coordinates] 
+        const coords = f.geometry.type === 'Polygon'
+          ? [f.geometry.coordinates]
           : f.geometry.coordinates;
         coords.forEach((poly: any) => poly[0]?.forEach((c: any) => bounds.extend(c)));
       } else if (f.geometry?.type === 'LineString') {

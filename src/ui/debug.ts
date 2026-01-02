@@ -94,6 +94,22 @@ function setPaintSafe(map: mapboxgl.Map, layerId: string, prop: string, value: a
   } catch (_) {}
 }
 
+function hexToRgbArr(hex: string, withAlpha255?: number): number[] | null {
+  try {
+    const c = String(hex || '').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return null;
+    const r = parseInt(c.slice(1, 3), 16);
+    const g = parseInt(c.slice(3, 5), 16);
+    const b = parseInt(c.slice(5, 7), 16);
+    if (typeof withAlpha255 === 'number' && Number.isFinite(withAlpha255)) {
+      return [r, g, b, Math.max(0, Math.min(255, Math.round(withAlpha255)))];
+    }
+    return [r, g, b];
+  } catch (_) {
+    return null;
+  }
+}
+
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
   let shell = document.getElementById('debug-shell') as HTMLElement | null;
   if (!shell) {
@@ -467,43 +483,27 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         return;
       }
 
-      // Avoid dumping huge payloads (esp. DuckDB SQL layers with tens of thousands of rows).
-      // Keep output stable + readable: show rowCount + a small preview instead of full `data`.
-      const MAX_PREVIEW_ROWS = 50;
+      // Paste-back config (short):
+      // show a minimal `{ vectorLayer: {...} }` / `{ hexLayer: {...}, tileLayer?: {...} }`
+      // that can be pasted back into the Python UDF as `config=...`.
       const MAX_STRINGIFY_CHARS = 200_000;
 
-      // Special-case: vector layers can get very verbose because they have both raw user config
-      // (`vectorLayer`) and normalized fields (`fillColorConfig`, `lineWidth`, etc).
-      // Keep this output intentionally compact.
       if (layer.layerType === 'vector') {
-        const gj = layer.geojson;
-        const features = Array.isArray(gj?.features) ? gj.features : [];
-        const preview = features.slice(0, 10);
-        const outVec: any = {
-          id: layer.id,
-          name: layer.name,
-          layerType: layer.layerType,
-          visible: layer.visible,
-          geojson: {
-            type: gj?.type || 'FeatureCollection',
-            rowCount: features.length,
-            featuresPreview: preview
-          },
-          vectorLayer: layer.vectorLayer,
-          // Keep the effective style in one small block (the renderer uses these normalized fields).
-          style: {
-            isFilled: layer.isFilled,
-            isStroked: layer.isStroked,
-            opacity: layer.opacity,
-            pointRadius: layer.pointRadius,
-            lineWidth: layer.lineWidth,
-            fillColorConfig: layer.fillColorConfig,
-            fillColorRgba: layer.fillColorRgba,
-            lineColorConfig: layer.lineColorConfig,
-            lineColorRgba: layer.lineColorRgba
-          }
-        };
-        let s = JSON.stringify(outVec, null, 2);
+        let s = JSON.stringify({ vectorLayer: layer.vectorLayer || {} }, null, 2);
+        if (s.length > MAX_STRINGIFY_CHARS) {
+          s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
+        }
+        layerOut.value = s;
+        return;
+      }
+
+      if (layer.layerType === 'hex') {
+        const outHex: any = { hexLayer: layer.hexLayer || {} };
+        if ((layer as any).isTileLayer) {
+          const tl = (layer as any).tileLayerConfig || (layer as any).tileLayer || null;
+          if (tl && typeof tl === 'object') outHex.tileLayer = tl;
+        }
+        let s = JSON.stringify(outHex, null, 2);
         if (s.length > MAX_STRINGIFY_CHARS) {
           s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
         }
@@ -524,8 +524,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
       if (Array.isArray(layer.data)) {
         out.rowCount = layer.data.length;
-        out.dataPreview = layer.data.slice(0, MAX_PREVIEW_ROWS);
-        if (layer.data.length > MAX_PREVIEW_ROWS) out.dataPreviewTruncated = true;
+        out.dataPreview = layer.data.slice(0, 50);
+        if (layer.data.length > 50) out.dataPreviewTruncated = true;
         delete out.data;
       }
 
@@ -773,6 +773,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const c = fillStaticEl.value || '#0090ff';
         (layer as any).fillColorConfig = null;
         (layer as any).fillColorRgba = c;
+        try {
+          const arr = hexToRgbArr(c, 200) || hexToRgbArr(c) || null;
+          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = arr || c;
+        } catch (_) {}
       } else {
         const attr = fillAttrEl.value || 'house_age';
         const colors = fillPaletteEl.value || 'ArmyRose';
@@ -784,7 +788,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const ng = parseInt(nc.slice(3, 5), 16);
         const nb = parseInt(nc.slice(5, 7), 16);
         (layer as any).fillColorRgba = null;
-        (layer as any).fillColorConfig = {
+        const cfgObj = {
           '@@function': 'colorContinuous',
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
@@ -792,6 +796,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           steps: Number.isFinite(steps) ? steps : 7,
           nullColor: [nr, ng, nb],
         };
+        (layer as any).fillColorConfig = cfgObj;
+        try {
+          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = cfgObj;
+        } catch (_) {}
       }
     }
 
@@ -822,19 +830,27 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const c = lineStaticEl.value || '#ffffff';
         (layer as any).lineColorConfig = null;
         (layer as any).lineColorRgba = c;
+        try {
+          const arr = hexToRgbArr(c, 255) || hexToRgbArr(c) || null;
+          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getLineColor = arr || c;
+        } catch (_) {}
       } else {
         const attr = lineAttrEl.value || 'house_age';
         const colors = linePaletteEl.value || 'ArmyRose';
         const d0 = parseFloat(lineDomainMinEl.value);
         const d1 = parseFloat(lineDomainMaxEl.value);
         (layer as any).lineColorRgba = null;
-        (layer as any).lineColorConfig = {
+        const cfgObj = {
           '@@function': 'colorContinuous',
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
           colors,
           steps: parseInt(fillStepsEl.value || '7', 10) || 7,
         };
+        (layer as any).lineColorConfig = cfgObj;
+        try {
+          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getLineColor = cfgObj;
+        } catch (_) {}
       }
     }
 
@@ -844,6 +860,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       hexCfg.lineWidthMinPixels = lwClamped;
     } else if (isVector) {
       (layer as any).lineWidth = lwClamped;
+      try {
+        if ((layer as any).vectorLayer) (layer as any).vectorLayer.lineWidthMinPixels = lwClamped;
+      } catch (_) {}
     }
 
     updateLayerOutput();

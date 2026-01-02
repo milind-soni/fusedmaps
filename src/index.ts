@@ -119,12 +119,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       autoFitBounds(map, config.layers);
       // Update home (⌂) target to the auto-fit result (esp. raster-only maps).
       try {
-        map.once('moveend', () => {
+        // mapbox-gl typings in this repo don't include `.once`, so use `.on` + remove.
+        const handler = () => {
           try {
             const vs = getViewState(map);
             widgets?.setHomeViewState?.(vs);
           } catch (_) {}
-        });
+          try { map.off('moveend', handler as any); } catch (_) {}
+        };
+        map.on('moveend', handler as any);
       } catch (_) {}
     }
   });

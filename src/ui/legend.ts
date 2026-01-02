@@ -4,6 +4,7 @@
 
 import type { LayerConfig, HexLayerConfig, VectorLayerConfig, ColorContinuousConfig, ColorCategoriesConfig } from '../types';
 import { getPaletteColors, FALLBACK_CATEGORICAL_COLORS, FALLBACK_CONTINUOUS_COLORS } from '../color/palettes';
+import { getUniqueCategories } from '../color/expressions';
 
 /**
  * Setup the legend container
@@ -46,7 +47,7 @@ export function updateLegend(
   let html = '';
   
   visibleLayers.forEach(layer => {
-    const legendHtml = buildLayerLegend(layer);
+    const legendHtml = buildLayerLegend(layer, geojsons);
     if (legendHtml) {
       html += legendHtml;
     }
@@ -63,7 +64,10 @@ export function updateLegend(
 /**
  * Build legend HTML for a single layer
  */
-function buildLayerLegend(layer: LayerConfig): string {
+function buildLayerLegend(
+  layer: LayerConfig,
+  geojsons: Record<string, GeoJSON.FeatureCollection>
+): string {
   let colorCfg: any = null;
   
   if (layer.layerType === 'hex') {
@@ -98,6 +102,34 @@ function buildLayerLegend(layer: LayerConfig): string {
   
   // Handle categorical legend
   if (fnType === 'colorCategories') {
+    // Auto-detect categories if they weren't provided and haven't been detected yet.
+    // This fixes cases where a categorical style exists but the rendering path didn't
+    // populate `_detectedCategories` (e.g., some tile flows).
+    try {
+      const cc = colorCfg as any;
+      const hasCats =
+        Array.isArray(cc._detectedCategories) && cc._detectedCategories.length
+          ? true
+          : Array.isArray(cc.categories) && cc.categories.length
+            ? true
+            : false;
+      if (!hasCats && cc.attr) {
+        let rows: Array<Record<string, unknown>> = [];
+        // Prefer cached GeoJSON for the layer (includes SQL hex outputs).
+        const gj = geojsons?.[(layer as any).id];
+        if (gj?.features?.length) {
+          rows = gj.features.map((f: any) => (f?.properties || {}));
+        } else if ((layer as any).layerType === 'hex') {
+          rows = (((layer as any).data || []) as any[]);
+        } else if ((layer as any).layerType === 'vector') {
+          const vgj = (layer as any).geojson;
+          if (vgj?.features?.length) rows = vgj.features.map((f: any) => (f?.properties || {}));
+        }
+        const pairs = getUniqueCategories(rows, cc.attr, cc.labelAttr);
+        // cap for UI sanity
+        cc._detectedCategories = pairs.slice(0, 50);
+      }
+    } catch (_) {}
     return buildCategoricalLegend(layer.name, colorCfg, paletteName);
   }
   

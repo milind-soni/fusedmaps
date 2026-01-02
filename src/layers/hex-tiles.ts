@@ -27,6 +27,7 @@ interface TileRuntime {
   inflight: Map<string, Promise<any[] | null>>;
   tilesLoading: number;
   tileStats: Record<string, Record<string, { min: number; max: number }>>; // layerId -> "z/x/y" -> min/max
+  catState: Record<string, Record<string, { lut: Map<string, number[]>; pairs: Array<{ value: string; label: string }>; next: number; debounce?: any }>>; // layerId -> attr -> state
 }
 
 const DEFAULT_MAX_REQUESTS = 10;
@@ -165,7 +166,11 @@ function coerceKnownIdsToStrings(jsonText: string): string {
   return jsonText.replace(/\"(hex|h3|index|id)\"\s*:\s*(\d+)/gi, (_m, k, d) => `"${k}":"${d}"`);
 }
 
-function buildColorAccessor(colorCfg: any): ((obj: any) => any) | any[] | null {
+function buildColorAccessor(
+  runtime: TileRuntime,
+  layer: HexLayerConfig,
+  colorCfg: any
+): ((obj: any) => any) | any[] | null {
   if (!colorCfg) return null;
 
   // Static color arrays
@@ -246,26 +251,78 @@ function buildColorAccessor(colorCfg: any): ((obj: any) => any) | any[] | null {
           : [];
 
       const paletteName = colorCfg.colors || 'Bold';
-      const cols0 = getPaletteColors(paletteName, Math.max(categories.length, 3)) || null;
       const nullColor = Array.isArray(colorCfg.nullColor) ? colorCfg.nullColor : [184, 184, 184];
 
-      const lut = new Map<string, any[]>();
-      if (cols0?.length && categories.length) {
-        categories.forEach((c, i) => {
-          const col = cols0[i % cols0.length] || '#999999';
-          const hex = String(col).replace('#', '');
-          const r = parseInt(hex.slice(0, 2), 16);
-          const g = parseInt(hex.slice(2, 4), 16);
-          const b = parseInt(hex.slice(4, 6), 16);
-          lut.set(String(c), [r, g, b]);
-        });
+      // If categories are provided, use a fixed lookup.
+      if (categories.length) {
+        const cols0 = getPaletteColors(paletteName, Math.max(categories.length, 3)) || null;
+        const lut = new Map<string, any[]>();
+        if (cols0?.length) {
+          categories.forEach((c, i) => {
+            const col = cols0[i % cols0.length] || '#999999';
+            const hex = String(col).replace('#', '');
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            lut.set(String((c as any)?.value ?? c), [r, g, b]);
+          });
+        }
+        // Also expose for legend if user passed objects
+        try {
+          (colorCfg as any)._detectedCategories = categories.map((c: any) =>
+            typeof c === 'object' ? { value: c.value, label: String(c.label ?? c.value) } : { value: c, label: String(c) }
+          );
+        } catch (_) {}
+
+        return (obj: any) => {
+          const p = obj?.properties || obj || {};
+          const v = p[attr];
+          if (v == null) return nullColor;
+          const hit = lut.get(String(v));
+          return hit || nullColor;
+        };
       }
+
+      // No categories provided: progressively discover categories from loaded tiles.
+      const layerId = layer.id;
+      runtime.catState[layerId] = runtime.catState[layerId] || {};
+      const st = runtime.catState[layerId][attr] || { lut: new Map(), pairs: [], next: 0 };
+      runtime.catState[layerId][attr] = st;
+
+      // Use a reasonable palette size for discovery.
+      const cols0 = getPaletteColors(paletteName, 12) || null;
+      const cols = cols0?.length ? cols0 : ['#7fc97f', '#beaed4', '#fdc086', '#ffff99', '#386cb0', '#f0027f', '#bf5b17', '#666666'];
+
+      const scheduleLegendUpdate = () => {
+        try {
+          if (st.debounce) return;
+          st.debounce = setTimeout(() => {
+            st.debounce = null;
+            try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch (_) {}
+          }, 150);
+        } catch (_) {}
+      };
 
       return (obj: any) => {
         const p = obj?.properties || obj || {};
         const v = p[attr];
-        if (v == null) return nullColor;
-        const hit = lut.get(String(v));
+        if (v == null || v === '' || v === 'null') return nullColor;
+        const key = String(v);
+        let hit = st.lut.get(key);
+        if (!hit) {
+          const col = cols[st.next % cols.length] || '#999999';
+          st.next += 1;
+          const hex = String(col).replace('#', '');
+          const r = parseInt(hex.slice(0, 2), 16);
+          const g = parseInt(hex.slice(2, 4), 16);
+          const b = parseInt(hex.slice(4, 6), 16);
+          hit = [r, g, b];
+          st.lut.set(key, hit);
+          // cap legend categories for sanity
+          if (st.pairs.length < 50) st.pairs.push({ value: key, label: key });
+          try { (colorCfg as any)._detectedCategories = st.pairs; } catch (_) {}
+          scheduleLegendUpdate();
+        }
         return hit || nullColor;
       };
     }
@@ -279,7 +336,8 @@ function createTileRuntime(): TileRuntime {
     cache: new Map(),
     inflight: new Map(),
     tilesLoading: 0,
-    tileStats: {}
+    tileStats: {},
+    catState: {}
   };
 }
 
@@ -511,8 +569,8 @@ function buildHexTileDeckLayers(
           ? { ...lineCfg, domain: lineCfg._dynamicDomain }
           : lineCfg;
 
-      const getFillColor = buildColorAccessor(fillCfgEffective);
-      const getLineColor = buildColorAccessor(lineCfgEffective);
+      const getFillColor = buildColorAccessor(runtime, layer, fillCfgEffective);
+      const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
 
       // IMPORTANT: When autoDomain updates, we must force TileLayer + its sublayers to fully update.
       // Otherwise, some already-loaded tiles can keep old attribute buffers and you see "tile seams".

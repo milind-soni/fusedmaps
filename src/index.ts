@@ -52,8 +52,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Widgets (zoom/home + optional screenshot + cmd-drag orbit)
   const widgets = setupWidgets(map, config.initialViewState, config.ui?.screenshot !== false);
 
-  // Debug panel (minimal)
-  const debugHandle = config.debug ? setupDebugPanel(map, config) : null;
+  // Sidebar panel (inspector)
+  // - sidebar undefined => do not mount (no toggle)
+  // - sidebar 'show'|'hide' => mount
+  // Back-compat: debug=true => sidebar 'show'
+  const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
+  const debugHandle = sidebarMode ? setupDebugPanel(map, config) : null;
   
   // Deck.gl overlay (for tile layers)
   let deckOverlay: unknown = null;

@@ -213,6 +213,7 @@ function toPyLiteral(x: any, indent = 0): string {
 }
 
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
+  const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
   let shell = document.getElementById('debug-shell') as HTMLElement | null;
   if (!shell) {
     shell = document.createElement('div');
@@ -398,7 +399,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         </div>
         <div id="debug-resize-handle" title="Drag to resize"></div>
       </div>
-      <div id="debug-toggle" title="Toggle debug panel">&#x2039;</div>
+      <div id="debug-toggle" title="Toggle sidebar">&#x2039;</div>
     `;
     document.body.appendChild(shell);
   }
@@ -406,6 +407,18 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const panel = document.getElementById('debug-panel') as HTMLElement;
   const toggle = document.getElementById('debug-toggle') as HTMLElement;
   const resizeHandle = document.getElementById('debug-resize-handle') as HTMLElement;
+
+  // Initial open/closed state (only relevant when mounted)
+  try {
+    if (sidebarMode === 'hide') {
+      panel.classList.add('collapsed');
+      toggle.innerHTML = '&#x203A;';
+    } else {
+      panel.classList.remove('collapsed');
+      toggle.innerHTML = '&#x2039;';
+    }
+    updateDebugTogglePosition(shell!, panel, toggle);
+  } catch (_) {}
 
   const layerSelect = document.getElementById('dbg-layer-select') as HTMLSelectElement;
 

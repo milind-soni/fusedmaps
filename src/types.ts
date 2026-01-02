@@ -230,6 +230,14 @@ export interface FusedMapsConfig {
   messaging?: MessagingConfig;
   highlightOnClick?: boolean;
   palettes?: string[];
+  /**
+   * Sidebar / inspector panel.
+   * - undefined: do not mount sidebar at all (no toggle).
+   * - "show": mount and show.
+   * - "hide": mount but start collapsed (toggle can open it).
+   */
+  sidebar?: 'show' | 'hide';
+  /** @deprecated use `sidebar` */
   debug?: boolean;
 }
 

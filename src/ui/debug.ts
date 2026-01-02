@@ -110,6 +110,79 @@ function hexToRgbArr(hex: string, withAlpha255?: number): number[] | null {
   }
 }
 
+// --- Defaults + delta helpers (debug output only) ---
+const DEFAULT_HEX_STYLE: any = {
+  filled: true,
+  stroked: true,
+  pickable: true,
+  extruded: false,
+  opacity: 1,
+  getHexagon: '@@=properties.hex',
+  getFillColor: {
+    '@@function': 'colorContinuous',
+    attr: 'cnt',
+    steps: 20,
+    colors: 'ArmyRose',
+    nullColor: [184, 184, 184]
+  },
+  getLineColor: [255, 255, 255],
+  lineWidthMinPixels: 1
+};
+
+const DEFAULT_TILE_LAYER: any = {
+  minZoom: 0,
+  maxZoom: 19,
+  zoomOffset: 0
+};
+
+const DEFAULT_VECTOR_STYLE: any = {
+  filled: true,
+  stroked: true,
+  pickable: true,
+  opacity: 0.8,
+  lineWidthMinPixels: 1,
+  pointRadiusMinPixels: 6
+};
+
+function isPlainObject(x: any) {
+  return !!x && typeof x === 'object' && !Array.isArray(x);
+}
+
+function deepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
+    return true;
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    for (const k of ka) {
+      if (!(k in b)) return false;
+      if (!deepEqual(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function deepDelta(base: any, cur: any): any {
+  // Return only keys in `cur` that differ from `base`.
+  if (deepEqual(base, cur)) return undefined;
+  if (Array.isArray(cur)) return cur;
+  if (!isPlainObject(cur)) return cur;
+
+  const out: any = {};
+  for (const k of Object.keys(cur)) {
+    const d = deepDelta(base?.[k], cur[k]);
+    if (d !== undefined) out[k] = d;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
   let shell = document.getElementById('debug-shell') as HTMLElement | null;
   if (!shell) {
@@ -489,7 +562,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       const MAX_STRINGIFY_CHARS = 200_000;
 
       if (layer.layerType === 'vector') {
-        let s = JSON.stringify({ vectorLayer: layer.vectorLayer || {} }, null, 2);
+        const vl = layer.vectorLayer || {};
+        const delta = deepDelta(DEFAULT_VECTOR_STYLE, vl) || {};
+        // Always keep output paste-back friendly
+        let s = JSON.stringify({ vectorLayer: delta }, null, 2);
         if (s.length > MAX_STRINGIFY_CHARS) {
           s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
         }
@@ -498,10 +574,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       }
 
       if (layer.layerType === 'hex') {
-        const outHex: any = { hexLayer: layer.hexLayer || {} };
+        const hl = layer.hexLayer || {};
+        const outHex: any = { hexLayer: deepDelta(DEFAULT_HEX_STYLE, hl) || {} };
         if ((layer as any).isTileLayer) {
           const tl = (layer as any).tileLayerConfig || (layer as any).tileLayer || null;
-          if (tl && typeof tl === 'object') outHex.tileLayer = tl;
+          if (tl && typeof tl === 'object') {
+            const dt = deepDelta(DEFAULT_TILE_LAYER, tl);
+            if (dt && Object.keys(dt).length) outHex.tileLayer = dt;
+          }
         }
         let s = JSON.stringify(outHex, null, 2);
         if (s.length > MAX_STRINGIFY_CHARS) {

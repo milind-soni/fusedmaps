@@ -141,8 +141,16 @@ const DEFAULT_VECTOR_STYLE: any = {
   stroked: true,
   pickable: true,
   opacity: 0.8,
-  lineWidthMinPixels: 1,
-  pointRadiusMinPixels: 6
+  lineWidthMinPixels: 0,
+  pointRadiusMinPixels: 10,
+  getFillColor: {
+    '@@function': 'colorContinuous',
+    attr: 'house_age',
+    domain: [0, 50],
+    colors: 'ArmyRose',
+    steps: 7,
+    nullColor: [200, 200, 200, 180]
+  }
 };
 
 function isPlainObject(x: any) {
@@ -618,9 +626,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
       const toLayerDef = (l: any) => {
         const base: any = {
-          name: l.name,
-          visible: l.visible !== false
+          name: l.name
         };
+        // Only include visibility when it's explicitly off (default True).
+        if (l.visible === false) base.visible = false;
 
         // Hex (tile or static)
         if (l.layerType === 'hex') {
@@ -637,11 +646,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           } else {
             // Static hex data or DuckDB SQL-backed non-tile hex
             base.type = 'hex';
-            // Don't inline huge data arrays in the paste-back snippet.
-            // Use a placeholder (data=None) or a python symbol (data=df) if dataRef was provided.
-            base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
             if (l.parquetUrl) base.parquetUrl = l.parquetUrl;
             if (l.sql) base.sql = l.sql;
+            // If this is not a parquet/sql-backed layer, keep an explicit data placeholder.
+            if (!l.parquetUrl) {
+              // Don't inline huge data arrays in the paste-back snippet.
+              // Use a placeholder (data=None) or a python symbol (data=df) if dataRef was provided.
+              base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
+            }
           }
           base.config = cfg;
           return base;

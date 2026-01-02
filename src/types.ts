@@ -153,7 +153,10 @@ export interface MVTLayerConfig extends BaseLayerConfig {
 
 export interface RasterLayerConfig extends BaseLayerConfig {
   layerType: 'raster';
-  tileUrl: string;
+  // Either a raster XYZ tile URL template OR a static image overlay.
+  tileUrl?: string;
+  imageUrl?: string; // can be http(s) URL or data URL (data:image/png;base64,...)
+  imageBounds?: [number, number, number, number]; // [west, south, east, north]
   rasterLayer?: RasterLayerStyle;
   opacity?: number;
 }

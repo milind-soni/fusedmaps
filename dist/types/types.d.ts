@@ -130,7 +130,9 @@ export interface MVTLayerConfig extends BaseLayerConfig {
 }
 export interface RasterLayerConfig extends BaseLayerConfig {
     layerType: 'raster';
-    tileUrl: string;
+    tileUrl?: string;
+    imageUrl?: string;
+    imageBounds?: [number, number, number, number];
     rasterLayer?: RasterLayerStyle;
     opacity?: number;
 }

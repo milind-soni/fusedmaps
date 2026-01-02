@@ -1224,6 +1224,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     applyUIToLayer();
   });
   elevAttrEl.addEventListener('change', applyUIToLayer);
+  // Number input: make it feel like Deck.gl (updates while typing / clicking steppers)
+  elevScaleEl.addEventListener('input', applyUIToLayer);
   elevScaleEl.addEventListener('change', applyUIToLayer);
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });

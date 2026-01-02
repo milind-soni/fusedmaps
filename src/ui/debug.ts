@@ -472,6 +472,45 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       const MAX_PREVIEW_ROWS = 50;
       const MAX_STRINGIFY_CHARS = 200_000;
 
+      // Special-case: vector layers can get very verbose because they have both raw user config
+      // (`vectorLayer`) and normalized fields (`fillColorConfig`, `lineWidth`, etc).
+      // Keep this output intentionally compact.
+      if (layer.layerType === 'vector') {
+        const gj = layer.geojson;
+        const features = Array.isArray(gj?.features) ? gj.features : [];
+        const preview = features.slice(0, 10);
+        const outVec: any = {
+          id: layer.id,
+          name: layer.name,
+          layerType: layer.layerType,
+          visible: layer.visible,
+          geojson: {
+            type: gj?.type || 'FeatureCollection',
+            rowCount: features.length,
+            featuresPreview: preview
+          },
+          vectorLayer: layer.vectorLayer,
+          // Keep the effective style in one small block (the renderer uses these normalized fields).
+          style: {
+            isFilled: layer.isFilled,
+            isStroked: layer.isStroked,
+            opacity: layer.opacity,
+            pointRadius: layer.pointRadius,
+            lineWidth: layer.lineWidth,
+            fillColorConfig: layer.fillColorConfig,
+            fillColorRgba: layer.fillColorRgba,
+            lineColorConfig: layer.lineColorConfig,
+            lineColorRgba: layer.lineColorRgba
+          }
+        };
+        let s = JSON.stringify(outVec, null, 2);
+        if (s.length > MAX_STRINGIFY_CHARS) {
+          s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
+        }
+        layerOut.value = s;
+        return;
+      }
+
       const out: any = { ...layer };
       // SQL UX: allow shorthand "WHERE ..." expressions but surface the resolved full query for clarity.
       try {

@@ -5,5 +5,6 @@
 import type { ViewState } from '../types';
 export interface WidgetsHandle {
     destroy: () => void;
+    setHomeViewState?: (view: ViewState) => void;
 }
 export declare function setupWidgets(map: mapboxgl.Map, initialView: ViewState, screenshotEnabled: boolean): WidgetsHandle;

@@ -6,7 +6,7 @@
  */
 
 import type { FusedMapsConfig, FusedMapsInstance, LayerConfig } from './types';
-import { initMap, applyViewState } from './core/map';
+import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, setLayerVisibility, getLayerGeoJSONs } from './layers';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
@@ -117,6 +117,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // Auto-fit to bounds if no custom view
     if (!config.hasCustomView) {
       autoFitBounds(map, config.layers);
+      // Update home (⌂) target to the auto-fit result (esp. raster-only maps).
+      try {
+        map.once('moveend', () => {
+          try {
+            const vs = getViewState(map);
+            widgets?.setHomeViewState?.(vs);
+          } catch (_) {}
+        });
+      } catch (_) {}
     }
   });
   

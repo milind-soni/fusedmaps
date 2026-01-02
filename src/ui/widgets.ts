@@ -7,6 +7,7 @@ import type { ViewState } from '../types';
 
 export interface WidgetsHandle {
   destroy: () => void;
+  setHomeViewState?: (view: ViewState) => void;
 }
 
 function downloadScreenshot(map: mapboxgl.Map) {
@@ -65,7 +66,25 @@ function addScaleControl(map: mapboxgl.Map) {
   } catch (_) {}
 }
 
-function addZoomHomeControl(map: mapboxgl.Map, initialView: ViewState, screenshotEnabled: boolean) {
+function addZoomHomeControl(
+  map: mapboxgl.Map,
+  initialView: ViewState,
+  screenshotEnabled: boolean
+): { setHomeViewState: (view: ViewState) => void } {
+  // Keep home target mutable so callers can update it after auto-fit.
+  const homeView: ViewState = { ...initialView };
+
+  const setHomeViewState = (v: ViewState) => {
+    try {
+      if (!v) return;
+      if (typeof v.longitude === 'number' && Number.isFinite(v.longitude)) homeView.longitude = v.longitude;
+      if (typeof v.latitude === 'number' && Number.isFinite(v.latitude)) homeView.latitude = v.latitude;
+      if (typeof v.zoom === 'number' && Number.isFinite(v.zoom)) homeView.zoom = v.zoom;
+      if (typeof v.pitch === 'number' && Number.isFinite(v.pitch)) homeView.pitch = v.pitch;
+      if (typeof v.bearing === 'number' && Number.isFinite(v.bearing)) homeView.bearing = v.bearing;
+    } catch (_) {}
+  };
+
   class ZoomHomeControl {
     private _map?: mapboxgl.Map;
     private _container?: HTMLElement;
@@ -121,10 +140,10 @@ function addZoomHomeControl(map: mapboxgl.Map, initialView: ViewState, screensho
       container.appendChild(
         mkBtn('⌂', 'Reset view', () => {
           m.easeTo({
-            center: [initialView.longitude, initialView.latitude],
-            zoom: Number.isFinite(initialView.zoom) ? initialView.zoom : m.getZoom(),
-            pitch: Number.isFinite(initialView.pitch ?? 0) ? (initialView.pitch ?? 0) : m.getPitch(),
-            bearing: Number.isFinite(initialView.bearing ?? 0) ? (initialView.bearing ?? 0) : m.getBearing(),
+            center: [homeView.longitude, homeView.latitude],
+            zoom: Number.isFinite(homeView.zoom) ? homeView.zoom : m.getZoom(),
+            pitch: Number.isFinite(homeView.pitch ?? 0) ? (homeView.pitch ?? 0) : m.getPitch(),
+            bearing: Number.isFinite(homeView.bearing ?? 0) ? (homeView.bearing ?? 0) : m.getBearing(),
             duration: 600
           });
         })
@@ -159,6 +178,8 @@ function addZoomHomeControl(map: mapboxgl.Map, initialView: ViewState, screensho
   try {
     map.addControl(new ZoomHomeControl() as any, 'bottom-left');
   } catch (_) {}
+
+  return { setHomeViewState };
 }
 
 function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
@@ -252,7 +273,7 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
 
 export function setupWidgets(map: mapboxgl.Map, initialView: ViewState, screenshotEnabled: boolean): WidgetsHandle {
   addScaleControl(map);
-  addZoomHomeControl(map, initialView, screenshotEnabled);
+  const zh = addZoomHomeControl(map, initialView, screenshotEnabled);
   const cleanupOrbit = enableCmdDragOrbit(map);
 
   return {
@@ -260,7 +281,8 @@ export function setupWidgets(map: mapboxgl.Map, initialView: ViewState, screensh
       try {
         cleanupOrbit();
       } catch (_) {}
-    }
+    },
+    setHomeViewState: zh?.setHomeViewState
   };
 }
 

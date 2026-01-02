@@ -183,6 +183,34 @@ function deepDelta(base: any, cur: any): any {
   return Object.keys(out).length ? out : undefined;
 }
 
+function toPyLiteral(x: any, indent = 0): string {
+  const pad = (n: number) => '  '.repeat(n);
+  const next = indent + 1;
+
+  if (x === null || x === undefined) return 'None';
+  const t = typeof x;
+  if (t === 'boolean') return x ? 'True' : 'False';
+  if (t === 'number') return Number.isFinite(x) ? String(x) : 'None';
+  if (t === 'string') return JSON.stringify(x);
+  if (Array.isArray(x)) {
+    if (!x.length) return '[]';
+    const items = x.map((v) => `${pad(next)}${toPyLiteral(v, next)}`);
+    return `[\n${items.join(',\n')}\n${pad(indent)}]`;
+  }
+  if (isPlainObject(x)) {
+    const keys = Object.keys(x);
+    if (!keys.length) return '{}';
+    const items = keys.map((k) => `${pad(next)}${JSON.stringify(k)}: ${toPyLiteral((x as any)[k], next)}`);
+    return `{\n${items.join(',\n')}\n${pad(indent)}}`;
+  }
+  // Fallback for anything else
+  try {
+    return JSON.stringify(String(x));
+  } catch {
+    return 'None';
+  }
+}
+
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
   let shell = document.getElementById('debug-shell') as HTMLElement | null;
   if (!shell) {
@@ -628,7 +656,12 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       const outCombined: any = { layers: layersOut };
       try { outCombined.initialViewState = getViewState(map); } catch (_) {}
 
-      let s = JSON.stringify(outCombined, null, 2);
+      const sBlocks: string[] = [];
+      if (outCombined.initialViewState) {
+        sBlocks.push(`initialViewState = ${toPyLiteral(outCombined.initialViewState, 0)}`);
+      }
+      sBlocks.push(`layers = ${toPyLiteral(outCombined.layers, 0)}`);
+      let s = sBlocks.join('\n\n');
       if (s.length > MAX_STRINGIFY_CHARS) {
         s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
       }

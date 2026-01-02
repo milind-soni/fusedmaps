@@ -366,11 +366,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               <span class="debug-label">Bearing</span>
               <input type="number" class="debug-input" id="dbg-bearing" step="1" />
             </div>
-            <div class="debug-row">
-              <span class="debug-label"></span>
-              <button type="button" class="debug-btn" id="dbg-apply">Apply</button>
-              <button type="button" class="debug-btn debug-btn-secondary" id="dbg-copy">Copy current</button>
-            </div>
           </div>
 
           <div class="debug-section" id="sql-section" style="display:none;">
@@ -379,8 +374,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           </div>
 
           <div class="debug-section">
-            <div class="debug-section-title">Current ViewState</div>
-            <textarea id="dbg-view-output" class="debug-output" readonly></textarea>
+            <details id="dbg-view-details">
+              <summary class="debug-section-title" style="cursor:pointer; user-select:none;">Current ViewState</summary>
+              <textarea id="dbg-view-output" class="debug-output" readonly></textarea>
+            </details>
           </div>
 
           <div class="debug-section">
@@ -1140,14 +1137,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateDebugTogglePosition(shell!, panel, toggle);
   };
 
-  const onApplyView = (e: any) => {
-    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-    applyView();
-  };
-  const onCopy = async (e: any) => {
-    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-    await copyCurrent();
-  };
 
   // Resize handle (sticky toggle)
   let resizing = false;
@@ -1179,8 +1168,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   // Event wiring
   toggle.addEventListener('click', onToggle);
-  (document.getElementById('dbg-apply') as HTMLElement).addEventListener('click', onApplyView);
-  (document.getElementById('dbg-copy') as HTMLElement).addEventListener('click', onCopy);
   resizeHandle.addEventListener('pointerdown', onResizeDown as any, { passive: false });
 
   // Layer editor events
@@ -1270,10 +1257,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       try { document.removeEventListener('click', onDocClick); } catch (_) {}
       try { window.removeEventListener('blur', onDocClick); } catch (_) {}
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
-      try {
-        (document.getElementById('dbg-apply') as HTMLElement).removeEventListener('click', onApplyView);
-        (document.getElementById('dbg-copy') as HTMLElement).removeEventListener('click', onCopy);
-      } catch (_) {}
+      // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
       try {
         map.off('moveend', updateFromMapStop);

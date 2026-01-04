@@ -692,6 +692,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           // Users can swap it with a pmtiles_path + fused.api.sign_url(...) if desired.
           base.pmtiles_url = l.pmtilesUrl;
           if (l.sourceLayer) base.source_layer = l.sourceLayer;
+          if (typeof l.minzoom === 'number') base.minzoom = l.minzoom;
+          if (typeof l.maxzoom === 'number') base.maxzoom = l.maxzoom;
 
           // Use vectorLayer style schema (same as map_utils_refactored expects)
           // Emit a delta against DEFAULT_VECTOR_STYLE for compactness.

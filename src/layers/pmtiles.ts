@@ -283,11 +283,13 @@ export async function addPMTilesLayers(
       
       // Add source if not exists
       if (!map.getSource(sourceId)) {
+        const srcMinZoom = layer.minzoom ?? meta.minZoom ?? 0;
+        const srcMaxZoom = layer.maxzoom ?? meta.maxZoom ?? 14;
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
           url: layer.pmtilesUrl,
-          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
-          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 14,
+          minzoom: srcMinZoom,
+          maxzoom: srcMaxZoom,
           bounds: meta.bounds,
         } as any);
       }
@@ -325,6 +327,8 @@ export async function addPMTilesLayers(
           type: 'circle',
           source: sourceId,
           'source-layer': sourceLayerName,
+          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
+          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
           filter: ['==', ['geometry-type'], 'Point'],
           paint: {
             'circle-radius': [
@@ -351,6 +355,8 @@ export async function addPMTilesLayers(
           type: 'fill',
           source: sourceId,
           'source-layer': sourceLayerName,
+          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
+          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
           filter: ['==', ['geometry-type'], 'Polygon'],
           paint: {
             'fill-color': fillColorExpr,
@@ -368,6 +374,8 @@ export async function addPMTilesLayers(
           type: 'line',
           source: sourceId,
           'source-layer': sourceLayerName,
+          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
+          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
           filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'LineString']],
           paint: {
             'line-color': lineColorExpr,

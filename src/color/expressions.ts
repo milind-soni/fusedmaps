@@ -133,6 +133,7 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
   const [d0, d1] = cfg.domain;
   const isReversed = d0 > d1;
   const domain = isReversed ? [d1, d0] : [d0, d1];
+  const wantsReverse = !!(cfg as any).reverse;
   
   const steps = cfg.steps || 7;
   const paletteName = cfg.colors || 'TealGrn';
@@ -147,7 +148,10 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
     ];
   }
   
-  if (isReversed) colors.reverse();
+  // `reverse` flips palette direction (low↔high). If the domain itself is reversed,
+  // we already normalize it, so we invert the meaning of `reverse`.
+  const shouldReverse = isReversed ? !wantsReverse : wantsReverse;
+  if (shouldReverse) colors = [...colors].reverse();
   
   // Build interpolate expression
   const expr: unknown[] = ['interpolate', ['linear'], ['get', cfg.attr]];

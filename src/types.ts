@@ -194,7 +194,43 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
   fillDomainFromUser?: boolean;
 }
 
-export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig | PMTilesLayerConfig;
+export type DrawingMode =
+  | 'select'
+  | 'freehand'
+  | 'line'
+  | 'polygon'
+  | 'rectangle'
+  | 'circle'
+  | 'arrow';
+
+export interface DrawingStyleConfig {
+  stroke?: string; // e.g. "#6366f1"
+  fill?: string; // e.g. "rgba(99,102,241,0.25)"
+  strokeWidth?: number; // px
+}
+
+export interface DrawingConfig {
+  enabled?: boolean;
+  position?: 'bottom' | 'top';
+  layerId?: string; // id used in layer panel
+  layerName?: string; // display name in layer panel
+  defaultMode?: DrawingMode;
+  tools?: DrawingMode[]; // which tools to show
+  style?: DrawingStyleConfig;
+  initialGeoJSON?: FeatureCollection;
+}
+
+export interface DrawingLayerConfig extends BaseLayerConfig {
+  layerType: 'drawing';
+}
+
+export type LayerConfig =
+  | HexLayerConfig
+  | VectorLayerConfig
+  | MVTLayerConfig
+  | RasterLayerConfig
+  | PMTilesLayerConfig
+  | DrawingLayerConfig;
 
 // ============================================================
 // UI Configuration
@@ -258,6 +294,7 @@ export interface FusedMapsConfig {
   messaging?: MessagingConfig;
   highlightOnClick?: boolean;
   palettes?: string[];
+  drawing?: DrawingConfig;
   /**
    * Sidebar / inspector panel.
    * - undefined: do not mount sidebar at all (no toggle).

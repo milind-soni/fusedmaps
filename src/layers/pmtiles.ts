@@ -417,7 +417,11 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          filter: ['==', ['geometry-type'], 'Point'],
+          // Be tolerant of Multi* geometry types (some tilers emit them at certain zooms)
+          filter: ['any',
+            ['==', ['geometry-type'], 'Point'],
+            ['==', ['geometry-type'], 'MultiPoint'],
+          ],
           paint: {
             'circle-radius': [
               'interpolate', ['exponential', 2], ['zoom'],
@@ -447,7 +451,10 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          filter: ['==', ['geometry-type'], 'Polygon'],
+          filter: ['any',
+            ['==', ['geometry-type'], 'Polygon'],
+            ['==', ['geometry-type'], 'MultiPolygon'],
+          ],
           paint: {
             'fill-color': fillColorExpr,
             'fill-opacity': effectiveFillOpacity,
@@ -468,7 +475,12 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'LineString']],
+          filter: ['any',
+            ['==', ['geometry-type'], 'Polygon'],
+            ['==', ['geometry-type'], 'MultiPolygon'],
+            ['==', ['geometry-type'], 'LineString'],
+            ['==', ['geometry-type'], 'MultiLineString'],
+          ],
           paint: {
             'line-color': lineColorExpr,
             'line-width': effectiveLineWidth,

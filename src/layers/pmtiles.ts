@@ -479,8 +479,9 @@ export async function addPMTilesLayers(
       }
       
       // Fit to bounds if available and this is the first layer, and user didn't provide a custom view
-      if (!hasCustomView && meta.bounds && i === 0) {
-        map.fitBounds(meta.bounds as [number, number, number, number], {
+      // IMPORTANT: use the header bounds directly (SW/NE pairs) so the map starts on the dataset.
+      if (!hasCustomView && bounds && i === 0) {
+        map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
           padding: 50,
           duration: 0,
         });

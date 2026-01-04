@@ -274,7 +274,17 @@ export async function addPMTilesLayers(
     const sourceId = `${layer.id}-source`;
     
     try {
-      // Get metadata to find layer name and bounds
+      // Use mapbox-pmtiles native getHeader() method - this is what the library docs recommend
+      // This ensures we get the header the same way the library expects
+      const header = await mapboxPmTiles.PmTilesSource.getHeader(layer.pmtilesUrl);
+      const bounds: [number, number, number, number] = [
+        header.minLon,
+        header.minLat,
+        header.maxLon,
+        header.maxLat,
+      ];
+      
+      // Also get our metadata for layer name detection
       const meta = await getPMTilesMetadata(layer.pmtilesUrl);
       const sourceLayerName = layer.sourceLayer || meta.layerName;
       if (!layer.sourceLayer && meta.layerName === 'default') {
@@ -282,24 +292,20 @@ export async function addPMTilesLayers(
       }
       
       // Add source if not exists
-      // IMPORTANT: Source MUST have minzoom/maxzoom from header so Mapbox knows what tiles exist.
-      // This enables proper multi-resolution tile fetching at different zoom levels.
-      // Render layers should NOT have minzoom/maxzoom (unless user explicitly sets them) to allow overzoom.
+      // IMPORTANT: Use header values from mapbox-pmtiles native getHeader() for correct tile fetching
       if (!map.getSource(sourceId)) {
-        const srcMinZoom = meta.minZoom ?? 0;
-        const srcMaxZoom = meta.maxZoom ?? 14;
         console.log(`[FusedMaps] PMTiles header for ${layer.id}:`, {
-          minZoom: srcMinZoom,
-          maxZoom: srcMaxZoom,
-          bounds: meta.bounds,
-          layerName: meta.layerName,
+          minZoom: header.minZoom,
+          maxZoom: header.maxZoom,
+          bounds: bounds,
+          layerName: sourceLayerName,
         });
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
           url: layer.pmtilesUrl,
-          minzoom: srcMinZoom,
-          maxzoom: srcMaxZoom,
-          bounds: meta.bounds,
+          minzoom: header.minZoom,
+          maxzoom: header.maxZoom,
+          bounds: bounds,
         } as any);
       }
       

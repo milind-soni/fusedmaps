@@ -542,16 +542,27 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     }
   };
 
-  const paletteGradient = (paletteName: string, steps = 9): string => {
-    const cols = getPaletteColors(paletteName, Math.max(steps, 3));
+  const paletteGradient = (paletteName: string, steps = 9, reverse = false): string => {
+    const cols0 = getPaletteColors(paletteName, Math.max(steps, 3));
+    const cols = (reverse && cols0?.length) ? [...cols0].reverse() : cols0;
     if (!cols?.length) return 'linear-gradient(90deg, #555, #999)';
     const g = cols.map((c: string, i: number) => `${c} ${(i / Math.max(1, cols.length - 1)) * 100}%`).join(', ');
     return `linear-gradient(90deg, ${g})`;
   };
 
-  const updatePalSwatch = (sel: HTMLSelectElement, swatchEl: HTMLElement, triggerEl: HTMLButtonElement) => {
+  const getPreviewSteps = () => {
+    const s = parseInt(fillStepsEl?.value || '7', 10);
+    return Number.isFinite(s) ? Math.max(2, Math.min(20, s)) : 7;
+  };
+
+  const updatePalSwatch = (
+    sel: HTMLSelectElement,
+    swatchEl: HTMLElement,
+    triggerEl: HTMLButtonElement,
+    reverse: boolean
+  ) => {
     const name = sel.value || 'Palette';
-    swatchEl.style.background = paletteGradient(name);
+    swatchEl.style.background = paletteGradient(name, getPreviewSteps(), reverse);
     triggerEl.title = name;
   };
 
@@ -564,11 +575,12 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     sel: HTMLSelectElement,
     menuEl: HTMLElement,
     swatchEl: HTMLElement,
-    triggerEl: HTMLButtonElement
+    triggerEl: HTMLButtonElement,
+    reverse: boolean
   ) => {
     menuEl.innerHTML = palettes
       .map((p) => {
-        const bg = paletteGradient(p);
+        const bg = paletteGradient(p, getPreviewSteps(), reverse);
         return `<div class="pal-item" data-pal="${p}" title="${p}">
           <div class="pal-item-swatch" style="background:${bg};"></div>
         </div>`;
@@ -579,7 +591,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
         const pal = (el as HTMLElement).getAttribute('data-pal') || '';
         if (pal) sel.value = pal;
-        updatePalSwatch(sel, swatchEl, triggerEl);
+        updatePalSwatch(sel, swatchEl, triggerEl, reverse);
         menuEl.style.display = 'none';
         applyUIToLayer();
       });
@@ -592,12 +604,20 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     swatchEl: HTMLElement,
     triggerEl: HTMLButtonElement
   ) => {
-    buildPalMenu(sel, menuEl, swatchEl, triggerEl);
-    updatePalSwatch(sel, swatchEl, triggerEl);
+    const isFill = sel === fillPaletteEl;
+    const reverse = isFill ? !!fillReverseEl.checked : !!lineReverseEl.checked;
+    buildPalMenu(sel, menuEl, swatchEl, triggerEl, reverse);
+    updatePalSwatch(sel, swatchEl, triggerEl, reverse);
     triggerEl.addEventListener('click', (e) => {
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
       const isOpen = menuEl.style.display !== 'none';
       closeMenus();
+      // Rebuild menu each open so gradient reflects current reverse/steps
+      try {
+        const reverseNow = isFill ? !!fillReverseEl.checked : !!lineReverseEl.checked;
+        buildPalMenu(sel, menuEl, swatchEl, triggerEl, reverseNow);
+        updatePalSwatch(sel, swatchEl, triggerEl, reverseNow);
+      } catch (_) {}
       menuEl.style.display = isOpen ? 'none' : 'block';
     });
   };
@@ -835,7 +855,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (cc.attr) fillAttrEl.value = String(cc.attr);
         if (cc.colors) fillPaletteEl.value = String(cc.colors);
         try { fillReverseEl.checked = !!(cc as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger);
+        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger, !!fillReverseEl.checked);
         const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -883,7 +903,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (fcCfg.attr) fillAttrEl.value = String(fcCfg.attr);
         if (fcCfg.colors) fillPaletteEl.value = String(fcCfg.colors);
         try { fillReverseEl.checked = !!(fcCfg as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger);
+        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger, !!fillReverseEl.checked);
         const dom = Array.isArray(fcCfg.domain) ? fcCfg.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -911,7 +931,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
         if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
         try { lineReverseEl.checked = !!(lcCC as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger);
+        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger, !!lineReverseEl.checked);
         const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -938,7 +958,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (lcCfg.attr) lineAttrEl.value = String(lcCfg.attr);
         if (lcCfg.colors) linePaletteEl.value = String(lcCfg.colors);
         try { lineReverseEl.checked = !!(lcCfg as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger);
+        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger, !!lineReverseEl.checked);
         const dom = Array.isArray(lcCfg.domain) ? lcCfg.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -1421,7 +1441,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   elevScaleEl.addEventListener('change', applyUIToLayer);
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
-  [fillAttrEl, fillStepsEl, fillReverseEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [fillAttrEl, fillStepsEl, fillReverseEl].forEach((el) => el.addEventListener('change', () => {
+    // keep palette swatches/menu in sync with reverse + steps
+    attachPalDropdown(fillPaletteEl, fillPalMenu, fillPalSwatch, fillPalTrigger);
+    applyUIToLayer();
+  }));
   // Domain inputs -> slider (no repaint while typing)
   fillDomainMinEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
   fillDomainMaxEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
@@ -1435,7 +1459,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   fillRangeMaxEl.addEventListener('change', onDomainSliderChange);
   fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
   fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
-  [lineAttrEl, lineDomainMinEl, lineDomainMaxEl, lineReverseEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [lineAttrEl, lineDomainMinEl, lineDomainMaxEl, lineReverseEl].forEach((el) => el.addEventListener('change', () => {
+    attachPalDropdown(linePaletteEl, linePalMenu, linePalSwatch, linePalTrigger);
+    applyUIToLayer();
+  }));
   lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });

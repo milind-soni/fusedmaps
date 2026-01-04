@@ -436,7 +436,7 @@ export async function addPMTilesLayers(
         '#ffffff'
       );
       
-      // Circle layer for points
+      // Circle layer for points (NO geometry-type filter - let Mapbox handle it)
       const circleLayerId = `${layer.id}-circles`;
       if (!map.getLayer(circleLayerId)) {
         const layerZoomProps: any = {};
@@ -448,11 +448,7 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          // Be tolerant of Multi* geometry types (some tilers emit them at certain zooms)
-          filter: ['any',
-            ['==', ['geometry-type'], 'Point'],
-            ['==', ['geometry-type'], 'MultiPoint'],
-          ],
+          // NO filter - circle layer will only render point geometries naturally
           paint: {
             'circle-radius': [
               'interpolate', ['exponential', 2], ['zoom'],
@@ -470,7 +466,7 @@ export async function addPMTilesLayers(
         });
       }
       
-      // Fill layer for polygons
+      // Fill layer for polygons (NO geometry-type filter)
       const fillLayerId = `${layer.id}-fill`;
       if (!map.getLayer(fillLayerId)) {
         const layerZoomProps: any = {};
@@ -482,10 +478,7 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          filter: ['any',
-            ['==', ['geometry-type'], 'Polygon'],
-            ['==', ['geometry-type'], 'MultiPolygon'],
-          ],
+          // NO filter - fill layer will only render polygon geometries naturally
           paint: {
             'fill-color': fillColorExpr,
             'fill-opacity': effectiveFillOpacity,
@@ -494,7 +487,7 @@ export async function addPMTilesLayers(
         });
       }
       
-      // Line layer for polygons (outlines) and lines
+      // Line layer for polygons (outlines) and lines (NO geometry-type filter)
       const lineLayerId = `${layer.id}-line`;
       if (!map.getLayer(lineLayerId)) {
         const layerZoomProps: any = {};
@@ -506,12 +499,7 @@ export async function addPMTilesLayers(
           source: sourceId,
           'source-layer': sourceLayerName,
           ...layerZoomProps,
-          filter: ['any',
-            ['==', ['geometry-type'], 'Polygon'],
-            ['==', ['geometry-type'], 'MultiPolygon'],
-            ['==', ['geometry-type'], 'LineString'],
-            ['==', ['geometry-type'], 'MultiLineString'],
-          ],
+          // NO filter - line layer will render line and polygon outline geometries
           paint: {
             'line-color': lineColorExpr,
             'line-width': effectiveLineWidth,

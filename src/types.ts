@@ -173,6 +173,7 @@ export interface RasterLayerConfig extends BaseLayerConfig {
 export interface PMTilesLayerConfig extends BaseLayerConfig {
   layerType: 'pmtiles';
   pmtilesUrl: string; // Signed URL to PMTiles archive
+  pmtilesPath?: string; // Optional original s3:// path (for nicer sidebar export)
   sourceLayer?: string; // Optional source layer name (auto-detected from metadata if not provided)
   excludeSourceLayers?: string[]; // Optional source-layer exclusion list (for helper layers)
   minzoom?: number;

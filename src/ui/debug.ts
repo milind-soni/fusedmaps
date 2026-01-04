@@ -712,9 +712,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         // PMTiles (Mapbox GL source via mapbox-pmtiles)
         if (l.layerType === 'pmtiles') {
           base.type = 'pmtiles';
-          // Keep the URL explicit so the snippet is paste-back runnable.
-          // Users can swap it with a pmtiles_path + fused.api.sign_url(...) if desired.
-          base.pmtiles_url = l.pmtilesUrl;
+          // Prefer original path if available (cleaner paste-back). Otherwise fall back to URL.
+          if ((l as any).pmtilesPath) base.pmtiles_path = (l as any).pmtilesPath;
+          else base.pmtiles_url = l.pmtilesUrl;
           if (l.sourceLayer) base.source_layer = l.sourceLayer;
           if (typeof l.minzoom === 'number') base.minzoom = l.minzoom;
           if (typeof l.maxzoom === 'number') base.maxzoom = l.maxzoom;

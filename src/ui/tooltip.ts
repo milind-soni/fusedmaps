@@ -57,6 +57,9 @@ export function setupTooltip(
         `${layer.id}-line`,
         `${layer.id}-extrusion`
       );
+    } else if (layer.layerType === 'pmtiles') {
+      // PMTiles layers are generated dynamically (multiple Mapbox layers per source-layer),
+      // so we discover their ids at hover time via the `${layer.id}-` prefix.
     }
     
     layerIds.forEach(layerId => {
@@ -66,9 +69,23 @@ export function setupTooltip(
   
   // Mouse move handler
   map.on('mousemove', (e: any) => {
-    const queryIds = allQueryableLayers
-      .map(x => x.layerId)
-      .filter(id => map.getLayer(id));
+    // Build query layer IDs dynamically so PMTiles layers (which may be added async) are included.
+    const queryable: QueryableLayer[] = [...allQueryableLayers];
+    try {
+      const styleLayers: any[] = (map.getStyle?.()?.layers || []) as any[];
+      for (const ldef of layers) {
+        if (ldef.layerType !== 'pmtiles') continue;
+        const prefix = `${ldef.id}-`;
+        for (const sl of styleLayers) {
+          const id = sl?.id;
+          if (typeof id === 'string' && id.startsWith(prefix)) {
+            queryable.push({ layerId: id, layerDef: ldef });
+          }
+        }
+      }
+    } catch (_) {}
+
+    const queryIds = queryable.map(x => x.layerId).filter(id => map.getLayer(id));
     
     const layerOrderIndex = (layerId: string) => {
       const idx = layers.findIndex(l => l.id === layerId);
@@ -82,7 +99,7 @@ export function setupTooltip(
     if (queryIds.length) {
       const features = map.queryRenderedFeatures(e.point, { layers: queryIds });
       for (const f of features || []) {
-        const match = allQueryableLayers.find(x => x.layerId === (f as any).layer?.id);
+        const match = queryable.find(x => x.layerId === (f as any).layer?.id);
         if (!match) continue;
         if (visibilityState[match.layerDef.id] === false) continue;
         const idx = layerOrderIndex(match.layerDef.id);
@@ -157,6 +174,9 @@ function getTooltipColumns(layer: LayerConfig): string[] {
   } else if (layer.layerType === 'vector') {
     const vecLayer = layer as VectorLayerConfig;
     return vecLayer.vectorLayer?.tooltipColumns || vecLayer.vectorLayer?.tooltipAttrs || vecLayer.tooltipColumns || [];
+  } else if (layer.layerType === 'pmtiles') {
+    const p: any = layer as any;
+    return p.vectorLayer?.tooltipColumns || p.vectorLayer?.tooltipAttrs || p.tooltipColumns || [];
   }
   return layer.tooltipColumns || [];
 }

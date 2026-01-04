@@ -142,6 +142,7 @@ export interface RasterLayerConfig extends BaseLayerConfig {
 export interface PMTilesLayerConfig extends BaseLayerConfig {
     layerType: 'pmtiles';
     pmtilesUrl: string;
+    pmtilesPath?: string;
     sourceLayer?: string;
     excludeSourceLayers?: string[];
     minzoom?: number;

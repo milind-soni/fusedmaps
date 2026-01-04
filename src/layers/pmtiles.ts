@@ -339,6 +339,19 @@ export async function addPMTilesLayers(
           maxzoom: header.maxZoom,
           bounds: bounds,
         } as any);
+        
+        // Debug: enable tile boundaries to visualize what tiles are being loaded
+        (map as any).showTileBoundaries = true;
+        console.log('[FusedMaps] PMTiles: tile boundaries enabled for debugging');
+        
+        // Debug: log zoom changes to see if Mapbox is requesting different zoom tiles
+        if (!map._pmtilesZoomDebugAttached) {
+          (map as any)._pmtilesZoomDebugAttached = true;
+          map.on('zoomend', () => {
+            const z = map.getZoom();
+            console.log(`[FusedMaps] PMTiles zoom changed to: ${z.toFixed(2)} (tile zoom: ${Math.floor(z)})`);
+          });
+        }
 
         // Debug: probe whether tiles actually exist at multiple zooms around the current view.
         // This helps distinguish "tiles only exist at one zoom" vs "renderer bug".

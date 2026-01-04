@@ -94,6 +94,20 @@ function setPaintSafe(map: mapboxgl.Map, layerId: string, prop: string, value: a
   } catch (_) {}
 }
 
+function setPaintSafePrefix(map: mapboxgl.Map, layerIdPrefix: string, prop: string, value: any) {
+  try {
+    const layers: any[] = (map.getStyle?.()?.layers || []) as any[];
+    for (const l of layers) {
+      const id = l?.id as string | undefined;
+      if (id && id.startsWith(layerIdPrefix) && map.getLayer(id)) {
+        try {
+          map.setPaintProperty(id, prop as any, value as any);
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+}
+
 function hexToRgbArr(hex: string, withAlpha255?: number): number[] | null {
   try {
     const c = String(hex || '').trim();
@@ -1133,17 +1147,17 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
         const lineOpacity = (v.isStroked === false) ? 0 : 1;
 
-        // Polygons
-        setPaintSafe(map, `${v.id}-fill`, 'fill-color', fillExpr);
-        setPaintSafe(map, `${v.id}-fill`, 'fill-opacity', fillOpacity);
+        // Polygons (prefix-based for PMTiles multi-source-layer rendering)
+        setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
         setPaintSafe(map, `${v.id}-outline`, 'line-color', lineExpr);
         setPaintSafe(map, `${v.id}-outline`, 'line-width', lwClamped);
         setPaintSafe(map, `${v.id}-outline`, 'line-opacity', lineOpacity);
 
         // Lines
-        setPaintSafe(map, `${v.id}-line`, 'line-color', lineExpr);
-        setPaintSafe(map, `${v.id}-line`, 'line-width', lwClamped);
-        setPaintSafe(map, `${v.id}-line`, 'line-opacity', lineOpacity);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-width', lwClamped);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
 
         // Points (circle)
         setPaintSafe(map, `${v.id}-circle`, 'circle-color', fillExpr);
@@ -1216,15 +1230,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         // Apply stroke width only when stroked is true
         const effectiveLineWidth = (v.isStroked === false) ? 0 : lwClamped;
         
-        setPaintSafe(map, `${v.id}-fill`, 'fill-color', fillExpr);
-        setPaintSafe(map, `${v.id}-fill`, 'fill-opacity', fillOpacity);
-        setPaintSafe(map, `${v.id}-line`, 'line-color', lineExpr);
-        setPaintSafe(map, `${v.id}-line`, 'line-width', effectiveLineWidth);
-        setPaintSafe(map, `${v.id}-line`, 'line-opacity', lineOpacity);
-        setPaintSafe(map, `${v.id}-circles`, 'circle-color', fillExpr);
-        setPaintSafe(map, `${v.id}-circles`, 'circle-opacity', fillOpacity);
-        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-color', lineExpr);
-        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-width', effectiveLineWidth);
+        // PMTiles now renders multiple Mapbox layers per source-layer, so update via prefix.
+        setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-width', effectiveLineWidth);
+        setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
+        setPaintSafePrefix(map, `${v.id}-`, 'circle-color', fillExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'circle-opacity', fillOpacity);
+        setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-color', lineExpr);
+        setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-width', effectiveLineWidth);
       }
     } catch (e) { console.warn('[FusedMaps] PMTiles update error:', e); }
   };

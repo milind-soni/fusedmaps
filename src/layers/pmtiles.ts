@@ -313,15 +313,38 @@ export async function addPMTilesLayers(
       const meta = await getPMTilesMetadata(layer.pmtilesUrl);
       
       // Log ALL available source layers for debugging
-      console.log(`[FusedMaps] PMTiles available source-layers for ${layer.id}:`, 
-        meta.allLayerNames.length > 0 ? meta.allLayerNames : ['(none detected - check metadata)']);
-      
-      const sourceLayerName = layer.sourceLayer || meta.layerName;
-      if (!layer.sourceLayer && (meta.layerName === 'default' || meta.allLayerNames.length > 1)) {
-        console.warn('[FusedMaps] PMTiles: you may need to set `source_layer` explicitly for:', layer.id, 
-          meta.allLayerNames.length > 0 ? `Available: ${meta.allLayerNames.join(', ')}` : '');
+      console.log(
+        `[FusedMaps] PMTiles available source-layers for ${layer.id}:`,
+        meta.allLayerNames.length > 0 ? meta.allLayerNames : ['(none detected - check metadata)']
+      );
+
+      const requestedSourceLayer =
+        typeof (layer as any).sourceLayer === 'string' ? ((layer as any).sourceLayer as string).trim() : '';
+
+      // New behavior:
+      // - sourceLayer="*" => render ALL source-layers found in metadata
+      // - sourceLayer unset/empty AND metadata has multiple layers => render ALL layers (acts like OL's "dynamic")
+      // - otherwise render the single requested/detected layer
+      const sourceLayerNamesToRender: string[] =
+        requestedSourceLayer === '*'
+          ? meta.allLayerNames
+          : requestedSourceLayer
+            ? [requestedSourceLayer]
+            : (meta.allLayerNames.length > 1 ? meta.allLayerNames : [meta.layerName]);
+
+      if (sourceLayerNamesToRender.length === 0) {
+        console.warn('[FusedMaps] PMTiles: could not detect any source-layers; set `source_layer` explicitly for:', layer.id);
+      } else if (!requestedSourceLayer && meta.allLayerNames.length > 1) {
+        console.log(
+          `[FusedMaps] PMTiles: rendering ALL source-layers for ${layer.id} (auto):`,
+          sourceLayerNamesToRender
+        );
+      } else {
+        console.log(
+          `[FusedMaps] PMTiles: rendering source-layer(s) for ${layer.id}:`,
+          sourceLayerNamesToRender
+        );
       }
-      console.log(`[FusedMaps] PMTiles using source-layer: "${sourceLayerName}" for ${layer.id}`);
       
       // Add source if not exists
       // IMPORTANT: Use header values from mapbox-pmtiles native getHeader() for correct tile fetching
@@ -330,7 +353,7 @@ export async function addPMTilesLayers(
           minZoom: header.minZoom,
           maxZoom: header.maxZoom,
           bounds: bounds,
-          layerName: sourceLayerName,
+          layerNames: sourceLayerNamesToRender,
         });
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
@@ -339,18 +362,19 @@ export async function addPMTilesLayers(
           maxzoom: header.maxZoom,
           bounds: bounds,
         } as any);
-        
-        // Debug: enable tile boundaries to visualize what tiles are being loaded
-        (map as any).showTileBoundaries = true;
-        console.log('[FusedMaps] PMTiles: tile boundaries enabled for debugging');
-        
-        // Debug: log zoom changes to see if Mapbox is requesting different zoom tiles
-        if (!map._pmtilesZoomDebugAttached) {
-          (map as any)._pmtilesZoomDebugAttached = true;
-          map.on('zoomend', () => {
-            const z = map.getZoom();
-            console.log(`[FusedMaps] PMTiles zoom changed to: ${z.toFixed(2)} (tile zoom: ${Math.floor(z)})`);
-          });
+
+        // Optional debug: enable tile boundaries & zoom logging only if explicitly enabled
+        const dbg = (window as any).FUSEDMAPS_DEBUG_PMtiles === true;
+        if (dbg) {
+          (map as any).showTileBoundaries = true;
+          console.log('[FusedMaps] PMTiles: tile boundaries enabled (FUSEDMAPS_DEBUG_PMtiles=true)');
+          if (!(map as any)._pmtilesZoomDebugAttached) {
+            (map as any)._pmtilesZoomDebugAttached = true;
+            map.on('zoomend', () => {
+              const z = map.getZoom();
+              console.log(`[FusedMaps] PMTiles zoom changed to: ${z.toFixed(2)} (tile zoom: ${Math.floor(z)})`);
+            });
+          }
         }
 
         // Debug: probe whether tiles actually exist at multiple zooms around the current view.
@@ -436,77 +460,75 @@ export async function addPMTilesLayers(
         '#ffffff'
       );
       
-      // Circle layer for points (NO geometry-type filter - let Mapbox handle it)
-      const circleLayerId = `${layer.id}-circles`;
-      if (!map.getLayer(circleLayerId)) {
+      const slugify = (s: string) => s.replace(/[^a-zA-Z0-9_-]+/g, '-');
+
+      // NEW: render one set of Mapbox layers per source-layer name
+      for (const sl of sourceLayerNamesToRender) {
+        const slSlug = slugify(sl || 'default');
         const layerZoomProps: any = {};
         if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
         if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
-        map.addLayer({
-          id: circleLayerId,
-          type: 'circle',
-          source: sourceId,
-          'source-layer': sourceLayerName,
-          ...layerZoomProps,
-          // NO filter - circle layer will only render point geometries naturally
-          paint: {
-            'circle-radius': [
-              'interpolate', ['exponential', 2], ['zoom'],
-              0, pointRadius * 0.5,
-              10, pointRadius,
-              15, pointRadius * 4,
-              20, pointRadius * 20,
-            ],
-            'circle-color': fillColorExpr,
-            'circle-opacity': effectiveFillOpacity,
-            'circle-stroke-color': lineColorExpr,
-            'circle-stroke-width': effectiveLineWidth,
-          },
-          layout: { visibility: visible ? 'visible' : 'none' },
-        });
-      }
-      
-      // Fill layer for polygons (NO geometry-type filter)
-      const fillLayerId = `${layer.id}-fill`;
-      if (!map.getLayer(fillLayerId)) {
-        const layerZoomProps: any = {};
-        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
-        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
-        map.addLayer({
-          id: fillLayerId,
-          type: 'fill',
-          source: sourceId,
-          'source-layer': sourceLayerName,
-          ...layerZoomProps,
-          // NO filter - fill layer will only render polygon geometries naturally
-          paint: {
-            'fill-color': fillColorExpr,
-            'fill-opacity': effectiveFillOpacity,
-          },
-          layout: { visibility: visible ? 'visible' : 'none' },
-        });
-      }
-      
-      // Line layer for polygons (outlines) and lines (NO geometry-type filter)
-      const lineLayerId = `${layer.id}-line`;
-      if (!map.getLayer(lineLayerId)) {
-        const layerZoomProps: any = {};
-        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
-        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
-        map.addLayer({
-          id: lineLayerId,
-          type: 'line',
-          source: sourceId,
-          'source-layer': sourceLayerName,
-          ...layerZoomProps,
-          // NO filter - line layer will render line and polygon outline geometries
-          paint: {
-            'line-color': lineColorExpr,
-            'line-width': effectiveLineWidth,
-            'line-opacity': opacity,
-          },
-          layout: { visibility: visible ? 'visible' : 'none' },
-        });
+
+        // Circle layer
+        const circleLayerId = `${layer.id}-${slSlug}-circles`;
+        if (!map.getLayer(circleLayerId)) {
+          map.addLayer({
+            id: circleLayerId,
+            type: 'circle',
+            source: sourceId,
+            'source-layer': sl,
+            ...layerZoomProps,
+            paint: {
+              'circle-radius': [
+                'interpolate', ['exponential', 2], ['zoom'],
+                0, pointRadius * 0.5,
+                10, pointRadius,
+                15, pointRadius * 4,
+                20, pointRadius * 20,
+              ],
+              'circle-color': fillColorExpr,
+              'circle-opacity': effectiveFillOpacity,
+              'circle-stroke-color': lineColorExpr,
+              'circle-stroke-width': effectiveLineWidth,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
+        }
+
+        // Fill layer
+        const fillLayerId = `${layer.id}-${slSlug}-fill`;
+        if (!map.getLayer(fillLayerId)) {
+          map.addLayer({
+            id: fillLayerId,
+            type: 'fill',
+            source: sourceId,
+            'source-layer': sl,
+            ...layerZoomProps,
+            paint: {
+              'fill-color': fillColorExpr,
+              'fill-opacity': effectiveFillOpacity,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
+        }
+
+        // Line layer
+        const lineLayerId = `${layer.id}-${slSlug}-line`;
+        if (!map.getLayer(lineLayerId)) {
+          map.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            'source-layer': sl,
+            ...layerZoomProps,
+            paint: {
+              'line-color': lineColorExpr,
+              'line-width': effectiveLineWidth,
+              'line-opacity': opacity,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
+        }
       }
       
       // Fit to bounds if available and this is the first layer, and user didn't provide a custom view
@@ -532,11 +554,16 @@ export function updatePMTilesVisibility(
   layerId: string,
   visible: boolean
 ): void {
-  const layerIds = [`${layerId}-circles`, `${layerId}-fill`, `${layerId}-line`];
-  
-  for (const id of layerIds) {
-    if (map.getLayer(id)) {
-      map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+  const prefix = `${layerId}-`;
+  // We now create multiple Mapbox layers per PMTiles source-layer (e.g. `${layerId}-input10-fill`)
+  // So visibility toggling is prefix-based.
+  const styleLayers = (map.getStyle()?.layers || []) as any[];
+  for (const l of styleLayers) {
+    const id = l?.id as string | undefined;
+    if (id && id.startsWith(prefix)) {
+      try {
+        map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+      } catch (_) {}
     }
   }
 }
@@ -545,11 +572,15 @@ export function updatePMTilesVisibility(
  * Remove PMTiles layers from the map
  */
 export function removePMTilesLayers(map: mapboxgl.Map, layerId: string): void {
-  const layerIds = [`${layerId}-circles`, `${layerId}-fill`, `${layerId}-line`];
-  
-  for (const id of layerIds) {
-    if (map.getLayer(id)) {
-      map.removeLayer(id);
+  const prefix = `${layerId}-`;
+  const styleLayers = (map.getStyle()?.layers || []) as any[];
+  // Remove from end to avoid style index shifting issues
+  for (let i = styleLayers.length - 1; i >= 0; i--) {
+    const id = styleLayers[i]?.id as string | undefined;
+    if (id && id.startsWith(prefix)) {
+      try {
+        if (map.getLayer(id)) map.removeLayer(id);
+      } catch (_) {}
     }
   }
   
@@ -563,9 +594,10 @@ export function removePMTilesLayers(map: mapboxgl.Map, layerId: string): void {
  * Check if PMTiles layers exist for a given layer ID
  */
 export function hasPMTilesLayers(map: mapboxgl.Map, layerId: string): boolean {
-  return !!(
-    map.getLayer(`${layerId}-circles`) ||
-    map.getLayer(`${layerId}-fill`) ||
-    map.getLayer(`${layerId}-line`)
-  );
+  const prefix = `${layerId}-`;
+  const styleLayers = (map.getStyle()?.layers || []) as any[];
+  return styleLayers.some(l => {
+    const id = l?.id as string | undefined;
+    return !!(id && id.startsWith(prefix));
+  });
 }

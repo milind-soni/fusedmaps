@@ -322,13 +322,15 @@ export async function addPMTilesLayers(
       // Circle layer for points
       const circleLayerId = `${layer.id}-circles`;
       if (!map.getLayer(circleLayerId)) {
+        const layerZoomProps: any = {};
+        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
+        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
         map.addLayer({
           id: circleLayerId,
           type: 'circle',
           source: sourceId,
           'source-layer': sourceLayerName,
-          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
-          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
+          ...layerZoomProps,
           filter: ['==', ['geometry-type'], 'Point'],
           paint: {
             'circle-radius': [
@@ -350,13 +352,15 @@ export async function addPMTilesLayers(
       // Fill layer for polygons
       const fillLayerId = `${layer.id}-fill`;
       if (!map.getLayer(fillLayerId)) {
+        const layerZoomProps: any = {};
+        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
+        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
         map.addLayer({
           id: fillLayerId,
           type: 'fill',
           source: sourceId,
           'source-layer': sourceLayerName,
-          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
-          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
+          ...layerZoomProps,
           filter: ['==', ['geometry-type'], 'Polygon'],
           paint: {
             'fill-color': fillColorExpr,
@@ -369,13 +373,15 @@ export async function addPMTilesLayers(
       // Line layer for polygons (outlines) and lines
       const lineLayerId = `${layer.id}-line`;
       if (!map.getLayer(lineLayerId)) {
+        const layerZoomProps: any = {};
+        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
+        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
         map.addLayer({
           id: lineLayerId,
           type: 'line',
           source: sourceId,
           'source-layer': sourceLayerName,
-          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
-          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 24,
+          ...layerZoomProps,
           filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'LineString']],
           paint: {
             'line-color': lineColorExpr,

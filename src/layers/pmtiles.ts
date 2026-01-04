@@ -327,7 +327,15 @@ export async function addPMTilesLayers(
         try {
           if (!pmtilesTileProbeDone.has(sourceId)) {
             pmtilesTileProbeDone.add(sourceId);
-            const center = map.getCenter();
+            // Probe around the dataset center (not the current map center),
+            // otherwise you'll just probe empty tiles when the map starts elsewhere.
+            const probeLon = (typeof header.centerLon === 'number' && Number.isFinite(header.centerLon))
+              ? header.centerLon
+              : ((bounds?.[0] ?? 0) + (bounds?.[2] ?? 0)) / 2;
+            const probeLat = (typeof header.centerLat === 'number' && Number.isFinite(header.centerLat))
+              ? header.centerLat
+              : ((bounds?.[1] ?? 0) + (bounds?.[3] ?? 0)) / 2;
+
             const zNow = Math.round(map.getZoom());
             const zList = Array.from(new Set<number>([
               header.minZoom,
@@ -343,7 +351,7 @@ export async function addPMTilesLayers(
             } else {
               const results: any[] = [];
               for (const z of zList) {
-                const { x, y } = lonLatToTileXY(center.lng, center.lat, z);
+                const { x, y } = lonLatToTileXY(probeLon, probeLat, z);
                 let bytes: number | null = null;
                 let ok = false;
                 try {
@@ -351,7 +359,7 @@ export async function addPMTilesLayers(
                   const data = resp?.data ?? resp;
                   if (data) {
                     // data may be Uint8Array or ArrayBuffer
-                    bytes = (data.byteLength ?? data.length ?? null) as any;
+                    bytes = (data.byteLength ?? (data as any).length ?? null) as any;
                     ok = bytes != null ? bytes > 0 : true;
                   }
                 } catch (e) {
@@ -359,7 +367,14 @@ export async function addPMTilesLayers(
                 }
                 results.push({ z, x, y, ok, bytes });
               }
-              console.log(`[FusedMaps] PMTiles tile probe (${layer.id}) @ center=(${center.lng.toFixed(5)},${center.lat.toFixed(5)}) zNow=${zNow}:`, results);
+              console.log(
+                `[FusedMaps] PMTiles tile probe (${layer.id}) @ dataCenter=(${probeLon.toFixed(5)},${probeLat.toFixed(5)}) zNow=${zNow}:`,
+                results
+              );
+              try {
+                // Easier to read/copy
+                console.table(results);
+              } catch (_) {}
             }
           }
         } catch (_) {}

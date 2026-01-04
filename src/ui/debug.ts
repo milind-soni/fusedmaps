@@ -584,8 +584,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   window.addEventListener('blur', onDocClick);
 
   // Find editable layers.
-  // Note: originally this panel was hex-only; we also support vector layers now so the default UDF (points) can be edited.
-  const editableLayers = config.layers.filter((l) => l.layerType === 'hex' || l.layerType === 'vector') as any[];
+  // Note: originally this panel was hex-only; we also support vector layers and pmtiles now.
+  const editableLayers = config.layers.filter((l) => l.layerType === 'hex' || l.layerType === 'vector' || l.layerType === 'pmtiles') as any[];
   layerSelect.innerHTML = editableLayers.map((l) => `<option value="${l.id}">${l.name || l.id}</option>`).join('');
   if (!layerSelect.value && editableLayers.length) layerSelect.value = editableLayers[0].id;
 
@@ -731,6 +731,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     if (!layer) return;
     const isHex = (layer as any).layerType === 'hex';
     const isVector = (layer as any).layerType === 'vector';
+    const isPmtiles = (layer as any).layerType === 'pmtiles';
     const hexCfg: any = isHex ? ((layer as any).hexLayer || {}) : {};
 
     // Basic toggles
@@ -739,7 +740,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       strokedEl.checked = hexCfg.stroked !== false;
       extrudedEl.checked = hexCfg.extruded === true;
     } else {
-      // vector: treat filled/stroked as on/off hints; extruded doesn't apply
+      // vector/pmtiles: treat filled/stroked as on/off hints; extruded doesn't apply
       filledEl.checked = (layer as any).isFilled !== false;
       strokedEl.checked = (layer as any).isStroked !== false;
       extrudedEl.checked = false;
@@ -813,9 +814,12 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         fillFnEl.value = 'colorContinuous';
       }
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       const v = layer as any;
-      const attrs = getVectorAttrCandidates(layer as any);
+      // PMTiles layers may not have inline data for attribute detection; provide color attr or empty list
+      const attrs = isPmtiles
+        ? (v.colorAttribute ? [v.colorAttribute] : ['value'])
+        : getVectorAttrCandidates(layer as any);
       fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       const fcCfg = v.fillColorConfig;
       if (fcCfg && typeof fcCfg === 'object' && fcCfg['@@function'] === 'colorContinuous') {
@@ -861,9 +865,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         lineFnEl.value = 'static';
       }
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       const v = layer as any;
-      const attrs = getVectorAttrCandidates(layer as any);
+      const attrs = isPmtiles
+        ? (v.colorAttribute ? [v.colorAttribute] : ['value'])
+        : getVectorAttrCandidates(layer as any);
       lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       const lcCfg = v.lineColorConfig;
       if (lcCfg && typeof lcCfg === 'object' && lcCfg['@@function'] === 'colorContinuous') {
@@ -903,6 +909,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     if (!layer) return;
     const isHex = (layer as any).layerType === 'hex';
     const isVector = (layer as any).layerType === 'vector';
+    const isPmtiles = (layer as any).layerType === 'pmtiles';
 
     if (isHex) {
       (layer as any).hexLayer = (layer as any).hexLayer || {};
@@ -927,7 +934,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (ep) hexCfg.elevationProperty = ep;
         else delete hexCfg.elevationProperty;
       } catch (_) {}
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       (layer as any).isFilled = !!filledEl.checked;
       (layer as any).isStroked = !!strokedEl.checked;
       (layer as any).opacity = opClamped;
@@ -963,7 +970,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           autoDomain: (hexCfg.getFillColor?.autoDomain !== false)
         };
       }
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       if (fillFnEl.value === 'static') {
         const c = fillStaticEl.value || '#0090ff';
         (layer as any).fillColorConfig = null;
@@ -973,7 +980,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = arr || c;
         } catch (_) {}
       } else {
-        const attr = fillAttrEl.value || 'house_age';
+        const attr = fillAttrEl.value || 'value';
         const colors = fillPaletteEl.value || 'ArmyRose';
         const d0 = parseFloat(fillDomainMinEl.value);
         const d1 = parseFloat(fillDomainMaxEl.value);
@@ -992,6 +999,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           nullColor: [nr, ng, nb],
         };
         (layer as any).fillColorConfig = cfgObj;
+        if (isPmtiles) (layer as any).colorAttribute = attr;
         try {
           if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = cfgObj;
         } catch (_) {}
@@ -1020,7 +1028,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           autoDomain: (hexCfg.getLineColor?.autoDomain !== false)
         };
       }
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       if (lineFnEl.value === 'static') {
         const c = lineStaticEl.value || '#ffffff';
         (layer as any).lineColorConfig = null;
@@ -1030,7 +1038,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           if ((layer as any).vectorLayer) (layer as any).vectorLayer.getLineColor = arr || c;
         } catch (_) {}
       } else {
-        const attr = lineAttrEl.value || 'house_age';
+        const attr = lineAttrEl.value || 'value';
         const colors = linePaletteEl.value || 'ArmyRose';
         const d0 = parseFloat(lineDomainMinEl.value);
         const d1 = parseFloat(lineDomainMaxEl.value);
@@ -1053,7 +1061,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     const lwClamped = Number.isFinite(lw) ? clamp(lw, 0, 10) : 1;
     if (isHex) {
       hexCfg.lineWidthMinPixels = lwClamped;
-    } else if (isVector) {
+    } else if (isVector || isPmtiles) {
       (layer as any).lineWidth = lwClamped;
       try {
         if ((layer as any).vectorLayer) (layer as any).vectorLayer.lineWidthMinPixels = lwClamped;
@@ -1115,6 +1123,78 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-width', lwClamped);
       }
     } catch (_) {}
+
+    // PMTiles layers use Mapbox GL vector layers. Build color expressions and update paint.
+    try {
+      if (isPmtiles) {
+        const v: any = layer as any;
+        const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
+        const lineOpacity = (v.isStroked === false) ? 0 : 1;
+
+        // Build PMTiles-compatible color expression
+        const buildPMTilesColorExpr = (colorConfig: any, defaultColor: string): any => {
+          if (!colorConfig) return defaultColor;
+          if (typeof colorConfig === 'string') return colorConfig;
+          if (Array.isArray(colorConfig)) return colorConfig;
+          
+          const fn = colorConfig['@@function'];
+          const attr = colorConfig.attr || v.colorAttribute || 'value';
+          
+          if (fn === 'colorContinuous') {
+            const domain = colorConfig.domain || [0, 100];
+            const steps = colorConfig.steps || 7;
+            
+            // Resolve palette name to colors
+            let colors = colorConfig.colors;
+            if (typeof colors === 'string') {
+              const cartocolor = (window as any).cartocolor;
+              if (cartocolor && cartocolor[colors]) {
+                const pal = cartocolor[colors];
+                const availSteps = Object.keys(pal).map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
+                const best = availSteps.find(s => s <= steps) || availSteps[availSteps.length - 1];
+                colors = pal[best] || ['#440154', '#21918c', '#fde725'];
+              } else {
+                colors = ['#440154', '#21918c', '#fde725'];
+              }
+            }
+            if (!colors || !Array.isArray(colors)) {
+              colors = ['#440154', '#21918c', '#fde725'];
+            }
+            
+            // Build interpolate expression
+            const expr: any[] = ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', attr]], 0]];
+            const numColors = colors.length;
+            for (let i = 0; i < numColors; i++) {
+              const t = i / (numColors - 1);
+              const value = domain[0] + t * (domain[1] - domain[0]);
+              expr.push(value, colors[i]);
+            }
+            return expr;
+          }
+          
+          return defaultColor;
+        };
+
+        const fillExpr = v.fillColorConfig
+          ? buildPMTilesColorExpr(v.fillColorConfig, '#ff8c00')
+          : (v.fillColorRgba || '#ff8c00');
+        
+        const lineExpr = v.lineColorConfig
+          ? buildPMTilesColorExpr(v.lineColorConfig, '#ffffff')
+          : (v.lineColorRgba || '#ffffff');
+
+        // PMTiles layers: -circles, -fill, -line
+        setPaintSafe(map, `${v.id}-fill`, 'fill-color', fillExpr);
+        setPaintSafe(map, `${v.id}-fill`, 'fill-opacity', fillOpacity);
+        setPaintSafe(map, `${v.id}-line`, 'line-color', lineExpr);
+        setPaintSafe(map, `${v.id}-line`, 'line-width', lwClamped);
+        setPaintSafe(map, `${v.id}-line`, 'line-opacity', lineOpacity);
+        setPaintSafe(map, `${v.id}-circles`, 'circle-color', fillExpr);
+        setPaintSafe(map, `${v.id}-circles`, 'circle-opacity', fillOpacity);
+        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-color', lineExpr);
+        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-width', lwClamped);
+      }
+    } catch (e) { console.warn('[FusedMaps] PMTiles update error:', e); }
   };
 
   // Domain slider behavior (map_utils style)

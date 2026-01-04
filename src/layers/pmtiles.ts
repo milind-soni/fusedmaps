@@ -12,6 +12,12 @@ let sourceTypeRegistered = false;
 // In-flight loaders to avoid double-loading scripts/modules
 let mapboxPmtilesLoadPromise: Promise<any> | null = null;
 
+// Optional: minimal metadata fallback. Some PMTiles do not expose `vector_layers`
+// via mapbox-pmtiles `getHeader().json`, so we read PMTiles metadata only when needed.
+let pmtilesLib: any = null;
+let pmtilesLoadPromise: Promise<any> | null = null;
+const pmtilesLayerNamesCache = new Map<string, Promise<string[]>>();
+
 function extractVectorLayerNamesFromHeader(header: any): string[] {
   const json = header?.json || {};
   const names: string[] = [];
@@ -29,6 +35,51 @@ function extractVectorLayerNamesFromHeader(header: any): string[] {
     }
   }
   return names;
+}
+
+async function ensurePmtilesMetadataLibLoaded(): Promise<any> {
+  if (pmtilesLib) return pmtilesLib;
+  if (pmtilesLoadPromise) return pmtilesLoadPromise;
+  const dynamicImport = (u: string) => (new Function('u', 'return import(u)') as any)(u);
+  pmtilesLoadPromise = dynamicImport('https://cdn.jsdelivr.net/npm/pmtiles@3.0.6/+esm')
+    .then((m: any) => {
+      pmtilesLib = m;
+      return pmtilesLib;
+    })
+    .finally(() => {
+      pmtilesLoadPromise = null;
+    });
+  return pmtilesLoadPromise;
+}
+
+async function getVectorLayerNamesFallback(url: string): Promise<string[]> {
+  if (pmtilesLayerNamesCache.has(url)) return pmtilesLayerNamesCache.get(url)!;
+  const p = (async () => {
+    const pmtiles = await ensurePmtilesMetadataLibLoaded();
+    const inst = new pmtiles.PMTiles(url);
+    let metadata: any = {};
+    try {
+      metadata = await inst.getMetadata();
+    } catch (_) {
+      metadata = {};
+    }
+    const names: string[] = [];
+    if (metadata?.vector_layers?.length > 0) {
+      for (const vl of metadata.vector_layers) {
+        if (vl?.id) names.push(String(vl.id));
+      }
+    }
+    if (metadata?.tilestats?.layers && Array.isArray(metadata.tilestats.layers)) {
+      for (const tl of metadata.tilestats.layers) {
+        const n = tl?.layer;
+        if (n && !names.includes(String(n))) names.push(String(n));
+      }
+    }
+    return names;
+  })();
+  pmtilesLayerNamesCache.set(url, p);
+  p.catch(() => pmtilesLayerNamesCache.delete(url));
+  return p;
 }
 
 /**
@@ -188,11 +239,20 @@ export async function addPMTilesLayers(
         header.maxLon,
         header.maxLat,
       ];
-      const allLayerNames = extractVectorLayerNamesFromHeader(header);
+      let allLayerNames = extractVectorLayerNamesFromHeader(header);
       const defaultLayerName = allLayerNames[0] || 'default';
 
       const requestedSourceLayer =
         typeof (layer as any).sourceLayer === 'string' ? ((layer as any).sourceLayer as string).trim() : '';
+
+      // Minimal fallback: if we couldn't detect source-layers from header.json
+      // and the user didn't specify one, try reading PMTiles metadata once.
+      if (!requestedSourceLayer && allLayerNames.length === 0) {
+        try {
+          allLayerNames = await getVectorLayerNamesFallback(layer.pmtilesUrl);
+        } catch (_) {}
+      }
+      const defaultLayerName2 = allLayerNames[0] || defaultLayerName;
 
       // New behavior:
       // - sourceLayer="*" => render ALL source-layers found in metadata
@@ -215,7 +275,7 @@ export async function addPMTilesLayers(
           ? filterExcluded(allLayerNames)
           : requestedSourceLayer
             ? [requestedSourceLayer]
-            : (allLayerNames.length > 1 ? autoAllFiltered : [defaultLayerName]);
+            : (allLayerNames.length > 1 ? autoAllFiltered : [defaultLayerName2]);
 
       if (sourceLayerNamesToRender.length === 0) {
         console.warn('[FusedMaps] PMTiles: could not detect any source-layers; set `source_layer` explicitly for:', layer.id);

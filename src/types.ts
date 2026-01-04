@@ -169,7 +169,26 @@ export interface RasterLayerConfig extends BaseLayerConfig {
   opacity?: number;
 }
 
-export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig;
+export interface PMTilesLayerConfig extends BaseLayerConfig {
+  layerType: 'pmtiles';
+  pmtilesUrl: string; // Signed URL to PMTiles archive
+  sourceLayer?: string; // Optional source layer name (auto-detected from metadata if not provided)
+  minzoom?: number;
+  maxzoom?: number;
+  // Styling
+  fillColorConfig?: ColorConfig;
+  fillOpacity?: number;
+  isFilled?: boolean;
+  lineColorConfig?: ColorConfig;
+  lineWidth?: number;
+  pointRadiusMinPixels?: number;
+  colorAttribute?: string; // Attribute to use for coloring
+  // Vector layer style (legacy/compatibility)
+  vectorLayer?: VectorLayerStyle;
+  fillDomainFromUser?: boolean;
+}
+
+export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig | PMTilesLayerConfig;
 
 // ============================================================
 // UI Configuration

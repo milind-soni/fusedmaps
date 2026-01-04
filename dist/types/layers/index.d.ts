@@ -24,3 +24,4 @@ export declare function setLayerVisibility(map: mapboxgl.Map, layerId: string, v
 export * from './hex';
 export * from './vector';
 export * from './raster';
+export * from './pmtiles';

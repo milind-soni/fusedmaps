@@ -2,11 +2,12 @@
  * Layer management - add, remove, toggle visibility
  */
 
-import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, RasterLayerConfig, FusedMapsConfig } from '../types';
+import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, RasterLayerConfig, PMTilesLayerConfig, FusedMapsConfig } from '../types';
 import { hexToGeoJSON, addStaticHexLayer, setHexLayerVisibility } from './hex';
 import { addVectorLayer, addMVTLayer, setVectorLayerVisibility } from './vector';
 import { addRasterLayer, setRasterLayerVisibility } from './raster';
 import { createHexTileOverlay } from './hex-tiles';
+import { addPMTilesLayers, updatePMTilesVisibility, removePMTilesLayers } from './pmtiles';
 
 // Store computed GeoJSONs for legend/tooltip access
 const layerGeoJSONs: Record<string, GeoJSON.FeatureCollection> = {};
@@ -79,6 +80,11 @@ export function addAllLayers(
         addRasterLayer(map, rasterLayer, visible);
         break;
       }
+      
+      case 'pmtiles': {
+        // PMTiles layers are handled separately after all sync layers
+        break;
+      }
     }
   });
   
@@ -94,6 +100,15 @@ export function addAllLayers(
     }
   }
   
+  // Set up PMTiles layers (async - uses native Mapbox vector sources)
+  const pmtilesLayers = layers.filter(l => l.layerType === 'pmtiles') as PMTilesLayerConfig[];
+  if (pmtilesLayers.length > 0) {
+    // Add PMTiles layers asynchronously
+    addPMTilesLayers(map, pmtilesLayers, visibilityState).catch(e => {
+      console.error('[FusedMaps] Failed to add PMTiles layers:', e);
+    });
+  }
+  
   return { deckOverlay };
 }
 
@@ -102,13 +117,20 @@ export function addAllLayers(
  */
 function removeAllLayers(map: mapboxgl.Map, layers: LayerConfig[]): void {
   layers.forEach(layer => {
+    // Handle PMTiles layers specially
+    if (layer.layerType === 'pmtiles') {
+      removePMTilesLayers(map, layer.id);
+      return;
+    }
+    
     const layerIds = [
       `${layer.id}-fill`,
       `${layer.id}-extrusion`,
       `${layer.id}-outline`,
       `${layer.id}-circle`,
       `${layer.id}-line`,
-      `${layer.id}-raster`
+      `${layer.id}-raster`,
+      `${layer.id}-circles`, // PMTiles circle layer
     ];
     
     layerIds.forEach(id => {
@@ -119,6 +141,7 @@ function removeAllLayers(map: mapboxgl.Map, layers: LayerConfig[]): void {
     
     try {
       if (map.getSource(layer.id)) map.removeSource(layer.id);
+      if (map.getSource(`${layer.id}-source`)) map.removeSource(`${layer.id}-source`);
     } catch (e) {}
   });
 }
@@ -159,6 +182,10 @@ export function setLayerVisibility(
     case 'raster':
       setRasterLayerVisibility(map, layerId, visible);
       break;
+    
+    case 'pmtiles':
+      updatePMTilesVisibility(map, layerId, visible);
+      break;
   }
 }
 
@@ -166,4 +193,5 @@ export function setLayerVisibility(
 export * from './hex';
 export * from './vector';
 export * from './raster';
+export * from './pmtiles';
 

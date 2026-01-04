@@ -134,6 +134,32 @@ export async function getPMTilesMetadata(url: string): Promise<{
 }
 
 /**
+ * Resolve a palette name (e.g., "Sunset", "Viridis") to an array of hex colors
+ */
+function resolvePalette(paletteName: string, steps: number = 7): string[] {
+  const cartocolor = (window as any).cartocolor;
+  
+  // Default fallback colors
+  const fallback = ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'];
+  
+  if (!cartocolor) {
+    console.warn('[FusedMaps] cartocolor not loaded, using default colors');
+    return fallback;
+  }
+  
+  // Try to find the palette in cartocolor
+  const palette = cartocolor[paletteName];
+  if (palette) {
+    // cartocolor palettes have different step counts (3-11 typically)
+    const availableSteps = Object.keys(palette).map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
+    const bestMatch = availableSteps.find(s => s <= steps) || availableSteps[availableSteps.length - 1];
+    return palette[bestMatch] || fallback;
+  }
+  
+  return fallback;
+}
+
+/**
  * Build a Mapbox GL color expression from a color config
  */
 function buildColorExpression(
@@ -150,15 +176,25 @@ function buildColorExpression(
   
   if (fn === 'colorContinuous') {
     const domain = colorConfig.domain || [0, 100];
-    const colors = colorConfig.colors || ['#440154', '#21918c', '#fde725'];
+    const steps = colorConfig.steps || 7;
     
+    // Resolve palette name to colors array
+    let colors = colorConfig.colors;
+    if (typeof colors === 'string') {
+      colors = resolvePalette(colors, steps);
+    }
+    if (!colors || !Array.isArray(colors)) {
+      colors = ['#440154', '#21918c', '#fde725'];
+    }
+    
+    // Build interpolate expression with all color stops
     const expr: any[] = ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', attr]], 0]];
     
-    if (colors.length === 2) {
-      expr.push(domain[0], colors[0], domain[1], colors[1]);
-    } else if (colors.length >= 3) {
-      const mid = (domain[0] + domain[1]) / 2;
-      expr.push(domain[0], colors[0], mid, colors[1], domain[1], colors[2]);
+    const numColors = colors.length;
+    for (let i = 0; i < numColors; i++) {
+      const t = i / (numColors - 1);
+      const value = domain[0] + t * (domain[1] - domain[0]);
+      expr.push(value, colors[i]);
     }
     
     return expr;

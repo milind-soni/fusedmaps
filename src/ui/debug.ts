@@ -685,6 +685,33 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           return base;
         }
 
+        // PMTiles (Mapbox GL source via mapbox-pmtiles)
+        if (l.layerType === 'pmtiles') {
+          base.type = 'pmtiles';
+          // Keep the URL explicit so the snippet is paste-back runnable.
+          // Users can swap it with a pmtiles_path + fused.api.sign_url(...) if desired.
+          base.pmtiles_url = l.pmtilesUrl;
+          if (l.sourceLayer) base.source_layer = l.sourceLayer;
+
+          // Use vectorLayer style schema (same as map_utils_refactored expects)
+          // Emit a delta against DEFAULT_VECTOR_STYLE for compactness.
+          const v: any = l.vectorLayer || {};
+
+          // Ensure key overrides from the PMTiles config are reflected in the style block
+          // even if vectorLayer is missing them (PMTiles has some top-level style fields).
+          const vMerged: any = { ...v };
+          if (l.fillColorConfig) vMerged.getFillColor = l.fillColorConfig;
+          if (l.lineColorConfig) vMerged.getLineColor = l.lineColorConfig;
+          if (typeof l.fillOpacity === 'number') vMerged.opacity = l.fillOpacity;
+          if (typeof l.lineWidth === 'number') vMerged.lineWidthMinPixels = l.lineWidth;
+          if (typeof l.pointRadiusMinPixels === 'number') vMerged.pointRadiusMinPixels = l.pointRadiusMinPixels;
+          if (typeof l.isFilled === 'boolean') vMerged.filled = l.isFilled;
+          if (typeof l.isStroked === 'boolean') vMerged.stroked = l.isStroked;
+
+          base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, vMerged) || {} };
+          return base;
+        }
+
         // Raster tiles / static raster overlay
         if (l.layerType === 'raster') {
           base.type = 'raster';

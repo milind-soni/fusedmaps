@@ -1184,15 +1184,18 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           : (v.lineColorRgba || '#ffffff');
 
         // PMTiles layers: -circles, -fill, -line
+        // Apply stroke width only when stroked is true
+        const effectiveLineWidth = (v.isStroked === false) ? 0 : lwClamped;
+        
         setPaintSafe(map, `${v.id}-fill`, 'fill-color', fillExpr);
         setPaintSafe(map, `${v.id}-fill`, 'fill-opacity', fillOpacity);
         setPaintSafe(map, `${v.id}-line`, 'line-color', lineExpr);
-        setPaintSafe(map, `${v.id}-line`, 'line-width', lwClamped);
+        setPaintSafe(map, `${v.id}-line`, 'line-width', effectiveLineWidth);
         setPaintSafe(map, `${v.id}-line`, 'line-opacity', lineOpacity);
         setPaintSafe(map, `${v.id}-circles`, 'circle-color', fillExpr);
         setPaintSafe(map, `${v.id}-circles`, 'circle-opacity', fillOpacity);
         setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-color', lineExpr);
-        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-width', lwClamped);
+        setPaintSafe(map, `${v.id}-circles`, 'circle-stroke-width', effectiveLineWidth);
       }
     } catch (e) { console.warn('[FusedMaps] PMTiles update error:', e); }
   };

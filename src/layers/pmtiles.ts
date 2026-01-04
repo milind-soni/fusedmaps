@@ -255,8 +255,14 @@ export async function addPMTilesLayers(
       // Get styling config
       const vectorStyle = layer.vectorLayer || {};
       const opacity = layer.fillOpacity ?? vectorStyle.opacity ?? 0.8;
-      const lineWidth = layer.lineWidth ?? 1;
+      const baseLineWidth = layer.lineWidth ?? 1;
       const pointRadius = layer.pointRadiusMinPixels ?? 4;
+      
+      // Check filled/stroked booleans
+      const isFilled = (layer as any).isFilled !== false;
+      const isStroked = (layer as any).isStroked !== false;
+      const effectiveLineWidth = isStroked ? baseLineWidth : 0;
+      const effectiveFillOpacity = isFilled ? opacity : 0;
       
       // Determine colors
       const fillColorExpr = buildColorExpression(
@@ -289,9 +295,9 @@ export async function addPMTilesLayers(
               20, pointRadius * 20,
             ],
             'circle-color': fillColorExpr,
-            'circle-opacity': opacity,
+            'circle-opacity': effectiveFillOpacity,
             'circle-stroke-color': lineColorExpr,
-            'circle-stroke-width': lineWidth,
+            'circle-stroke-width': effectiveLineWidth,
           },
           layout: { visibility: visible ? 'visible' : 'none' },
         });
@@ -308,7 +314,7 @@ export async function addPMTilesLayers(
           filter: ['==', ['geometry-type'], 'Polygon'],
           paint: {
             'fill-color': fillColorExpr,
-            'fill-opacity': opacity,
+            'fill-opacity': effectiveFillOpacity,
           },
           layout: { visibility: visible ? 'visible' : 'none' },
         });
@@ -325,7 +331,7 @@ export async function addPMTilesLayers(
           filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'LineString']],
           paint: {
             'line-color': lineColorExpr,
-            'line-width': lineWidth,
+            'line-width': effectiveLineWidth,
             'line-opacity': opacity,
           },
           layout: { visibility: visible ? 'visible' : 'none' },

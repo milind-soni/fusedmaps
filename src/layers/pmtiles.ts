@@ -285,6 +285,12 @@ export async function addPMTilesLayers(
       // NOTE: Do NOT set minzoom/maxzoom on the source - let mapbox-pmtiles read the header
       // and handle tile fetching. Setting maxzoom here prevents overzoom from working.
       if (!map.getSource(sourceId)) {
+        console.log(`[FusedMaps] PMTiles header for ${layer.id}:`, {
+          minZoom: meta.minZoom,
+          maxZoom: meta.maxZoom,
+          bounds: meta.bounds,
+          layerName: meta.layerName,
+        });
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
           url: layer.pmtilesUrl,

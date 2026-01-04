@@ -168,6 +168,7 @@ function buildColorExpression(
   if (fn === 'colorContinuous') {
     const domain = colorConfig.domain || [0, 100];
     const steps = colorConfig.steps || 7;
+    const reverse = !!colorConfig.reverse;
     
     // Resolve palette name to colors array
     let colors = colorConfig.colors;
@@ -176,6 +177,9 @@ function buildColorExpression(
     }
     if (!colors || !Array.isArray(colors)) {
       colors = ['#440154', '#21918c', '#fde725'];
+    }
+    if (reverse && colors.length > 1) {
+      colors = [...colors].reverse();
     }
     
     // Build interpolate expression with all color stops

@@ -23,6 +23,7 @@ export interface ColorContinuousConfig {
   colors: string;
   steps?: number;
   nullColor?: [number, number, number, number?];
+  reverse?: boolean; // reverse palette direction (low↔high)
 }
 
 export interface ColorCategoriesConfig {

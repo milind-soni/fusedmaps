@@ -13,6 +13,7 @@ export interface ColorContinuousConfig {
     colors: string;
     steps?: number;
     nullColor?: [number, number, number, number?];
+    reverse?: boolean;
 }
 export interface ColorCategoriesConfig {
     '@@function': 'colorCategories';

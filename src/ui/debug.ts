@@ -310,6 +310,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
                 </div>
               </div>
               <div class="debug-row">
+                <span class="debug-label"></span>
+                <label class="debug-checkbox" style="margin-left:auto;"><input type="checkbox" id="dbg-fill-reverse" /> Reverse</label>
+              </div>
+              <div class="debug-row">
                 <span class="debug-label">Domain</span>
                 <input type="number" class="debug-input debug-input-sm" id="dbg-domain-min" step="0.1" placeholder="min" />
                 <span style="color:#666;">–</span>
@@ -365,6 +369,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
                   </button>
                   <div class="pal-menu" id="dbg-line-palette-menu" style="display:none;"></div>
                 </div>
+              </div>
+              <div class="debug-row">
+                <span class="debug-label"></span>
+                <label class="debug-checkbox" style="margin-left:auto;"><input type="checkbox" id="dbg-line-reverse" /> Reverse</label>
               </div>
               <div class="debug-row">
                 <span class="debug-label">Domain</span>
@@ -475,6 +483,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const fillRangeMinEl = document.getElementById('dbg-domain-range-min') as HTMLInputElement;
   const fillRangeMaxEl = document.getElementById('dbg-domain-range-max') as HTMLInputElement;
   const fillStepsEl = document.getElementById('dbg-steps') as HTMLInputElement;
+  const fillReverseEl = document.getElementById('dbg-fill-reverse') as HTMLInputElement;
   const fillNullEl = document.getElementById('dbg-null-color') as HTMLInputElement;
   const fillNullLabel = document.getElementById('dbg-null-color-label') as HTMLElement;
   const fillStaticEl = document.getElementById('dbg-fill-static') as HTMLInputElement;
@@ -490,6 +499,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const linePalMenu = document.getElementById('dbg-line-palette-menu') as HTMLElement;
   const lineDomainMinEl = document.getElementById('dbg-line-domain-min') as HTMLInputElement;
   const lineDomainMaxEl = document.getElementById('dbg-line-domain-max') as HTMLInputElement;
+  const lineReverseEl = document.getElementById('dbg-line-reverse') as HTMLInputElement;
   const lineStaticEl = document.getElementById('dbg-line-static') as HTMLInputElement;
   const lineStaticLabel = document.getElementById('dbg-line-static-label') as HTMLElement;
   const lineWidthSliderEl = document.getElementById('dbg-line-width-slider') as HTMLInputElement;
@@ -824,6 +834,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (cc.attr) fillAttrEl.value = String(cc.attr);
         if (cc.colors) fillPaletteEl.value = String(cc.colors);
+        try { fillReverseEl.checked = !!(cc as any).reverse; } catch (_) { fillReverseEl.checked = false; }
         updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger);
         const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
@@ -850,12 +861,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillNullLabel.textContent = hex;
       } else if (Array.isArray(fc)) {
         fillFnEl.value = 'static';
+        try { fillReverseEl.checked = false; } catch (_) {}
         const arr = fc as any[];
         const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
         fillStaticEl.value = hex;
         fillStaticLabel.textContent = hex;
       } else {
         fillFnEl.value = 'colorContinuous';
+        try { fillReverseEl.checked = false; } catch (_) {}
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;
@@ -869,6 +882,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillFnEl.value = 'colorContinuous';
         if (fcCfg.attr) fillAttrEl.value = String(fcCfg.attr);
         if (fcCfg.colors) fillPaletteEl.value = String(fcCfg.colors);
+        try { fillReverseEl.checked = !!(fcCfg as any).reverse; } catch (_) { fillReverseEl.checked = false; }
         updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger);
         const dom = Array.isArray(fcCfg.domain) ? fcCfg.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
@@ -880,6 +894,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillNullLabel.textContent = hex;
       } else {
         fillFnEl.value = 'static';
+        try { fillReverseEl.checked = false; } catch (_) {}
         // best-effort: derive picker from rgba if possible, else keep default
         fillStaticEl.value = '#0090ff';
         fillStaticLabel.textContent = fillStaticEl.value;
@@ -895,18 +910,21 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         lineAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
         if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
+        try { lineReverseEl.checked = !!(lcCC as any).reverse; } catch (_) { lineReverseEl.checked = false; }
         updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger);
         const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
       } else if (Array.isArray(lc)) {
         lineFnEl.value = 'static';
+        try { lineReverseEl.checked = false; } catch (_) {}
         const arr = lc as any[];
         const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
         lineStaticEl.value = hex;
         lineStaticLabel.textContent = hex;
       } else {
         lineFnEl.value = 'static';
+        try { lineReverseEl.checked = false; } catch (_) {}
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;
@@ -919,12 +937,14 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         lineFnEl.value = 'colorContinuous';
         if (lcCfg.attr) lineAttrEl.value = String(lcCfg.attr);
         if (lcCfg.colors) linePaletteEl.value = String(lcCfg.colors);
+        try { lineReverseEl.checked = !!(lcCfg as any).reverse; } catch (_) { lineReverseEl.checked = false; }
         updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger);
         const dom = Array.isArray(lcCfg.domain) ? lcCfg.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
       } else {
         lineFnEl.value = 'static';
+        try { lineReverseEl.checked = false; } catch (_) {}
       }
     }
 
@@ -995,6 +1015,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         const attr = fillAttrEl.value || 'data_avg';
         const colors = fillPaletteEl.value || 'Earth';
+        const reverse = !!fillReverseEl.checked;
         const d0 = parseFloat(fillDomainMinEl.value);
         const d1 = parseFloat(fillDomainMaxEl.value);
         const steps = parseInt(fillStepsEl.value || '7', 10);
@@ -1007,6 +1028,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
           colors,
+          reverse,
           steps: Number.isFinite(steps) ? steps : 7,
           nullColor: [nr, ng, nb],
           // Default to autoDomain unless user explicitly overrides the domain (see domain handlers below).
@@ -1025,6 +1047,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         const attr = fillAttrEl.value || 'value';
         const colors = fillPaletteEl.value || 'ArmyRose';
+        const reverse = !!fillReverseEl.checked;
         const d0 = parseFloat(fillDomainMinEl.value);
         const d1 = parseFloat(fillDomainMaxEl.value);
         const steps = parseInt(fillStepsEl.value || '7', 10);
@@ -1038,6 +1061,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
           colors,
+          reverse,
           steps: Number.isFinite(steps) ? steps : 7,
           nullColor: [nr, ng, nb],
         };
@@ -1060,6 +1084,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         const attr = lineAttrEl.value || 'data_avg';
         const colors = linePaletteEl.value || 'Earth';
+        const reverse = !!lineReverseEl.checked;
         const d0 = parseFloat(lineDomainMinEl.value);
         const d1 = parseFloat(lineDomainMaxEl.value);
         hexCfg.getLineColor = {
@@ -1067,6 +1092,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
           colors,
+          reverse,
           steps: parseInt(fillStepsEl.value || '7', 10) || 7,
           autoDomain: (hexCfg.getLineColor?.autoDomain !== false)
         };
@@ -1083,6 +1109,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } else {
         const attr = lineAttrEl.value || 'value';
         const colors = linePaletteEl.value || 'ArmyRose';
+        const reverse = !!lineReverseEl.checked;
         const d0 = parseFloat(lineDomainMinEl.value);
         const d1 = parseFloat(lineDomainMaxEl.value);
         (layer as any).lineColorRgba = null;
@@ -1091,6 +1118,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           attr,
           domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
           colors,
+          reverse,
           steps: parseInt(fillStepsEl.value || '7', 10) || 7,
         };
         (layer as any).lineColorConfig = cfgObj;
@@ -1186,6 +1214,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           if (fn === 'colorContinuous') {
             const domain = colorConfig.domain || [0, 100];
             const steps = colorConfig.steps || 7;
+            const reverse = !!colorConfig.reverse;
             
             // Resolve palette name to colors
             let colors = colorConfig.colors;
@@ -1202,6 +1231,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
             }
             if (!colors || !Array.isArray(colors)) {
               colors = ['#440154', '#21918c', '#fde725'];
+            }
+            if (reverse && colors.length > 1) {
+              colors = [...colors].reverse();
             }
             
             // Build interpolate expression

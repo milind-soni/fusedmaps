@@ -1421,7 +1421,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   elevScaleEl.addEventListener('change', applyUIToLayer);
   opacitySliderEl.addEventListener('input', () => { opacityEl.value = opacitySliderEl.value; applyUIToLayer(); });
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
-  [fillAttrEl, fillStepsEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [fillAttrEl, fillStepsEl, fillReverseEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   // Domain inputs -> slider (no repaint while typing)
   fillDomainMinEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
   fillDomainMaxEl.addEventListener('input', () => { syncDomainSliderFromInputs(); });
@@ -1435,7 +1435,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   fillRangeMaxEl.addEventListener('change', onDomainSliderChange);
   fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
   fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
-  [lineAttrEl, lineDomainMinEl, lineDomainMaxEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  [lineAttrEl, lineDomainMinEl, lineDomainMaxEl, lineReverseEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
   lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });

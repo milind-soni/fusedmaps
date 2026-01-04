@@ -142,6 +142,7 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
     layerType: 'pmtiles';
     pmtilesUrl: string;
     sourceLayer?: string;
+    excludeSourceLayers?: string[];
     minzoom?: number;
     maxzoom?: number;
     fillColorConfig?: ColorConfig;
@@ -151,6 +152,9 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
     lineWidth?: number;
     pointRadiusMinPixels?: number;
     colorAttribute?: string;
+    renderPoints?: boolean;
+    renderLines?: boolean;
+    renderPolygons?: boolean;
     vectorLayer?: VectorLayerStyle;
     fillDomainFromUser?: boolean;
 }

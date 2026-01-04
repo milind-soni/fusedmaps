@@ -173,6 +173,7 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
   layerType: 'pmtiles';
   pmtilesUrl: string; // Signed URL to PMTiles archive
   sourceLayer?: string; // Optional source layer name (auto-detected from metadata if not provided)
+  excludeSourceLayers?: string[]; // Optional source-layer exclusion list (for helper layers)
   minzoom?: number;
   maxzoom?: number;
   // Styling
@@ -183,6 +184,9 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
   lineWidth?: number;
   pointRadiusMinPixels?: number;
   colorAttribute?: string; // Attribute to use for coloring
+  renderPoints?: boolean;
+  renderLines?: boolean;
+  renderPolygons?: boolean;
   // Vector layer style (legacy/compatibility)
   vectorLayer?: VectorLayerStyle;
   fillDomainFromUser?: boolean;

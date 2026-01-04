@@ -28,6 +28,20 @@ const pmtilesMetadataCache = new Map<string, Promise<{
 let pmtilesLoadPromise: Promise<any> | null = null;
 let mapboxPmtilesLoadPromise: Promise<any> | null = null;
 
+// One-time debug probes per sourceId to avoid log spam / extra range requests
+const pmtilesTileProbeDone = new Set<string>();
+
+function lonLatToTileXY(lon: number, lat: number, z: number): { x: number; y: number } {
+  const n = Math.pow(2, z);
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const latClamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const latRad = (latClamped * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
+  );
+  return { x, y };
+}
+
 /**
  * Lazy load the PMTiles library (for metadata reading)
  */
@@ -307,6 +321,48 @@ export async function addPMTilesLayers(
           maxzoom: header.maxZoom,
           bounds: bounds,
         } as any);
+
+        // Debug: probe whether tiles actually exist at multiple zooms around the current view.
+        // This helps distinguish "tiles only exist at one zoom" vs "renderer bug".
+        try {
+          if (!pmtilesTileProbeDone.has(sourceId)) {
+            pmtilesTileProbeDone.add(sourceId);
+            const center = map.getCenter();
+            const zNow = Math.round(map.getZoom());
+            const zList = Array.from(new Set<number>([
+              header.minZoom,
+              Math.max(header.minZoom, Math.min(header.maxZoom, Math.floor((header.minZoom + header.maxZoom) / 2))),
+              header.maxZoom,
+              Math.max(header.minZoom, Math.min(header.maxZoom, zNow)),
+            ])).sort((a, b) => a - b);
+
+            const inst = await getPMTilesInstance(layer.pmtilesUrl);
+            const canGetZxy = typeof inst?.getZxy === 'function';
+            if (!canGetZxy) {
+              console.warn('[FusedMaps] PMTiles probe: PMTiles instance has no getZxy(); cannot probe tiles.');
+            } else {
+              const results: any[] = [];
+              for (const z of zList) {
+                const { x, y } = lonLatToTileXY(center.lng, center.lat, z);
+                let bytes: number | null = null;
+                let ok = false;
+                try {
+                  const resp = await inst.getZxy(z, x, y);
+                  const data = resp?.data ?? resp;
+                  if (data) {
+                    // data may be Uint8Array or ArrayBuffer
+                    bytes = (data.byteLength ?? data.length ?? null) as any;
+                    ok = bytes != null ? bytes > 0 : true;
+                  }
+                } catch (e) {
+                  ok = false;
+                }
+                results.push({ z, x, y, ok, bytes });
+              }
+              console.log(`[FusedMaps] PMTiles tile probe (${layer.id}) @ center=(${center.lng.toFixed(5)},${center.lat.toFixed(5)}) zNow=${zNow}:`, results);
+            }
+          }
+        } catch (_) {}
       }
       
       // Get styling config

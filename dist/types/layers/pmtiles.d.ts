@@ -11,6 +11,7 @@ export declare function getPMTilesMetadata(url: string): Promise<{
     header: any;
     metadata: any;
     layerName: string;
+    allLayerNames: string[];
     bounds?: [number, number, number, number];
     center?: [number, number];
     minZoom?: number;

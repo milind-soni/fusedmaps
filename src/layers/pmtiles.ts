@@ -18,6 +18,7 @@ const pmtilesMetadataCache = new Map<string, Promise<{
   header: any;
   metadata: any;
   layerName: string;
+  allLayerNames: string[];
   bounds?: [number, number, number, number];
   center?: [number, number];
   minZoom?: number;
@@ -127,6 +128,7 @@ export async function getPMTilesMetadata(url: string): Promise<{
   header: any;
   metadata: any;
   layerName: string;
+  allLayerNames: string[];
   bounds?: [number, number, number, number];
   center?: [number, number];
   minZoom?: number;
@@ -145,13 +147,21 @@ export async function getPMTilesMetadata(url: string): Promise<{
       // Metadata is optional
     }
 
-    // Extract layer name from metadata
-    let layerName = 'default';
+    // Extract all layer names from metadata
+    const allLayerNames: string[] = [];
     if (metadata?.vector_layers?.length > 0) {
-      layerName = metadata.vector_layers[0].id;
-    } else if (metadata?.tilestats?.layers?.length > 0) {
-      layerName = metadata.tilestats.layers[0].layer;
+      for (const vl of metadata.vector_layers) {
+        if (vl.id) allLayerNames.push(vl.id);
+      }
     }
+    if (metadata?.tilestats?.layers?.length > 0) {
+      for (const tl of metadata.tilestats.layers) {
+        if (tl.layer && !allLayerNames.includes(tl.layer)) allLayerNames.push(tl.layer);
+      }
+    }
+    
+    // Use first layer as default
+    const layerName = allLayerNames[0] || 'default';
 
     // Extract bounds
     let bounds: [number, number, number, number] | undefined;
@@ -169,6 +179,7 @@ export async function getPMTilesMetadata(url: string): Promise<{
       header,
       metadata,
       layerName,
+      allLayerNames,
       bounds,
       center,
       minZoom: header.minZoom,
@@ -300,10 +311,17 @@ export async function addPMTilesLayers(
       
       // Also get our metadata for layer name detection
       const meta = await getPMTilesMetadata(layer.pmtilesUrl);
+      
+      // Log ALL available source layers for debugging
+      console.log(`[FusedMaps] PMTiles available source-layers for ${layer.id}:`, 
+        meta.allLayerNames.length > 0 ? meta.allLayerNames : ['(none detected - check metadata)']);
+      
       const sourceLayerName = layer.sourceLayer || meta.layerName;
-      if (!layer.sourceLayer && meta.layerName === 'default') {
-        console.warn('[FusedMaps] PMTiles: could not detect sourceLayer from metadata; set `sourceLayer` explicitly for:', layer.id);
+      if (!layer.sourceLayer && (meta.layerName === 'default' || meta.allLayerNames.length > 1)) {
+        console.warn('[FusedMaps] PMTiles: you may need to set `source_layer` explicitly for:', layer.id, 
+          meta.allLayerNames.length > 0 ? `Available: ${meta.allLayerNames.join(', ')}` : '');
       }
+      console.log(`[FusedMaps] PMTiles using source-layer: "${sourceLayerName}" for ${layer.id}`);
       
       // Add source if not exists
       // IMPORTANT: Use header values from mapbox-pmtiles native getHeader() for correct tile fetching

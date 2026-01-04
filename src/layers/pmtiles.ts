@@ -13,16 +13,38 @@ let sourceTypeRegistered = false;
 
 // Cache PMTiles instances by URL
 const pmtilesCache = new Map<string, any>();
+// Cache metadata reads by URL (avoid repeated HTTP range requests)
+const pmtilesMetadataCache = new Map<string, Promise<{
+  header: any;
+  metadata: any;
+  layerName: string;
+  bounds?: [number, number, number, number];
+  center?: [number, number];
+  minZoom?: number;
+  maxZoom?: number;
+}>>();
+
+// In-flight loaders to avoid double-loading scripts/modules
+let pmtilesLoadPromise: Promise<any> | null = null;
+let mapboxPmtilesLoadPromise: Promise<any> | null = null;
 
 /**
  * Lazy load the PMTiles library (for metadata reading)
  */
 async function ensurePMTilesLoaded(): Promise<any> {
   if (pmtilesLib) return pmtilesLib;
+  if (pmtilesLoadPromise) return pmtilesLoadPromise;
   
   const dynamicImport = (u: string) => (new Function('u', 'return import(u)') as any)(u);
-  pmtilesLib = await dynamicImport('https://cdn.jsdelivr.net/npm/pmtiles@3.0.6/+esm');
-  return pmtilesLib;
+  pmtilesLoadPromise = dynamicImport('https://cdn.jsdelivr.net/npm/pmtiles@3.0.6/+esm')
+    .then((m: any) => {
+      pmtilesLib = m;
+      return pmtilesLib;
+    })
+    .finally(() => {
+      pmtilesLoadPromise = null;
+    });
+  return pmtilesLoadPromise;
 }
 
 /**
@@ -30,6 +52,7 @@ async function ensurePMTilesLoaded(): Promise<any> {
  */
 async function ensureMapboxPMTilesLoaded(): Promise<any> {
   if (mapboxPmtilesLib) return mapboxPmtilesLib;
+  if (mapboxPmtilesLoadPromise) return mapboxPmtilesLoadPromise;
   
   // Check if already loaded globally
   if ((window as any).mapboxPmTiles) {
@@ -38,7 +61,7 @@ async function ensureMapboxPMTilesLoaded(): Promise<any> {
   }
   
   // Load via script tag (UMD build)
-  return new Promise((resolve, reject) => {
+  mapboxPmtilesLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/mapbox-pmtiles@1.0.54/dist/mapbox-pmtiles.umd.min.js';
     script.onload = () => {
@@ -47,7 +70,10 @@ async function ensureMapboxPMTilesLoaded(): Promise<any> {
     };
     script.onerror = () => reject(new Error('Failed to load mapbox-pmtiles library'));
     document.head.appendChild(script);
+  }).finally(() => {
+    mapboxPmtilesLoadPromise = null;
   });
+  return mapboxPmtilesLoadPromise;
 }
 
 /**
@@ -92,45 +118,54 @@ export async function getPMTilesMetadata(url: string): Promise<{
   minZoom?: number;
   maxZoom?: number;
 }> {
-  const instance = await getPMTilesInstance(url);
-  const header = await instance.getHeader();
-  
-  let metadata: any = {};
-  try {
-    metadata = await instance.getMetadata();
-  } catch (e) {
-    // Metadata is optional
-  }
-  
-  // Extract layer name from metadata
-  let layerName = 'default';
-  if (metadata?.vector_layers?.length > 0) {
-    layerName = metadata.vector_layers[0].id;
-  } else if (metadata?.tilestats?.layers?.length > 0) {
-    layerName = metadata.tilestats.layers[0].layer;
-  }
-  
-  // Extract bounds
-  let bounds: [number, number, number, number] | undefined;
-  if (header.minLon != null && header.minLat != null && header.maxLon != null && header.maxLat != null) {
-    bounds = [header.minLon, header.minLat, header.maxLon, header.maxLat];
-  }
-  
-  // Extract center
-  let center: [number, number] | undefined;
-  if (header.centerLon != null && header.centerLat != null) {
-    center = [header.centerLon, header.centerLat];
-  }
-  
-  return {
-    header,
-    metadata,
-    layerName,
-    bounds,
-    center,
-    minZoom: header.minZoom,
-    maxZoom: header.maxZoom,
-  };
+  if (pmtilesMetadataCache.has(url)) return pmtilesMetadataCache.get(url)!;
+
+  const p = (async () => {
+    const instance = await getPMTilesInstance(url);
+    const header = await instance.getHeader();
+
+    let metadata: any = {};
+    try {
+      metadata = await instance.getMetadata();
+    } catch (e) {
+      // Metadata is optional
+    }
+
+    // Extract layer name from metadata
+    let layerName = 'default';
+    if (metadata?.vector_layers?.length > 0) {
+      layerName = metadata.vector_layers[0].id;
+    } else if (metadata?.tilestats?.layers?.length > 0) {
+      layerName = metadata.tilestats.layers[0].layer;
+    }
+
+    // Extract bounds
+    let bounds: [number, number, number, number] | undefined;
+    if (header.minLon != null && header.minLat != null && header.maxLon != null && header.maxLat != null) {
+      bounds = [header.minLon, header.minLat, header.maxLon, header.maxLat];
+    }
+
+    // Extract center
+    let center: [number, number] | undefined;
+    if (header.centerLon != null && header.centerLat != null) {
+      center = [header.centerLon, header.centerLat];
+    }
+
+    return {
+      header,
+      metadata,
+      layerName,
+      bounds,
+      center,
+      minZoom: header.minZoom,
+      maxZoom: header.maxZoom,
+    };
+  })();
+
+  pmtilesMetadataCache.set(url, p);
+  // If it fails, allow retries next time
+  p.catch(() => pmtilesMetadataCache.delete(url));
+  return p;
 }
 
 /**
@@ -222,7 +257,8 @@ function buildColorExpression(
 export async function addPMTilesLayers(
   map: mapboxgl.Map,
   layers: PMTilesLayerConfig[],
-  visibilityState: Record<string, boolean>
+  visibilityState: Record<string, boolean>,
+  hasCustomView: boolean = false
 ): Promise<void> {
   if (layers.length === 0) return;
   
@@ -230,7 +266,8 @@ export async function addPMTilesLayers(
   await registerPMTilesSourceType();
   const mapboxPmTiles = await ensureMapboxPMTilesLoaded();
   
-  for (const layer of layers) {
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
     if (!layer.pmtilesUrl) continue;
     
     const visible = visibilityState[layer.id] !== false;
@@ -240,14 +277,17 @@ export async function addPMTilesLayers(
       // Get metadata to find layer name and bounds
       const meta = await getPMTilesMetadata(layer.pmtilesUrl);
       const sourceLayerName = layer.sourceLayer || meta.layerName;
+      if (!layer.sourceLayer && meta.layerName === 'default') {
+        console.warn('[FusedMaps] PMTiles: could not detect sourceLayer from metadata; set `sourceLayer` explicitly for:', layer.id);
+      }
       
       // Add source if not exists
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
           url: layer.pmtilesUrl,
-          minzoom: meta.minZoom || 0,
-          maxzoom: meta.maxZoom || 14,
+          minzoom: layer.minzoom ?? meta.minZoom ?? 0,
+          maxzoom: layer.maxzoom ?? meta.maxZoom ?? 14,
           bounds: meta.bounds,
         } as any);
       }
@@ -338,8 +378,8 @@ export async function addPMTilesLayers(
         });
       }
       
-      // Fit to bounds if available and this is the first layer
-      if (meta.bounds && layers.indexOf(layer) === 0) {
+      // Fit to bounds if available and this is the first layer, and user didn't provide a custom view
+      if (!hasCustomView && meta.bounds && i === 0) {
         map.fitBounds(meta.bounds as [number, number, number, number], {
           padding: 50,
           duration: 0,

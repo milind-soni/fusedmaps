@@ -104,7 +104,7 @@ export function addAllLayers(
   const pmtilesLayers = layers.filter(l => l.layerType === 'pmtiles') as PMTilesLayerConfig[];
   if (pmtilesLayers.length > 0) {
     // Add PMTiles layers asynchronously
-    addPMTilesLayers(map, pmtilesLayers, visibilityState).catch(e => {
+    addPMTilesLayers(map, pmtilesLayers, visibilityState, config?.hasCustomView === true).catch(e => {
       console.error('[FusedMaps] Failed to add PMTiles layers:', e);
     });
   }

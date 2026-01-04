@@ -19,7 +19,7 @@ export declare function getPMTilesMetadata(url: string): Promise<{
 /**
  * Add PMTiles layers to the map
  */
-export declare function addPMTilesLayers(map: mapboxgl.Map, layers: PMTilesLayerConfig[], visibilityState: Record<string, boolean>): Promise<void>;
+export declare function addPMTilesLayers(map: mapboxgl.Map, layers: PMTilesLayerConfig[], visibilityState: Record<string, boolean>, hasCustomView?: boolean): Promise<void>;
 /**
  * Update visibility of PMTiles layers
  */

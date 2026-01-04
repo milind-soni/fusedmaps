@@ -6,60 +6,29 @@
 
 import type { PMTilesLayerConfig } from '../types';
 
-// Library instances
-let pmtilesLib: any = null;
 let mapboxPmtilesLib: any = null;
 let sourceTypeRegistered = false;
 
-// Cache PMTiles instances by URL
-const pmtilesCache = new Map<string, any>();
-// Cache metadata reads by URL (avoid repeated HTTP range requests)
-const pmtilesMetadataCache = new Map<string, Promise<{
-  header: any;
-  metadata: any;
-  layerName: string;
-  allLayerNames: string[];
-  bounds?: [number, number, number, number];
-  center?: [number, number];
-  minZoom?: number;
-  maxZoom?: number;
-}>>();
-
 // In-flight loaders to avoid double-loading scripts/modules
-let pmtilesLoadPromise: Promise<any> | null = null;
 let mapboxPmtilesLoadPromise: Promise<any> | null = null;
 
-// One-time debug probes per sourceId to avoid log spam / extra range requests
-const pmtilesTileProbeDone = new Set<string>();
-
-function lonLatToTileXY(lon: number, lat: number, z: number): { x: number; y: number } {
-  const n = Math.pow(2, z);
-  const x = Math.floor(((lon + 180) / 360) * n);
-  const latClamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
-  const latRad = (latClamped * Math.PI) / 180;
-  const y = Math.floor(
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
-  );
-  return { x, y };
-}
-
-/**
- * Lazy load the PMTiles library (for metadata reading)
- */
-async function ensurePMTilesLoaded(): Promise<any> {
-  if (pmtilesLib) return pmtilesLib;
-  if (pmtilesLoadPromise) return pmtilesLoadPromise;
-  
-  const dynamicImport = (u: string) => (new Function('u', 'return import(u)') as any)(u);
-  pmtilesLoadPromise = dynamicImport('https://cdn.jsdelivr.net/npm/pmtiles@3.0.6/+esm')
-    .then((m: any) => {
-      pmtilesLib = m;
-      return pmtilesLib;
-    })
-    .finally(() => {
-      pmtilesLoadPromise = null;
-    });
-  return pmtilesLoadPromise;
+function extractVectorLayerNamesFromHeader(header: any): string[] {
+  const json = header?.json || {};
+  const names: string[] = [];
+  // mapbox-pmtiles docs show `header.json.vector_layers`
+  if (Array.isArray(json.vector_layers)) {
+    for (const vl of json.vector_layers) {
+      if (vl?.id) names.push(String(vl.id));
+    }
+  }
+  // Sometimes tilestats exist
+  if (json?.tilestats?.layers && Array.isArray(json.tilestats.layers)) {
+    for (const tl of json.tilestats.layers) {
+      const n = tl?.layer;
+      if (n && !names.includes(String(n))) names.push(String(n));
+    }
+  }
+  return names;
 }
 
 /**
@@ -108,92 +77,6 @@ async function registerPMTilesSourceType(): Promise<void> {
 }
 
 /**
- * Get or create a PMTiles instance for metadata reading
- */
-async function getPMTilesInstance(url: string): Promise<any> {
-  if (pmtilesCache.has(url)) {
-    return pmtilesCache.get(url);
-  }
-  
-  const pmtiles = await ensurePMTilesLoaded();
-  const instance = new pmtiles.PMTiles(url);
-  pmtilesCache.set(url, instance);
-  return instance;
-}
-
-/**
- * Get metadata from a PMTiles file
- */
-export async function getPMTilesMetadata(url: string): Promise<{
-  header: any;
-  metadata: any;
-  layerName: string;
-  allLayerNames: string[];
-  bounds?: [number, number, number, number];
-  center?: [number, number];
-  minZoom?: number;
-  maxZoom?: number;
-}> {
-  if (pmtilesMetadataCache.has(url)) return pmtilesMetadataCache.get(url)!;
-
-  const p = (async () => {
-    const instance = await getPMTilesInstance(url);
-    const header = await instance.getHeader();
-
-    let metadata: any = {};
-    try {
-      metadata = await instance.getMetadata();
-    } catch (e) {
-      // Metadata is optional
-    }
-
-    // Extract all layer names from metadata
-    const allLayerNames: string[] = [];
-    if (metadata?.vector_layers?.length > 0) {
-      for (const vl of metadata.vector_layers) {
-        if (vl.id) allLayerNames.push(vl.id);
-      }
-    }
-    if (metadata?.tilestats?.layers?.length > 0) {
-      for (const tl of metadata.tilestats.layers) {
-        if (tl.layer && !allLayerNames.includes(tl.layer)) allLayerNames.push(tl.layer);
-      }
-    }
-    
-    // Use first layer as default
-    const layerName = allLayerNames[0] || 'default';
-
-    // Extract bounds
-    let bounds: [number, number, number, number] | undefined;
-    if (header.minLon != null && header.minLat != null && header.maxLon != null && header.maxLat != null) {
-      bounds = [header.minLon, header.minLat, header.maxLon, header.maxLat];
-    }
-
-    // Extract center
-    let center: [number, number] | undefined;
-    if (header.centerLon != null && header.centerLat != null) {
-      center = [header.centerLon, header.centerLat];
-    }
-
-    return {
-      header,
-      metadata,
-      layerName,
-      allLayerNames,
-      bounds,
-      center,
-      minZoom: header.minZoom,
-      maxZoom: header.maxZoom,
-    };
-  })();
-
-  pmtilesMetadataCache.set(url, p);
-  // If it fails, allow retries next time
-  p.catch(() => pmtilesMetadataCache.delete(url));
-  return p;
-}
-
-/**
  * Resolve a palette name (e.g., "Sunset", "Viridis") to an array of hex colors
  */
 function resolvePalette(paletteName: string, steps: number = 7): string[] {
@@ -202,10 +85,7 @@ function resolvePalette(paletteName: string, steps: number = 7): string[] {
   // Default fallback colors
   const fallback = ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'];
   
-  if (!cartocolor) {
-    console.warn('[FusedMaps] cartocolor not loaded, using default colors');
-    return fallback;
-  }
+  if (!cartocolor) return fallback;
   
   // Try to find the palette in cartocolor
   const palette = cartocolor[paletteName];
@@ -308,15 +188,8 @@ export async function addPMTilesLayers(
         header.maxLon,
         header.maxLat,
       ];
-      
-      // Also get our metadata for layer name detection
-      const meta = await getPMTilesMetadata(layer.pmtilesUrl);
-      
-      // Log ALL available source layers for debugging
-      console.log(
-        `[FusedMaps] PMTiles available source-layers for ${layer.id}:`,
-        meta.allLayerNames.length > 0 ? meta.allLayerNames : ['(none detected - check metadata)']
-      );
+      const allLayerNames = extractVectorLayerNamesFromHeader(header);
+      const defaultLayerName = allLayerNames[0] || 'default';
 
       const requestedSourceLayer =
         typeof (layer as any).sourceLayer === 'string' ? ((layer as any).sourceLayer as string).trim() : '';
@@ -334,43 +207,29 @@ export async function addPMTilesLayers(
       ].filter(Boolean));
 
       const filterExcluded = (names: string[]) => names.filter((n) => !exclude.has(n));
-      const autoAll = !requestedSourceLayer && meta.allLayerNames.length > 1;
-      const autoAllFiltered = autoAll ? filterExcluded(meta.allLayerNames) : meta.allLayerNames;
+      const autoAll = !requestedSourceLayer && allLayerNames.length > 1;
+      const autoAllFiltered = autoAll ? filterExcluded(allLayerNames) : allLayerNames;
 
       const sourceLayerNamesToRender: string[] =
         requestedSourceLayer === '*'
-          ? filterExcluded(meta.allLayerNames)
+          ? filterExcluded(allLayerNames)
           : requestedSourceLayer
             ? [requestedSourceLayer]
-            : (meta.allLayerNames.length > 1 ? autoAllFiltered : [meta.layerName]);
+            : (allLayerNames.length > 1 ? autoAllFiltered : [defaultLayerName]);
 
       if (sourceLayerNamesToRender.length === 0) {
         console.warn('[FusedMaps] PMTiles: could not detect any source-layers; set `source_layer` explicitly for:', layer.id);
-      } else if (!requestedSourceLayer && meta.allLayerNames.length > 1) {
-        console.log(
-          `[FusedMaps] PMTiles: rendering ALL source-layers for ${layer.id} (auto):`,
-          sourceLayerNamesToRender
-        );
-        const excluded = meta.allLayerNames.filter((n) => !sourceLayerNamesToRender.includes(n));
-        if (excluded.length > 0) {
-          console.log(`[FusedMaps] PMTiles: excluded source-layers for ${layer.id}:`, excluded);
-        }
-      } else {
-        console.log(
-          `[FusedMaps] PMTiles: rendering source-layer(s) for ${layer.id}:`,
-          sourceLayerNamesToRender
-        );
+      }
+      if (requestedSourceLayer && requestedSourceLayer !== '*' && allLayerNames.length > 0 && !allLayerNames.includes(requestedSourceLayer)) {
+        console.warn('[FusedMaps] PMTiles: requested source-layer not found in header.json:', {
+          requested: requestedSourceLayer,
+          available: allLayerNames,
+        });
       }
       
       // Add source if not exists
       // IMPORTANT: Use header values from mapbox-pmtiles native getHeader() for correct tile fetching
       if (!map.getSource(sourceId)) {
-        console.log(`[FusedMaps] PMTiles header for ${layer.id}:`, {
-          minZoom: header.minZoom,
-          maxZoom: header.maxZoom,
-          bounds: bounds,
-          layerNames: sourceLayerNamesToRender,
-        });
         map.addSource(sourceId, {
           type: mapboxPmTiles.SOURCE_TYPE,
           url: layer.pmtilesUrl,
@@ -378,77 +237,6 @@ export async function addPMTilesLayers(
           maxzoom: header.maxZoom,
           bounds: bounds,
         } as any);
-
-        // Optional debug: enable tile boundaries & zoom logging only if explicitly enabled
-        const dbg = (window as any).FUSEDMAPS_DEBUG_PMtiles === true;
-        if (dbg) {
-          (map as any).showTileBoundaries = true;
-          console.log('[FusedMaps] PMTiles: tile boundaries enabled (FUSEDMAPS_DEBUG_PMtiles=true)');
-          if (!(map as any)._pmtilesZoomDebugAttached) {
-            (map as any)._pmtilesZoomDebugAttached = true;
-            map.on('zoomend', () => {
-              const z = map.getZoom();
-              console.log(`[FusedMaps] PMTiles zoom changed to: ${z.toFixed(2)} (tile zoom: ${Math.floor(z)})`);
-            });
-          }
-        }
-
-        // Debug: probe whether tiles actually exist at multiple zooms around the current view.
-        // This helps distinguish "tiles only exist at one zoom" vs "renderer bug".
-        try {
-          if (!pmtilesTileProbeDone.has(sourceId)) {
-            pmtilesTileProbeDone.add(sourceId);
-            // Probe around the dataset center (not the current map center),
-            // otherwise you'll just probe empty tiles when the map starts elsewhere.
-            const probeLon = (typeof header.centerLon === 'number' && Number.isFinite(header.centerLon))
-              ? header.centerLon
-              : ((bounds?.[0] ?? 0) + (bounds?.[2] ?? 0)) / 2;
-            const probeLat = (typeof header.centerLat === 'number' && Number.isFinite(header.centerLat))
-              ? header.centerLat
-              : ((bounds?.[1] ?? 0) + (bounds?.[3] ?? 0)) / 2;
-
-            const zNow = Math.round(map.getZoom());
-            const zList = Array.from(new Set<number>([
-              header.minZoom,
-              Math.max(header.minZoom, Math.min(header.maxZoom, Math.floor((header.minZoom + header.maxZoom) / 2))),
-              header.maxZoom,
-              Math.max(header.minZoom, Math.min(header.maxZoom, zNow)),
-            ])).sort((a, b) => a - b);
-
-            const inst = await getPMTilesInstance(layer.pmtilesUrl);
-            const canGetZxy = typeof inst?.getZxy === 'function';
-            if (!canGetZxy) {
-              console.warn('[FusedMaps] PMTiles probe: PMTiles instance has no getZxy(); cannot probe tiles.');
-            } else {
-              const results: any[] = [];
-              for (const z of zList) {
-                const { x, y } = lonLatToTileXY(probeLon, probeLat, z);
-                let bytes: number | null = null;
-                let ok = false;
-                try {
-                  const resp = await inst.getZxy(z, x, y);
-                  const data = resp?.data ?? resp;
-                  if (data) {
-                    // data may be Uint8Array or ArrayBuffer
-                    bytes = (data.byteLength ?? (data as any).length ?? null) as any;
-                    ok = bytes != null ? bytes > 0 : true;
-                  }
-                } catch (e) {
-                  ok = false;
-                }
-                results.push({ z, x, y, ok, bytes });
-              }
-              console.log(
-                `[FusedMaps] PMTiles tile probe (${layer.id}) @ dataCenter=(${probeLon.toFixed(5)},${probeLat.toFixed(5)}) zNow=${zNow}:`,
-                results
-              );
-              try {
-                // Easier to read/copy
-                console.table(results);
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
       }
       
       // Get styling config

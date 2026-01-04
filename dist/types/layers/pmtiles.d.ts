@@ -5,19 +5,6 @@
  */
 import type { PMTilesLayerConfig } from '../types';
 /**
- * Get metadata from a PMTiles file
- */
-export declare function getPMTilesMetadata(url: string): Promise<{
-    header: any;
-    metadata: any;
-    layerName: string;
-    allLayerNames: string[];
-    bounds?: [number, number, number, number];
-    center?: [number, number];
-    minZoom?: number;
-    maxZoom?: number;
-}>;
-/**
  * Add PMTiles layers to the map
  */
 export declare function addPMTilesLayers(map: mapboxgl.Map, layers: PMTilesLayerConfig[], visibilityState: Record<string, boolean>, hasCustomView?: boolean): Promise<void>;

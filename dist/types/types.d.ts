@@ -239,11 +239,50 @@ export interface FusedMapsConfig {
     /** @deprecated use `sidebar` */
     debug?: boolean;
 }
+export interface LayerState {
+    config: LayerConfig;
+    visible: boolean;
+    order: number;
+    geojson?: import('geojson').FeatureCollection;
+}
+export interface ILayerStore {
+    get(layerId: string): LayerState | undefined;
+    getAll(): LayerState[];
+    getAllConfigs(): LayerConfig[];
+    getVisibilityState(): Record<string, boolean>;
+    setVisible(layerId: string, visible: boolean): void;
+    add(config: LayerConfig, options?: {
+        order?: number;
+    }): LayerState;
+    remove(layerId: string): boolean;
+    update(layerId: string, changes: Partial<LayerConfig>): LayerState | undefined;
+    moveUp(layerId: string): void;
+    moveDown(layerId: string): void;
+    on(event: string, callback: (event: unknown) => void): () => void;
+}
 export interface FusedMapsInstance {
     map: mapboxgl.Map;
     deckOverlay: unknown | null;
+    /** Access to the layer store for advanced operations */
+    store: ILayerStore;
     setLayerVisibility: (layerId: string, visible: boolean) => void;
     updateLegend: () => void;
+    /** Add a new layer at runtime */
+    addLayer: (layerConfig: LayerConfig, options?: {
+        order?: number;
+    }) => LayerState;
+    /** Remove a layer by ID */
+    removeLayer: (layerId: string) => boolean;
+    /** Update a layer's configuration */
+    updateLayer: (layerId: string, changes: Partial<LayerConfig>) => LayerState | undefined;
+    /** Get a layer by ID */
+    getLayer: (layerId: string) => LayerState | undefined;
+    /** Get all layers */
+    getLayers: () => LayerState[];
+    /** Move layer up in render order (renders on top) */
+    moveLayerUp: (layerId: string) => void;
+    /** Move layer down in render order (renders below) */
+    moveLayerDown: (layerId: string) => void;
     destroy: () => void;
 }
 export interface TooltipData {

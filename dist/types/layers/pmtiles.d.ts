@@ -5,6 +5,10 @@
  */
 import type { PMTilesLayerConfig } from '../types';
 /**
+ * Build a Mapbox GL color expression from a color config
+ */
+export declare function buildPMTilesColorExpression(colorConfig: any, attribute: string, defaultColor?: string): any;
+/**
  * Add PMTiles layers to the map
  */
 export declare function addPMTilesLayers(map: mapboxgl.Map, layers: PMTilesLayerConfig[], visibilityState: Record<string, boolean>, hasCustomView?: boolean): Promise<void>;

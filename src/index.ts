@@ -7,7 +7,7 @@
 
 import type { FusedMapsConfig, FusedMapsInstance, LayerConfig } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
-import { addAllLayers, setLayerVisibility, getLayerGeoJSONs } from './layers';
+import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
@@ -17,12 +17,13 @@ import { setupDrawing } from './ui/drawing';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
+import { createLayerStore, LayerStore } from './state';
 
 // Re-export types
 export * from './types';
-
-// Track layer visibility state
-const layerVisibilityState: Record<string, boolean> = {};
+// Re-export state (selectively to avoid conflicts with types.ts)
+export { createLayerStore, LayerStore } from './state';
+export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
 
 /**
  * Initialize a FusedMaps instance
@@ -30,12 +31,32 @@ const layerVisibilityState: Record<string, boolean> = {};
 export function init(config: FusedMapsConfig): FusedMapsInstance {
   const containerId = config.containerId || 'map';
 
+  // If drawing is enabled, inject a "drawing layer" entry so it behaves like another layer
+  // in the layer panel (toggle visibility, ordering, etc.).
+  const drawingLayerId = config.drawing?.enabled ? (config.drawing.layerId || 'drawings') : null;
+  if (drawingLayerId) {
+    const exists = (config.layers || []).some((l: any) => l && l.id === drawingLayerId);
+    if (!exists) {
+      (config.layers as any).push({
+        id: drawingLayerId,
+        name: config.drawing?.layerName || 'Drawings',
+        layerType: 'drawing',
+        visible: true,
+      } as any);
+    }
+  }
+
+  // Initialize layer store
+  const store = createLayerStore();
+  store.init(config.layers);
+
   // Theme (match map_utils.py: <html data-theme="dark|light">)
   try {
     const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
   } catch (_) {}
   
+<<<<<<< HEAD
   // If drawing is enabled, inject a "drawing layer" entry so it behaves like another layer
   // in the layer panel (toggle visibility).
   if (config.drawing?.enabled) {
@@ -58,6 +79,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Expose visibility state to internal helpers (used by drawing module)
   (config as any).__visibilityState = layerVisibilityState;
   
+=======
+>>>>>>> main
   // Create map
   const map = initMap({
     containerId,
@@ -82,30 +105,55 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   let legendUpdateHandler: any = null;
   let duckHandle: any = null;
   let drawingHandle: any = null;
+  const getDrawingHandle = () => drawingHandle;
+  
+  // Helper to get visibility state from store (for compatibility)
+  const getVisibilityState = () => store.getVisibilityState();
+  
+  // Helper to refresh UI
+  const refreshUI = () => {
+    try { updateLayerPanel(store.getAllConfigs(), getVisibilityState()); } catch (_) {}
+    try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs()); } catch (_) {}
+  };
+
+  // Subscribe to store changes for UI updates
+  const unsubscribeStore = store.on('*', (event) => {
+    if (event.type === 'visibility' || event.type === 'update' || event.type === 'batch') {
+      refreshUI();
+    }
+  });
   
   // Setup UI components
   if (config.ui?.layerPanel !== false) {
-    setupLayerPanel(config.layers, layerVisibilityState, (layerId, visible) => {
-      handleVisibilityChange(layerId, visible, map, config, deckOverlay);
-    });
+    setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
+      handleVisibilityChange(layerId, visible, map, store, deckOverlay, {
+        drawingLayerId: drawingLayerId || undefined,
+        getDrawingHandle,
+      });
+    }, store);
   }
   
   if (config.ui?.legend !== false) {
-    setupLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
   }
   
   // Add layers when map loads
   map.on('load', () => {
-    const result = addAllLayers(map, config.layers, layerVisibilityState, config);
+    const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
     deckOverlay = result.deckOverlay;
     
+    // Sync GeoJSONs from layer system to store
+    const geoJSONs = getLayerGeoJSONs();
+    Object.entries(geoJSONs).forEach(([id, geojson]) => {
+      store.setGeoJSON(id, geojson);
+    });
+    
     // Update UI
-    updateLayerPanel(config.layers, layerVisibilityState);
-    updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+    refreshUI();
 
     // Allow tile autoDomain to trigger legend refresh without tight coupling
     legendUpdateHandler = () => {
-      updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
     };
     try {
       window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
@@ -113,7 +161,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
-      setupTooltip(map, config.layers, layerVisibilityState, deckOverlay);
+      setupTooltip(map, store.getAllConfigs(), getVisibilityState(), deckOverlay);
     }
 
     // Drawing (experimental)
@@ -121,10 +169,10 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       setupDrawing(map, config).then((h) => {
         drawingHandle = h;
         try { (config as any).__drawingHandle = h; } catch (_) {}
-        // Apply current visibility
+        // Apply current visibility (may have been toggled before drawing finished loading)
         try {
-          const lid = config.drawing?.layerId || 'drawings';
-          const vis = layerVisibilityState[lid] !== false;
+          const lid = drawingLayerId || (config.drawing?.layerId || 'drawings');
+          const vis = store.get(lid)?.visible !== false;
           drawingHandle?.setVisible?.(vis);
         } catch (_) {}
       }).catch((e) => {
@@ -134,31 +182,34 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     
     // Setup interactions
     if (config.highlightOnClick !== false) {
-      setupHighlight(map, config.layers, layerVisibilityState, deckOverlay);
+      setupHighlight(map, store.getAllConfigs(), getVisibilityState(), deckOverlay);
     }
     
     // Setup messaging
     if (config.messaging) {
-      setupMessaging(map, config.messaging, config.layers);
+      setupMessaging(map, config.messaging, store.getAllConfigs());
     }
 
     // DuckDB-WASM SQL layers (non-tile Parquet-backed hex layers)
     duckHandle = setupDuckDbSql(
       map,
       config,
-      layerVisibilityState,
+      getVisibilityState(),
       () => {
-        try { updateLayerPanel(config.layers, layerVisibilityState); } catch (_) {}
-        try { updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs()); } catch (_) {}
+        // Sync GeoJSONs after SQL update
+        const geoJSONs = getLayerGeoJSONs();
+        Object.entries(geoJSONs).forEach(([id, geojson]) => {
+          store.setGeoJSON(id, geojson);
+        });
+        refreshUI();
       }
     );
     
     // Auto-fit to bounds if no custom view
     if (!config.hasCustomView) {
-      autoFitBounds(map, config.layers);
+      autoFitBounds(map, store.getAllConfigs(), store);
       // Update home (⌂) target to the auto-fit result (esp. raster-only maps).
       try {
-        // mapbox-gl typings in this repo don't include `.once`, so use `.on` + remove.
         const handler = () => {
           try {
             const vs = getViewState(map);
@@ -184,16 +235,94 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   return {
     map,
     deckOverlay,
+    
+    // Layer store access
+    store,
+    
+    // Legacy API
     setLayerVisibility: (layerId: string, visible: boolean) => {
-      handleVisibilityChange(layerId, visible, map, config, deckOverlay);
+      handleVisibilityChange(layerId, visible, map, store, deckOverlay);
     },
     updateLegend: () => {
-      updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
     },
+    
+    // New Layer Management API
+    addLayer: (layerConfig: LayerConfig, options?: { order?: number }) => {
+      const state = store.add(layerConfig, options);
+      // Incremental render
+      try {
+        addSingleLayer(map, state.config, state.visible, config);
+      } catch (e) {
+        // Fallback to full rebuild if incremental add fails
+        const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+        deckOverlay = result.deckOverlay;
+      }
+      refreshUI();
+      return state;
+    },
+    
+    removeLayer: (layerId: string) => {
+      const layer = store.get(layerId)?.config;
+      const removed = store.remove(layerId);
+      if (removed) {
+        try {
+          if (layer) removeSingleLayer(map, layer);
+        } catch (e) {
+          const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+          deckOverlay = result.deckOverlay;
+        }
+        refreshUI();
+      }
+      return removed;
+    },
+    
+    updateLayer: (layerId: string, changes: Partial<LayerConfig>) => {
+      const before = store.get(layerId)?.config;
+      const state = store.update(layerId, changes);
+      if (state) {
+        const onlyVisible =
+          Object.keys(changes || {}).length === 1 &&
+          Object.prototype.hasOwnProperty.call(changes, 'visible');
+        if (!onlyVisible && before) {
+          // Prefer paint/layout updates in place (no flicker)
+          const applied = updateLayerStyleInPlace(map, before, state.config, state.visible);
+          if (!applied) {
+            // Fallback: recreate just this layer
+            try {
+              removeSingleLayer(map, before);
+              addSingleLayer(map, state.config, state.visible, config);
+            } catch (e) {
+              const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+              deckOverlay = result.deckOverlay;
+            }
+          }
+        }
+        refreshUI();
+      }
+      return state;
+    },
+    
+    getLayer: (layerId: string) => store.get(layerId),
+    getLayers: () => store.getAll(),
+    
+    moveLayerUp: (layerId: string) => {
+      store.moveUp(layerId);
+      // Re-render to update z-order (safe fallback for now)
+      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+      deckOverlay = result.deckOverlay;
+    },
+    
+    moveLayerDown: (layerId: string) => {
+      store.moveDown(layerId);
+      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+      deckOverlay = result.deckOverlay;
+    },
+    
     destroy: () => {
       // Cleanup
+      try { unsubscribeStore(); } catch (_) {}
       try {
-        // remove any overlay-specific listeners
         (deckOverlay as any)?.__fused_hex_tiles__?.destroy?.();
       } catch (_) {}
       try {
@@ -222,29 +351,29 @@ function handleVisibilityChange(
   layerId: string,
   visible: boolean,
   map: mapboxgl.Map,
-  config: FusedMapsConfig,
-  deckOverlay: unknown
+  store: LayerStore,
+  deckOverlay: unknown,
+  opts?: { drawingLayerId?: string; getDrawingHandle?: () => any }
 ) {
-  layerVisibilityState[layerId] = visible;
+  store.setVisible(layerId, visible);
+
   // Drawing layer is handled by drawing module (it manages its own Mapbox layers)
-  const layer = config.layers.find(l => l.id === layerId);
-  if ((layer as any)?.layerType === 'drawing') {
+  if (opts?.drawingLayerId && layerId === opts.drawingLayerId) {
     try {
-      // drawing module reads from map style; simplest is to toggle by prefix.
-      // it installed a global helper on config in setupDrawing.
-      const dbg = (config as any).__drawingHandle;
-      dbg?.setVisible?.(visible);
+      const h = opts.getDrawingHandle?.();
+      h?.setVisible?.(visible);
     } catch (_) {}
   } else {
-    setLayerVisibility(map, layerId, visible, config.layers, deckOverlay);
+    setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay);
   }
-  updateLayerPanel(config.layers, layerVisibilityState);
-  updateLegend(config.layers, layerVisibilityState, getLayerGeoJSONs());
+
+  updateLayerPanel(store.getAllConfigs(), store.getVisibilityState());
+  updateLegend(store.getAllConfigs(), store.getVisibilityState(), store.getAllGeoJSONs());
 }
 
-function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[]) {
+function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[], store: LayerStore) {
   const bounds = new mapboxgl.LngLatBounds();
-  const geojsons = getLayerGeoJSONs();
+  const geojsons = store.getAllGeoJSONs();
   
   layers.forEach(layer => {
     // Hex tile layers are handled by Deck; don't auto-fit on their data.
@@ -291,4 +420,3 @@ if (typeof window !== 'undefined') {
 }
 
 export default { init };
-

@@ -163,7 +163,6 @@ function injectToolbarCss(): void {
     .fm-popover.fm-color-grid.show { display: grid; }
     .fm-popover.fm-stroke-list.show { display: flex; }
     .fm-color-grid {
-      display:grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
     }
@@ -178,7 +177,7 @@ function injectToolbarCss(): void {
     .fm-color-opt:hover { transform: scale(1.15); }
     .fm-color-opt.selected { border-color: white; }
 
-    .fm-stroke-list { display:flex; flex-direction:column; gap:4px; }
+    .fm-stroke-list { flex-direction:column; gap:4px; }
     .fm-stroke-opt {
       display:flex; align-items:center; gap:10px;
       padding: 6px 12px;
@@ -774,6 +773,20 @@ export async function setupDrawing(
   };
   document.addEventListener('click', onDocClick);
 
+  // ESC should always exit drawing mode back to Select.
+  // This answers the "how do I stop drawing?" question for line/polygon modes.
+  const onKeyDown = (e: KeyboardEvent) => {
+    try {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { colorPop.classList.remove('show'); } catch (_) {}
+      try { strokePop.classList.remove('show'); } catch (_) {}
+      try { setMode('select'); } catch (_) {}
+    } catch (_) {}
+  };
+  document.addEventListener('keydown', onKeyDown, true);
+
   // If drawing is represented as a layer in the panel, hook it up via visibilityState.
   const drawingLayerId = dcfg.layerId || 'drawings';
   const setVisible = (v: boolean) => setDrawVisibility(map as AnyMap, v);
@@ -786,6 +799,7 @@ export async function setupDrawing(
   return {
     destroy: () => {
       try { document.removeEventListener('click', onDocClick); } catch (_) {}
+      try { document.removeEventListener('keydown', onKeyDown, true as any); } catch (_) {}
       try { toolbar.remove(); } catch (_) {}
       try {
         (map as AnyMap).off('draw.modechange', onDrawModeChange);

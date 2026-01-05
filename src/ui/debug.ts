@@ -1568,6 +1568,31 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     window.addEventListener('fusedmaps:sql:status', onSqlStatus as any);
   } catch (_) {}
 
+  // Drawing changes: keep the Drawings GeoJSON + exported config fresh.
+  // Without this, users draw shapes but don't see updates until they manually switch layers.
+  const onDrawChanged = () => {
+    try {
+      const active = getActiveLayer();
+      if ((active as any)?.layerType === 'drawing') {
+        try {
+          const dh: any = (config as any).__drawingHandle;
+          const fc = dh?.getGeoJSON?.() || { type: 'FeatureCollection', features: [] };
+          if (drawingGeoEl) drawingGeoEl.value = JSON.stringify(fc, null, 2);
+        } catch (_) {
+          if (drawingGeoEl) drawingGeoEl.value = '';
+        }
+      }
+      try { updateLayerOutput(); } catch (_) {}
+    } catch (_) {}
+  };
+  try {
+    (map as any).on?.('draw.create', onDrawChanged);
+    (map as any).on?.('draw.update', onDrawChanged);
+    (map as any).on?.('draw.delete', onDrawChanged);
+    (map as any).on?.('draw.modechange', onDrawChanged);
+    (map as any).on?.('draw.selectionchange', onDrawChanged);
+  } catch (_) {}
+
   // Update viewstate only on "stop"
   try {
     map.on('moveend', updateFromMapStop);
@@ -1598,6 +1623,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         map.off('pitchend', updateFromMapStop);
       } catch (_) {}
       try { window.removeEventListener('fusedmaps:sql:status', onSqlStatus as any); } catch (_) {}
+      try {
+        (map as any).off?.('draw.create', onDrawChanged);
+        (map as any).off?.('draw.update', onDrawChanged);
+        (map as any).off?.('draw.delete', onDrawChanged);
+        (map as any).off?.('draw.modechange', onDrawChanged);
+        (map as any).off?.('draw.selectionchange', onDrawChanged);
+      } catch (_) {}
       try { shell?.remove(); } catch (_) {}
     }
   };

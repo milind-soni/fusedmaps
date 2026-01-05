@@ -55,32 +55,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
   } catch (_) {}
-  
-<<<<<<< HEAD
-  // If drawing is enabled, inject a "drawing layer" entry so it behaves like another layer
-  // in the layer panel (toggle visibility).
-  if (config.drawing?.enabled) {
-    const layerId = config.drawing.layerId || 'drawings';
-    const exists = config.layers.some(l => l.id === layerId);
-    if (!exists) {
-      (config.layers as any).push({
-        id: layerId,
-        name: config.drawing.layerName || 'Drawings',
-        layerType: 'drawing',
-        visible: true,
-      } as any);
-    }
-  }
 
-  // Initialize visibility state
-  config.layers.forEach(layer => {
-    layerVisibilityState[layer.id] = layer.visible !== false;
-  });
-  // Expose visibility state to internal helpers (used by drawing module)
-  (config as any).__visibilityState = layerVisibilityState;
-  
-=======
->>>>>>> main
   // Create map
   const map = initMap({
     containerId,

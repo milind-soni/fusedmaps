@@ -954,12 +954,23 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;
-      // PMTiles layers may not have inline data for attribute detection; provide color attr or empty list
-      const attrs = isPmtiles
-        ? (v.colorAttribute ? [v.colorAttribute] : ['value'])
-        : getVectorAttrCandidates(layer as any);
-      fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       const fcCfg = v.fillColorConfig;
+      // PMTiles layers may not have inline data for attribute detection.
+      // IMPORTANT: Always include the configured attr in the dropdown options,
+      // otherwise the <select> will silently fall back to its default (often "value"),
+      // and the map will appear "wrong" until the user touches the controls.
+      const attrs = (() => {
+        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
+        const s = new Set<string>();
+        // Prefer explicit configured attrs
+        if (fcCfg?.attr) s.add(String(fcCfg.attr));
+        if (v.lineColorConfig?.attr) s.add(String(v.lineColorConfig.attr));
+        if (v.colorAttribute) s.add(String(v.colorAttribute));
+        // Safe default for many PMTiles datasets
+        s.add('value');
+        return [...s].filter(Boolean);
+      })();
+      fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       if (fcCfg && typeof fcCfg === 'object' && fcCfg['@@function'] === 'colorContinuous') {
         fillFnEl.value = 'colorContinuous';
         if (fcCfg.attr) fillAttrEl.value = String(fcCfg.attr);
@@ -969,6 +980,21 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const dom = Array.isArray(fcCfg.domain) ? fcCfg.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
+        // Keep dual slider aligned with inputs (same behavior as hex)
+        try {
+          const dmin = Math.min(Number(dom[0]), Number(dom[1]));
+          const dmax = Math.max(Number(dom[0]), Number(dom[1]));
+          if (Number.isFinite(dmin) && Number.isFinite(dmax)) {
+            fillRangeMinEl.min = String(dmin);
+            fillRangeMinEl.max = String(dmax);
+            fillRangeMaxEl.min = String(dmin);
+            fillRangeMaxEl.max = String(dmax);
+            fillRangeMinEl.step = '0.1';
+            fillRangeMaxEl.step = '0.1';
+            fillRangeMinEl.value = String(Number(dom[0]));
+            fillRangeMaxEl.value = String(Number(dom[1]));
+          }
+        } catch (_) {}
         fillStepsEl.value = String(fcCfg.steps ?? 7);
         const nc = Array.isArray(fcCfg.nullColor) ? fcCfg.nullColor : [184, 184, 184];
         const hex = `#${nc.slice(0, 3).map((x: any) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
@@ -1010,11 +1036,17 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;
-      const attrs = isPmtiles
-        ? (v.colorAttribute ? [v.colorAttribute] : ['value'])
-        : getVectorAttrCandidates(layer as any);
-      lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       const lcCfg = v.lineColorConfig;
+      const attrs = (() => {
+        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
+        const s = new Set<string>();
+        if (lcCfg?.attr) s.add(String(lcCfg.attr));
+        if (v.fillColorConfig?.attr) s.add(String(v.fillColorConfig.attr));
+        if (v.colorAttribute) s.add(String(v.colorAttribute));
+        s.add('value');
+        return [...s].filter(Boolean);
+      })();
+      lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
       if (lcCfg && typeof lcCfg === 'object' && lcCfg['@@function'] === 'colorContinuous') {
         lineFnEl.value = 'colorContinuous';
         if (lcCfg.attr) lineAttrEl.value = String(lcCfg.attr);

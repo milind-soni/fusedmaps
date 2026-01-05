@@ -1,52 +1,48 @@
 /**
  * Drawing mode (experimental)
  *
- * Uses Mapbox GL Draw under the hood, but provides a custom bottom toolbar UI
- * inspired by `open_felt.py`.
+ * Hybrid approach inspired by `open_felt.py`:
+ * - SVG overlay for freehand/arrow (direct color application, no expression issues)
+ * - Terra Draw for shapes (polygon, line, rectangle, circle) with per-feature style functions
  *
- * NOTE: We intentionally keep this module self-contained and only load external
- * dependencies (mapbox-gl-draw) when enabled.
+ * This fixes the coloring issues that plagued the Mapbox GL Draw approach.
  */
 
 import type { FusedMapsConfig, DrawingConfig, DrawingMode } from '../types';
 
 type AnyMap = mapboxgl.Map & any;
 
-let drawCssInjected = false;
-let drawLoadPromise: Promise<any> | null = null;
+// Track loaded libraries
+let terraDrawLoaded = false;
+let terraDrawLoadPromise: Promise<any> | null = null;
 
-async function ensureMapboxDrawLoaded(): Promise<any> {
-  if ((window as any).MapboxDraw) return (window as any).MapboxDraw;
-  if (drawLoadPromise) return drawLoadPromise;
+async function ensureTerraDrawLoaded(): Promise<any> {
+  if (terraDrawLoaded && (window as any).terraDraw) {
+    return (window as any).terraDraw;
+  }
+  if (terraDrawLoadPromise) return terraDrawLoadPromise;
 
-  drawLoadPromise = new Promise((resolve, reject) => {
+  terraDrawLoadPromise = new Promise((resolve, reject) => {
     try {
-      if (!drawCssInjected) {
-        drawCssInjected = true;
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.css';
-        document.head.appendChild(link);
-      }
-
       const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.js';
-      script.onload = () => resolve((window as any).MapboxDraw);
-      script.onerror = () => reject(new Error('Failed to load mapbox-gl-draw'));
+      script.src = 'https://unpkg.com/terra-draw@1.0.0-beta.1/dist/terra-draw.umd.js';
+      script.onload = () => {
+        terraDrawLoaded = true;
+        resolve((window as any).terraDraw);
+      };
+      script.onerror = () => reject(new Error('Failed to load terra-draw'));
       document.head.appendChild(script);
     } catch (e) {
       reject(e);
     }
   }).finally(() => {
-    drawLoadPromise = null;
+    terraDrawLoadPromise = null;
   });
 
-  return drawLoadPromise;
+  return terraDrawLoadPromise;
 }
 
 function svgIcon(name: string): string {
-  // Small subset of icons matching open_felt toolbar.
-  // Keep inline for simplicity (no assets pipeline).
   const icons: Record<string, string> = {
     select: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
@@ -67,15 +63,27 @@ function svgIcon(name: string): string {
     circle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="10"/>
     </svg>`,
+    arrow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="5" y1="19" x2="19" y2="5"/>
+      <polyline points="10 5 19 5 19 14"/>
+    </svg>`,
     trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polyline points="3 6 5 6 21 6"/>
       <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+    </svg>`,
+    undo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 7v6h6"/>
+      <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+    </svg>`,
+    redo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 7v6h-6"/>
+      <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
     </svg>`,
   };
   return icons[name] || '';
 }
 
-function injectToolbarCss(): void {
+function injectStyles(): void {
   if (document.getElementById('fusedmaps-drawing-style')) return;
   const style = document.createElement('style');
   style.id = 'fusedmaps-drawing-style';
@@ -89,6 +97,27 @@ function injectToolbarCss(): void {
       --fm-accent: #6366f1;
       --fm-accent-glow: rgba(99, 102, 241, 0.4);
     }
+    
+    /* SVG Drawing Overlay for freehand/arrow */
+    .fm-drawing-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .fm-drawing-overlay.active {
+      pointer-events: all;
+      cursor: crosshair;
+    }
+    .fm-drawing-overlay path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    
     .fm-toolbar {
       position: fixed;
       left: 50%;
@@ -107,16 +136,16 @@ function injectToolbarCss(): void {
     }
     .fm-toolbar.bottom { bottom: 16px; }
     .fm-toolbar.top { top: 16px; }
-    .fm-toolbar-group { display:flex; gap:2px; }
+    .fm-toolbar-group { display: flex; gap: 2px; }
     .fm-toolbar-group + .fm-toolbar-group {
       margin-left: 4px;
       padding-left: 8px;
       border-left: 1px solid var(--fm-border-glass);
     }
     .fm-tool-btn {
-      display:flex;
-      align-items:center;
-      justify-content:center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 40px;
       height: 40px;
       border: none;
@@ -156,9 +185,8 @@ function injectToolbarCss(): void {
       border: 1px solid var(--fm-border-glass);
       border-radius: 12px;
       display: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
-    /* Popovers: show state should preserve each popover's intended layout (grid vs flex) */
     .fm-popover.show { display: block; }
     .fm-popover.fm-color-grid.show { display: grid; }
     .fm-popover.fm-stroke-list.show { display: flex; }
@@ -177,208 +205,55 @@ function injectToolbarCss(): void {
     .fm-color-opt:hover { transform: scale(1.15); }
     .fm-color-opt.selected { border-color: white; }
 
-    .fm-stroke-list { flex-direction:column; gap:4px; }
+    .fm-stroke-list { flex-direction: column; gap: 4px; }
     .fm-stroke-opt {
-      display:flex; align-items:center; gap:10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       padding: 6px 12px;
-      border:none;
+      border: none;
       border-radius: 8px;
       background: transparent;
       color: var(--fm-text-muted);
-      cursor:pointer;
+      cursor: pointer;
       font-size: 12px;
       white-space: nowrap;
     }
     .fm-stroke-opt:hover { background: var(--fm-bg-glass-hover); color: var(--fm-text-primary); }
     .fm-stroke-opt.selected { color: var(--fm-accent); }
-    .fm-stroke-line { width: 40px; height: var(--stroke-height,2px); background: currentColor; border-radius: 2px; }
+    .fm-stroke-line { width: 40px; height: var(--stroke-height, 2px); background: currentColor; border-radius: 2px; }
   `;
   document.head.appendChild(style);
 }
 
-function withAlpha(hex: string, alpha: number): string {
-  // alpha 0..1
-  const a = Math.max(0, Math.min(1, alpha));
-  // hex -> rgba
+function hexToRgba(hex: string, alpha: number): string {
   const c = String(hex || '').replace('#', '');
-  if (c.length !== 6) return `rgba(99,102,241,${a})`;
+  if (c.length !== 6) return `rgba(99,102,241,${alpha})`;
   const r = parseInt(c.slice(0, 2), 16);
   const g = parseInt(c.slice(2, 4), 16);
   const b = parseInt(c.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${a})`;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function makeFreehandMode(): any {
-  // Minimal freehand mode for MapboxDraw.
-  // Draws a LineString by sampling pointer moves (distance threshold in pixels).
-  return {
-    onSetup(this: any, opts: any = {}) {
-      const line = this.newFeature({
-        type: 'Feature',
-        properties: {
-          // Persist style on the feature so export contains values (geojson.io-like).
-          stroke: typeof opts.stroke === 'string' ? opts.stroke : undefined,
-          fill: typeof opts.fill === 'string' ? opts.fill : undefined,
-          strokeWidth: typeof opts.strokeWidth === 'number' ? opts.strokeWidth : undefined,
-        },
-        geometry: { type: 'LineString', coordinates: [] },
-      });
-      this.addFeature(line);
-      this.clearSelectedFeatures();
-      this.updateUIClasses({ mouse: 'add' });
-      this.setActionableState({ trash: true });
-      return { line, lastPt: null as any, isDown: false };
-    },
-    onMouseDown(this: any, state: any, e: any) {
-      state.isDown = true;
-      const c = [e.lngLat.lng, e.lngLat.lat];
-      state.line.updateCoordinate('0', c[0], c[1]);
-      state.lastPt = this.map.project(e.lngLat);
-    },
-    onMouseMove(this: any, state: any, e: any) {
-      if (!state.isDown) return;
-      const p = this.map.project(e.lngLat);
-      if (state.lastPt) {
-        const dx = p.x - state.lastPt.x;
-        const dy = p.y - state.lastPt.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < 9) return; // ~3px threshold
-      }
-      const coords = state.line.getCoordinates();
-      const idx = coords.length;
-      state.line.updateCoordinate(String(idx), e.lngLat.lng, e.lngLat.lat);
-      state.lastPt = p;
-    },
-    onMouseUp(this: any, state: any) {
-      state.isDown = false;
-      const coords = state.line.getCoordinates();
-      if (!coords || coords.length < 2) {
-        this.deleteFeature([state.line.id], { silent: true });
-        this.changeMode('simple_select');
-        return;
-      }
-      this.changeMode('simple_select', { featureIds: [state.line.id] });
-    },
-    onStop(this: any, state: any) {
-      this.updateUIClasses({ mouse: 'none' });
-      // Do not emit a synthetic draw.create event here.
-      // MapboxDraw will manage render + events during mode transition;
-      // synthetic events can cause odd "closing" artifacts or duplicate states.
-    },
-    toDisplayFeatures(this: any, state: any, geojson: any, display: any) {
-      // display the feature while drawing
-      display(geojson);
-    },
-  };
+// Convert hex to Terra Draw's expected format (hex with alpha suffix for fill)
+function hexWithAlpha(hex: string, alpha: number = 0.25): string {
+  // Terra Draw expects hex colors, append alpha as 2-char hex
+  const alphaHex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return hex + alphaHex;
 }
 
-function makeDrawStyles(defaultStroke: string, defaultFill: string, defaultWidth: number): any[] {
-  // Style expressions read from feature properties when present.
-  const stroke = ['coalesce', ['get', 'stroke'], defaultStroke];
-  const fill = ['coalesce', ['get', 'fill'], defaultFill];
-  const width = ['coalesce', ['get', 'strokeWidth'], defaultWidth];
-
-  // IMPORTANT:
-  // Mapbox GL Draw renders from 2 internal sources:
-  // - mapbox-gl-draw-cold (static/inactive)
-  // - mapbox-gl-draw-hot  (active while drawing/editing)
-  // If we omit `source`, Mapbox will reject the layer and Draw will fall back to its defaults.
-  const COLD = 'mapbox-gl-draw-cold';
-  const HOT = 'mapbox-gl-draw-hot';
-
-  // Keep it minimal but valid: line + polygon fill/outline + point.
-  //
-  // NOTE: During drawing/editing, Mapbox GL Draw frequently moves features between HOT and COLD
-  // sources. If we style them differently (or filter by `active`), it can appear as "blinking".
-  // To keep visuals stable, we apply the same styles to both sources (no active/inactive split).
-  return [
-    // Polygon fill (cold)
-    {
-      id: 'gl-draw-polygon-fill-cold',
-      type: 'fill',
-      source: COLD,
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint: { 'fill-color': fill, 'fill-opacity': 1 },
-    },
-    // Polygon fill (hot)
-    {
-      id: 'gl-draw-polygon-fill-hot',
-      type: 'fill',
-      source: HOT,
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint: { 'fill-color': fill, 'fill-opacity': 1 },
-    },
-    // Polygon outline (cold)
-    {
-      id: 'gl-draw-polygon-stroke-cold',
-      type: 'line',
-      source: COLD,
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': stroke, 'line-width': width },
-    },
-    // Polygon outline (hot)
-    {
-      id: 'gl-draw-polygon-stroke-hot',
-      type: 'line',
-      source: HOT,
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': stroke, 'line-width': width },
-    },
-    // LineString (cold)
-    {
-      id: 'gl-draw-line-cold',
-      type: 'line',
-      source: COLD,
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': stroke, 'line-width': width },
-    },
-    // LineString (hot)
-    {
-      id: 'gl-draw-line-hot',
-      type: 'line',
-      source: HOT,
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': stroke, 'line-width': width },
-    },
-    // Points/vertices (cold)
-    {
-      id: 'gl-draw-point-cold',
-      type: 'circle',
-      source: COLD,
-      filter: ['all', ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
-      paint: { 'circle-radius': 4, 'circle-color': stroke, 'circle-stroke-color': '#000', 'circle-stroke-width': 1 },
-    },
-    // Points/vertices (hot)
-    {
-      id: 'gl-draw-point-hot',
-      type: 'circle',
-      source: HOT,
-      filter: ['all', ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
-      paint: { 'circle-radius': 4, 'circle-color': stroke, 'circle-stroke-color': '#000', 'circle-stroke-width': 1 },
-    },
-  ];
+interface FreehandPath {
+  id: string;
+  points: Array<{ lng: number; lat: number }>;
+  color: string;
+  stroke: number;
+  type: 'freehand' | 'arrow';
 }
 
-function setActive(btns: Record<string, HTMLButtonElement>, active: string) {
-  Object.entries(btns).forEach(([k, el]) => {
-    try { el.classList.toggle('active', k === active); } catch (_) {}
-  });
-}
-
-function setDrawVisibility(map: AnyMap, visible: boolean) {
-  try {
-    const styleLayers: any[] = (map.getStyle?.()?.layers || []) as any[];
-    for (const l of styleLayers) {
-      const id = l?.id;
-      if (typeof id === 'string' && (id.startsWith('gl-draw') || id.startsWith('mapbox-gl-draw'))) {
-        try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none'); } catch (_) {}
-      }
-    }
-  } catch (_) {}
+interface UndoState {
+  freehandPaths: FreehandPath[];
+  terraFeatures: any[];
+  featureStyles: Record<string, { color: string; stroke: number }>;
 }
 
 export async function setupDrawing(
@@ -388,51 +263,366 @@ export async function setupDrawing(
   const dcfg: DrawingConfig | undefined = config.drawing;
   if (!dcfg?.enabled) return null;
 
-  injectToolbarCss();
+  injectStyles();
 
-  const MapboxDraw = await ensureMapboxDrawLoaded();
+  const terraDraw = await ensureTerraDrawLoaded();
+  const {
+    TerraDraw,
+    TerraDrawMapLibreGLAdapter,
+    TerraDrawLineStringMode,
+    TerraDrawPolygonMode,
+    TerraDrawRectangleMode,
+    TerraDrawCircleMode,
+    TerraDrawSelectMode,
+  } = terraDraw;
 
+  // State
   const defaultStroke = dcfg.style?.stroke || '#6366f1';
-  const defaultFill = dcfg.style?.fill || withAlpha(defaultStroke, 0.25);
   const defaultWidth = typeof dcfg.style?.strokeWidth === 'number' ? dcfg.style!.strokeWidth! : 4;
+  
+  let currentColor = defaultStroke;
+  let currentStroke = defaultWidth;
+  let currentMode: DrawingMode = dcfg.defaultMode || 'select';
+  
+  // Freehand paths (SVG overlay)
+  let freehandPaths: FreehandPath[] = [];
+  let isDrawingFreehand = false;
+  let currentFreehandPath: FreehandPath | null = null;
+  
+  // Terra Draw feature styles (featureId -> {color, stroke})
+  const featureStyles: Record<string, { color: string; stroke: number }> = {};
+  
+  // Undo/Redo stacks
+  let undoStack: string[] = [];
+  let redoStack: string[] = [];
+  
+  // Get feature style (for Terra Draw style functions)
+  const getFeatureColor = (featureId: string | number) => {
+    return featureStyles[String(featureId)]?.color || currentColor;
+  };
+  const getFeatureStroke = (featureId: string | number) => {
+    return featureStyles[String(featureId)]?.stroke || currentStroke;
+  };
 
-  const draw = new MapboxDraw({
-    displayControlsDefault: false,
-    modes: {
-      ...(MapboxDraw.modes || {}),
-      draw_freehand: makeFreehandMode(),
-    },
-    styles: makeDrawStyles(defaultStroke, defaultFill, defaultWidth),
+  // Initialize Terra Draw for shapes
+  const draw = new TerraDraw({
+    adapter: new TerraDrawMapLibreGLAdapter({ map: map as any, coordinatePrecision: 9 }),
+    modes: [
+      new TerraDrawSelectMode({
+        flags: {
+          linestring: { feature: { draggable: true, deletable: true } },
+          polygon: { feature: { draggable: true, deletable: true } },
+          rectangle: { feature: { draggable: true, deletable: true } },
+          circle: { feature: { draggable: true, deletable: true } },
+        },
+      }),
+      new TerraDrawLineStringMode({
+        styles: {
+          lineStringColor: (feature: any) => getFeatureColor(feature.id),
+          lineStringWidth: (feature: any) => getFeatureStroke(feature.id),
+        },
+      }),
+      new TerraDrawPolygonMode({
+        styles: {
+          fillColor: (feature: any) => hexWithAlpha(getFeatureColor(feature.id), 0.25),
+          outlineColor: (feature: any) => getFeatureColor(feature.id),
+          outlineWidth: (feature: any) => getFeatureStroke(feature.id),
+        },
+      }),
+      new TerraDrawRectangleMode({
+        styles: {
+          fillColor: (feature: any) => hexWithAlpha(getFeatureColor(feature.id), 0.25),
+          outlineColor: (feature: any) => getFeatureColor(feature.id),
+          outlineWidth: (feature: any) => getFeatureStroke(feature.id),
+        },
+      }),
+      new TerraDrawCircleMode({
+        styles: {
+          fillColor: (feature: any) => hexWithAlpha(getFeatureColor(feature.id), 0.25),
+          outlineColor: (feature: any) => getFeatureColor(feature.id),
+          outlineWidth: (feature: any) => getFeatureStroke(feature.id),
+        },
+      }),
+    ],
   });
 
-  // Add draw control but hide its default UI; we use our own toolbar.
-  (map as AnyMap).addControl(draw, 'top-left');
-  try {
-    const ctrlEls = document.getElementsByClassName('mapboxgl-ctrl-draw');
-    for (const el of Array.from(ctrlEls)) (el as HTMLElement).style.display = 'none';
-  } catch (_) {}
+  draw.start();
 
-  // Load initial GeoJSON if provided
-  try {
-    if (dcfg.initialGeoJSON) {
-      draw.add(dcfg.initialGeoJSON as any);
+  // When a Terra Draw feature is finished, store its color
+  draw.on('finish', (id: string) => {
+    if (id) {
+      featureStyles[String(id)] = { color: currentColor, stroke: currentStroke };
+      saveUndoState();
     }
-  } catch (_) {}
+  });
 
-  // Toolbar DOM
+  // Create SVG overlay for freehand/arrow
+  const mapContainer = (map as any).getContainer() as HTMLElement;
+  const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgOverlay.setAttribute('class', 'fm-drawing-overlay');
+  svgOverlay.innerHTML = `
+    <defs id="fm-arrow-markers"></defs>
+    <g id="fm-path-group"></g>
+  `;
+  mapContainer.appendChild(svgOverlay);
+
+  const pathGroup = svgOverlay.querySelector('#fm-path-group') as SVGGElement;
+  const arrowMarkers = svgOverlay.querySelector('#fm-arrow-markers') as SVGDefsElement;
+
+  // Ensure arrow marker exists for a color
+  function ensureArrowMarker(color: string) {
+    const markerId = `fm-arrow-${color.replace('#', '')}`;
+    if (document.getElementById(markerId)) return markerId;
+
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', markerId);
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '3.5');
+    marker.setAttribute('orient', 'auto');
+    marker.setAttribute('markerUnits', 'strokeWidth');
+
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+    polygon.setAttribute('fill', color);
+
+    marker.appendChild(polygon);
+    arrowMarkers.appendChild(marker);
+    return markerId;
+  }
+
+  // Convert lat/lng points to SVG path data
+  function pointsToPathData(points: Array<{ lng: number; lat: number }>): string {
+    if (!points || points.length === 0) return '';
+    
+    const screenPoints = points.map(p => (map as any).project([p.lng, p.lat]));
+    let d = `M ${screenPoints[0].x} ${screenPoints[0].y}`;
+    for (let i = 1; i < screenPoints.length; i++) {
+      d += ` L ${screenPoints[i].x} ${screenPoints[i].y}`;
+    }
+    return d;
+  }
+
+  // Redraw all freehand paths (called on map move/zoom)
+  function redrawFreehandPaths() {
+    pathGroup.innerHTML = '';
+    
+    freehandPaths.forEach((path, index) => {
+      const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathEl.setAttribute('stroke', path.color);
+      pathEl.setAttribute('stroke-width', String(path.stroke));
+      pathEl.setAttribute('d', pointsToPathData(path.points));
+      pathEl.dataset.index = String(index);
+
+      if (path.type === 'arrow') {
+        const markerId = ensureArrowMarker(path.color);
+        pathEl.setAttribute('marker-end', `url(#${markerId})`);
+      }
+
+      pathGroup.appendChild(pathEl);
+    });
+  }
+
+  // Get event point relative to map container
+  function getEventPoint(e: MouseEvent | TouchEvent): { x: number; y: number } {
+    const rect = mapContainer.getBoundingClientRect();
+    if ('touches' in e && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top,
+      };
+    }
+    return {
+      x: (e as MouseEvent).clientX - rect.left,
+      y: (e as MouseEvent).clientY - rect.top,
+    };
+  }
+
+  // Freehand drawing handlers
+  function handleFreehandStart(e: MouseEvent | TouchEvent) {
+    if (currentMode !== 'freehand' && currentMode !== 'arrow') return;
+
+    isDrawingFreehand = true;
+    const point = getEventPoint(e);
+    const lngLat = (map as any).unproject([point.x, point.y]);
+
+    currentFreehandPath = {
+      id: `path-${Date.now()}`,
+      points: [{ lng: lngLat.lng, lat: lngLat.lat }],
+      color: currentColor,
+      stroke: currentStroke,
+      type: currentMode as 'freehand' | 'arrow',
+    };
+
+    // Create temporary path element
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('stroke', currentColor);
+    pathEl.setAttribute('stroke-width', String(currentStroke));
+    pathEl.id = 'fm-current-path';
+
+    if (currentMode === 'arrow') {
+      const markerId = ensureArrowMarker(currentColor);
+      pathEl.setAttribute('marker-end', `url(#${markerId})`);
+    }
+
+    pathGroup.appendChild(pathEl);
+    updateCurrentPath();
+  }
+
+  function handleFreehandMove(e: MouseEvent | TouchEvent) {
+    if (!isDrawingFreehand || !currentFreehandPath) return;
+
+    const point = getEventPoint(e);
+    const lngLat = (map as any).unproject([point.x, point.y]);
+
+    // For arrow mode, just keep start and end points (straight line)
+    if (currentFreehandPath.type === 'arrow') {
+      if (currentFreehandPath.points.length === 1) {
+        currentFreehandPath.points.push({ lng: lngLat.lng, lat: lngLat.lat });
+      } else {
+        currentFreehandPath.points[1] = { lng: lngLat.lng, lat: lngLat.lat };
+      }
+    } else {
+      currentFreehandPath.points.push({ lng: lngLat.lng, lat: lngLat.lat });
+    }
+    updateCurrentPath();
+  }
+
+  function handleFreehandEnd() {
+    if (!isDrawingFreehand || !currentFreehandPath) return;
+
+    isDrawingFreehand = false;
+
+    // Only save if we have more than 1 point
+    if (currentFreehandPath.points.length > 1) {
+      freehandPaths.push(currentFreehandPath);
+      saveUndoState();
+    }
+
+    currentFreehandPath = null;
+
+    // Remove temp path and redraw all
+    const tempPath = document.getElementById('fm-current-path');
+    if (tempPath) tempPath.remove();
+
+    redrawFreehandPaths();
+  }
+
+  function updateCurrentPath() {
+    if (!currentFreehandPath) return;
+    const pathEl = document.getElementById('fm-current-path');
+    if (!pathEl) return;
+    pathEl.setAttribute('d', pointsToPathData(currentFreehandPath.points));
+  }
+
+  // Bind freehand events
+  svgOverlay.addEventListener('mousedown', handleFreehandStart);
+  svgOverlay.addEventListener('mousemove', handleFreehandMove);
+  svgOverlay.addEventListener('mouseup', handleFreehandEnd);
+  svgOverlay.addEventListener('mouseleave', handleFreehandEnd);
+  svgOverlay.addEventListener('touchstart', (e) => { e.preventDefault(); handleFreehandStart(e); }, { passive: false });
+  svgOverlay.addEventListener('touchmove', (e) => { e.preventDefault(); handleFreehandMove(e); }, { passive: false });
+  svgOverlay.addEventListener('touchend', (e) => { e.preventDefault(); handleFreehandEnd(); }, { passive: false });
+
+  // Redraw on map move/zoom
+  (map as any).on('move', redrawFreehandPaths);
+  (map as any).on('zoom', redrawFreehandPaths);
+
+  // Undo/Redo
+  function saveUndoState() {
+    const state: UndoState = {
+      freehandPaths: JSON.parse(JSON.stringify(freehandPaths)),
+      terraFeatures: draw.getSnapshot(),
+      featureStyles: JSON.parse(JSON.stringify(featureStyles)),
+    };
+    undoStack.push(JSON.stringify(state));
+    redoStack = [];
+    if (undoStack.length > 50) undoStack.shift();
+    updateUndoRedoButtons();
+  }
+
+  function undo() {
+    if (undoStack.length === 0) return;
+
+    // Save current to redo
+    const current: UndoState = {
+      freehandPaths: JSON.parse(JSON.stringify(freehandPaths)),
+      terraFeatures: draw.getSnapshot(),
+      featureStyles: JSON.parse(JSON.stringify(featureStyles)),
+    };
+    redoStack.push(JSON.stringify(current));
+
+    // Restore previous
+    const prev: UndoState = JSON.parse(undoStack.pop()!);
+    freehandPaths = prev.freehandPaths;
+    redrawFreehandPaths();
+
+    // Restore Terra Draw features
+    draw.clear();
+    Object.keys(featureStyles).forEach(k => delete featureStyles[k]);
+    Object.assign(featureStyles, prev.featureStyles);
+    if (prev.terraFeatures?.length) {
+      prev.terraFeatures.forEach((f: any) => {
+        try { draw.addFeatures([f]); } catch (_) {}
+      });
+    }
+
+    updateUndoRedoButtons();
+  }
+
+  function redo() {
+    if (redoStack.length === 0) return;
+
+    // Save current to undo
+    const current: UndoState = {
+      freehandPaths: JSON.parse(JSON.stringify(freehandPaths)),
+      terraFeatures: draw.getSnapshot(),
+      featureStyles: JSON.parse(JSON.stringify(featureStyles)),
+    };
+    undoStack.push(JSON.stringify(current));
+
+    // Restore next
+    const next: UndoState = JSON.parse(redoStack.pop()!);
+    freehandPaths = next.freehandPaths;
+    redrawFreehandPaths();
+
+    draw.clear();
+    Object.keys(featureStyles).forEach(k => delete featureStyles[k]);
+    Object.assign(featureStyles, next.featureStyles);
+    if (next.terraFeatures?.length) {
+      next.terraFeatures.forEach((f: any) => {
+        try { draw.addFeatures([f]); } catch (_) {}
+      });
+    }
+
+    updateUndoRedoButtons();
+  }
+
+  function clearAll() {
+    if (freehandPaths.length === 0 && draw.getSnapshot().length === 0) return;
+    saveUndoState();
+    freehandPaths = [];
+    redrawFreehandPaths();
+    draw.clear();
+    Object.keys(featureStyles).forEach(k => delete featureStyles[k]);
+  }
+
+  // Build toolbar
   const toolbar = document.createElement('div');
   toolbar.className = `fm-toolbar ${dcfg.position === 'top' ? 'top' : 'bottom'}`;
 
   const tools: DrawingMode[] = dcfg.tools?.length
     ? dcfg.tools
-    : ['select', 'freehand', 'line', 'polygon', 'rectangle', 'circle'];
+    : ['select', 'freehand', 'line', 'polygon', 'rectangle', 'circle', 'arrow'];
 
   const COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e',
     '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
     '#f43f5e', '#6366f1', '#14b8a6', '#84cc16',
-    '#a855f7', '#0ea5e9', '#64748b', '#ffffff'
+    '#a855f7', '#0ea5e9', '#64748b', '#ffffff',
   ];
+
   const STROKES = [
     { width: 2, label: 'Fine' },
     { width: 4, label: 'Medium' },
@@ -440,16 +630,13 @@ export async function setupDrawing(
     { width: 10, label: 'Heavy' },
   ];
 
-  let currentColor = defaultStroke;
-  let currentStroke = defaultWidth;
-  // Default to select so the map can be panned immediately.
-  // (Drawing modes intentionally capture drag gestures.)
-  let currentMode: DrawingMode = dcfg.defaultMode || 'select';
-
+  // Tool buttons
   const groupTools = document.createElement('div');
   groupTools.className = 'fm-toolbar-group';
 
-  const mkToolBtn = (mode: DrawingMode, title: string, iconKey: string, enabled = true) => {
+  const btns: Record<string, HTMLButtonElement> = {};
+
+  function mkToolBtn(mode: DrawingMode, title: string, iconKey: string, enabled = true): HTMLButtonElement {
     const b = document.createElement('button');
     b.className = 'fm-tool-btn';
     b.type = 'button';
@@ -458,65 +645,106 @@ export async function setupDrawing(
     b.innerHTML = svgIcon(iconKey);
     groupTools.appendChild(b);
     return b;
-  };
+  }
 
-  const btns: Record<string, HTMLButtonElement> = {};
-  if (tools.includes('select')) btns.select = mkToolBtn('select', 'Select', 'select', true);
-  if (tools.includes('freehand')) btns.freehand = mkToolBtn('freehand', 'Freehand', 'freehand', true);
-  if (tools.includes('line')) btns.line = mkToolBtn('line', 'Line', 'line', true);
-  if (tools.includes('polygon')) btns.polygon = mkToolBtn('polygon', 'Polygon', 'polygon', true);
-  // Rectangle/circle are not implemented yet without extra modes; keep disabled but present.
-  if (tools.includes('rectangle')) btns.rectangle = mkToolBtn('rectangle', 'Rectangle (coming soon)', 'rectangle', false);
-  if (tools.includes('circle')) btns.circle = mkToolBtn('circle', 'Circle (coming soon)', 'circle', false);
+  if (tools.includes('select')) btns.select = mkToolBtn('select', 'Select', 'select');
+  if (tools.includes('freehand')) btns.freehand = mkToolBtn('freehand', 'Freehand', 'freehand');
+  if (tools.includes('line')) btns.line = mkToolBtn('line', 'Line', 'line');
+  if (tools.includes('polygon')) btns.polygon = mkToolBtn('polygon', 'Polygon', 'polygon');
+  if (tools.includes('rectangle')) btns.rectangle = mkToolBtn('rectangle', 'Rectangle', 'rectangle');
+  if (tools.includes('circle')) btns.circle = mkToolBtn('circle', 'Circle', 'circle');
+  if (tools.includes('arrow')) btns.arrow = mkToolBtn('arrow', 'Arrow', 'arrow');
 
   toolbar.appendChild(groupTools);
 
-  // Style group
+  // Undo/Redo group
+  const groupActions = document.createElement('div');
+  groupActions.className = 'fm-toolbar-group';
+
+  const undoBtn = document.createElement('button');
+  undoBtn.className = 'fm-tool-btn';
+  undoBtn.type = 'button';
+  undoBtn.title = 'Undo';
+  undoBtn.disabled = true;
+  undoBtn.innerHTML = svgIcon('undo');
+  undoBtn.addEventListener('click', (e) => { e.preventDefault(); undo(); });
+  groupActions.appendChild(undoBtn);
+
+  const redoBtn = document.createElement('button');
+  redoBtn.className = 'fm-tool-btn';
+  redoBtn.type = 'button';
+  redoBtn.title = 'Redo';
+  redoBtn.disabled = true;
+  redoBtn.innerHTML = svgIcon('redo');
+  redoBtn.addEventListener('click', (e) => { e.preventDefault(); redo(); });
+  groupActions.appendChild(redoBtn);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'fm-tool-btn';
+  clearBtn.type = 'button';
+  clearBtn.title = 'Clear All';
+  clearBtn.innerHTML = svgIcon('trash');
+  clearBtn.addEventListener('click', (e) => { e.preventDefault(); clearAll(); });
+  groupActions.appendChild(clearBtn);
+
+  toolbar.appendChild(groupActions);
+
+  function updateUndoRedoButtons() {
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = redoStack.length === 0;
+  }
+
+  // Style group (color + stroke)
   const groupStyle = document.createElement('div');
   groupStyle.className = 'fm-toolbar-group';
   groupStyle.style.position = 'relative';
 
+  // Color picker
   const colorWrap = document.createElement('div');
   colorWrap.style.position = 'relative';
+
   const colorBtn = document.createElement('button');
   colorBtn.className = 'fm-color-btn';
   colorBtn.type = 'button';
   colorBtn.title = 'Color';
   colorBtn.style.setProperty('--fm-current-color', currentColor);
   colorBtn.style.background = currentColor;
+
   const colorPop = document.createElement('div');
   colorPop.className = 'fm-popover fm-color-grid';
+
   COLORS.forEach((c) => {
     const opt = document.createElement('div');
     opt.className = 'fm-color-opt' + (c === currentColor ? ' selected' : '');
     opt.style.background = c;
     opt.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       currentColor = c;
       colorBtn.style.background = currentColor;
       colorBtn.style.setProperty('--fm-current-color', currentColor);
-      try { applyGlobalDrawStyle(); } catch (_) {}
       Array.from(colorPop.querySelectorAll('.fm-color-opt')).forEach((el) => {
         (el as HTMLElement).classList.toggle('selected', (el as HTMLElement).style.background === currentColor);
       });
       colorPop.classList.remove('show');
-      // Only recolor selected features (if any). Otherwise, this sets the color for the *next* draw.
-      applyStyleToSelection();
-      // If we're currently in a drawing mode, re-enter it so the next feature picks up the new opts.
-      try { setMode(currentMode); } catch (_) {}
     });
     colorPop.appendChild(opt);
   });
+
   colorBtn.addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     colorPop.classList.toggle('show');
     strokePop.classList.remove('show');
   });
+
   colorWrap.appendChild(colorBtn);
   colorWrap.appendChild(colorPop);
 
+  // Stroke picker
   const strokeWrap = document.createElement('div');
   strokeWrap.style.position = 'relative';
+
   const strokeBtn = document.createElement('button');
   strokeBtn.className = 'fm-tool-btn';
   strokeBtn.type = 'button';
@@ -526,31 +754,34 @@ export async function setupDrawing(
     <line x1="4" y1="12" x2="20" y2="12" stroke-width="2"/>
     <line x1="4" y1="18" x2="20" y2="18" stroke-width="4"/>
   </svg>`;
+
   const strokePop = document.createElement('div');
   strokePop.className = 'fm-popover fm-stroke-list';
+
   STROKES.forEach((s) => {
     const opt = document.createElement('button');
     opt.type = 'button';
     opt.className = 'fm-stroke-opt' + (s.width === currentStroke ? ' selected' : '');
     opt.innerHTML = `<span class="fm-stroke-line" style="--stroke-height:${s.width}px"></span><span>${s.label}</span>`;
     opt.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       currentStroke = s.width;
-      try { applyGlobalDrawStyle(); } catch (_) {}
-      Array.from(strokePop.querySelectorAll('.fm-stroke-opt')).forEach((el) => {
-        (el as HTMLElement).classList.toggle('selected', (el as any).textContent?.includes(s.label));
+      Array.from(strokePop.querySelectorAll('.fm-stroke-opt')).forEach((el, i) => {
+        (el as HTMLElement).classList.toggle('selected', STROKES[i].width === currentStroke);
       });
       strokePop.classList.remove('show');
-      applyStyleToSelection();
-      try { setMode(currentMode); } catch (_) {}
     });
     strokePop.appendChild(opt);
   });
+
   strokeBtn.addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     strokePop.classList.toggle('show');
     colorPop.classList.remove('show');
   });
+
   strokeWrap.appendChild(strokeBtn);
   strokeWrap.appendChild(strokePop);
 
@@ -558,277 +789,138 @@ export async function setupDrawing(
   groupStyle.appendChild(strokeWrap);
   toolbar.appendChild(groupStyle);
 
-  // Actions group
-  const groupActions = document.createElement('div');
-  groupActions.className = 'fm-toolbar-group';
-  const clearBtn = document.createElement('button');
-  clearBtn.className = 'fm-tool-btn';
-  clearBtn.type = 'button';
-  clearBtn.title = 'Clear All';
-  clearBtn.innerHTML = svgIcon('trash');
-  clearBtn.addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    try { draw.deleteAll(); } catch (_) {}
-  });
-  groupActions.appendChild(clearBtn);
-  toolbar.appendChild(groupActions);
-
   document.body.appendChild(toolbar);
 
-  const DRAW_LAYER_IDS = [
-    'gl-draw-polygon-fill-cold',
-    'gl-draw-polygon-fill-hot',
-    'gl-draw-polygon-stroke-cold',
-    'gl-draw-polygon-stroke-hot',
-    'gl-draw-line-cold',
-    'gl-draw-line-hot',
-    'gl-draw-point-cold',
-    'gl-draw-point-hot',
-  ];
-
-  const applyGlobalDrawStyle = () => {
-    // IMPORTANT:
-    // Do NOT mutate the global Draw style defaults based on the toolbar selection.
-    // If we set the Mapbox GL Draw paint expressions to fall back to `currentColor`,
-    // every existing feature (that relies on fallback defaults) can appear to change color.
-    //
-    // Desired behavior:
-    // - Changing color/stroke affects *the next feature you draw* (and the active "hot" preview),
-    //   not every existing feature.
-    //
-    // We therefore only update the "hot" layers (active drawing/editing) to use currentColor/currentStroke
-    // as fallbacks. Cold/static layers keep their original defaults.
-    const hotStroke = ['coalesce', ['get', 'stroke'], currentColor];
-    const hotFill = ['coalesce', ['get', 'fill'], withAlpha(currentColor, 0.25)];
-    const hotWidth = ['coalesce', ['get', 'strokeWidth'], currentStroke];
-    try {
-      for (const id of DRAW_LAYER_IDS) {
-        if (!id.includes('-hot')) continue;
-        if (!(map as any).getLayer?.(id)) continue;
-        if (id.includes('fill')) {
-          try { (map as any).setPaintProperty(id, 'fill-color', hotFill); } catch (_) {}
-        }
-        if (id.includes('stroke') || id.includes('line')) {
-          try { (map as any).setPaintProperty(id, 'line-color', hotStroke); } catch (_) {}
-          try { (map as any).setPaintProperty(id, 'line-width', hotWidth); } catch (_) {}
-        }
-        if (id.includes('point')) {
-          try { (map as any).setPaintProperty(id, 'circle-color', hotStroke); } catch (_) {}
-        }
-      }
-    } catch (_) {}
-  };
-
-  const bringDrawLayersToFront = () => {
-    // Ensure drawings are on top of *all Mapbox style layers* (hex/vector/pmtiles/raster).
-    // Note: Deck.gl MapboxOverlay renders above the Mapbox map canvas; we can't layer MapboxDraw above Deck
-    // without changing the rendering approach. This guarantees top-of-stack within Mapbox itself.
-    try {
-      for (const id of DRAW_LAYER_IDS) {
-        try {
-          if ((map as any).getLayer?.(id)) (map as any).moveLayer(id);
-        } catch (_) {}
-      }
-    } catch (_) {}
-  };
-
-  // Draw layers appear after addControl; apply a few times to be safe.
-  try {
-    applyGlobalDrawStyle();
-    bringDrawLayersToFront();
-    setTimeout(applyGlobalDrawStyle, 50);
-    setTimeout(bringDrawLayersToFront, 60);
-    setTimeout(applyGlobalDrawStyle, 250);
-    setTimeout(bringDrawLayersToFront, 260);
-    setTimeout(applyGlobalDrawStyle, 750);
-    setTimeout(bringDrawLayersToFront, 760);
-  } catch (_) {}
-
-  // If other code adds layers later (e.g. PMTiles async; style reload), keep drawings on top.
-  let styleBumpTimer: any = null;
-  const onStyleData = () => {
-    clearTimeout(styleBumpTimer);
-    styleBumpTimer = setTimeout(() => {
-      try { bringDrawLayersToFront(); } catch (_) {}
-      try { applyGlobalDrawStyle(); } catch (_) {}
-    }, 50);
-  };
-  try { (map as AnyMap).on('styledata', onStyleData); } catch (_) {}
-
-  const applyStyleToIds = (ids: string[]) => {
-    try {
-      for (const id of ids || []) {
-        if (!id) continue;
-        try {
-          draw.setFeatureProperty(id, 'stroke', currentColor);
-          draw.setFeatureProperty(id, 'fill', withAlpha(currentColor, 0.25));
-          draw.setFeatureProperty(id, 'strokeWidth', currentStroke);
-        } catch (_) {}
-      }
-    } catch (_) {}
-  };
-
-  const applyDefaultsToUnstyled = () => {
-    // Guarantee that freshly-created features get styled even if we can't reliably
-    // infer their IDs from the draw.create event payload.
-    try {
-      const all = draw.getAll?.()?.features || [];
-      for (const f of all) {
-        const id = f?.id ? String(f.id) : '';
-        if (!id) continue;
-        const p: any = (f as any).properties || {};
-        const needsStroke = !(typeof p.stroke === 'string' && p.stroke.length);
-        const needsFill = !(typeof p.fill === 'string' && p.fill.length);
-        const needsWidth = !(typeof p.strokeWidth === 'number' && Number.isFinite(p.strokeWidth));
-        if (!needsStroke && !needsFill && !needsWidth) continue;
-        try {
-          if (needsStroke) draw.setFeatureProperty(id, 'stroke', currentColor);
-          if (needsFill) draw.setFeatureProperty(id, 'fill', withAlpha(currentColor, 0.25));
-          if (needsWidth) draw.setFeatureProperty(id, 'strokeWidth', currentStroke);
-        } catch (_) {}
-      }
-    } catch (_) {}
-  };
-
-  function applyStyleToSelection() {
-    try {
-      const ids: string[] = (draw.getSelectedIds && draw.getSelectedIds()) || [];
-      if (!ids.length) return;
-      applyStyleToIds(ids);
-    } catch (_) {}
-  }
-
+  // Mode switching
   function setMode(mode: DrawingMode) {
     currentMode = mode;
-    setActive(btns, mode);
-    try {
-      if (mode === 'select') draw.changeMode('simple_select');
-      else if (mode === 'freehand') draw.changeMode('draw_freehand', { stroke: currentColor, strokeWidth: currentStroke, fill: withAlpha(currentColor, 0.25) });
-      else if (mode === 'line') draw.changeMode('draw_line_string');
-      else if (mode === 'polygon') draw.changeMode('draw_polygon');
-    } catch (_) {}
+
+    // Update button states
+    Object.entries(btns).forEach(([k, el]) => {
+      el.classList.toggle('active', k === mode);
+    });
+
+    // SVG overlay modes: freehand and arrow
+    if (mode === 'freehand' || mode === 'arrow') {
+      svgOverlay.classList.add('active');
+      try { draw.setMode('static'); } catch (_) {}
+    } else {
+      svgOverlay.classList.remove('active');
+      // Terra Draw modes
+      const terraMode = mode === 'line' ? 'linestring' : mode;
+      try { draw.setMode(terraMode); } catch (_) {}
+    }
   }
 
   Object.entries(btns).forEach(([k, el]) => {
     el.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      setMode(k as any);
+      e.preventDefault();
+      e.stopPropagation();
+      setMode(k as DrawingMode);
     });
   });
 
-  // default mode
+  // Set initial mode
   setMode(currentMode);
 
-  // Ensure newly created features get current style, and selection updates reflect in toolbar.
-  const knownIds = new Set<string>();
-  try {
-    const all0 = draw.getAll?.()?.features || [];
-    for (const f of all0) if (f?.id) knownIds.add(String(f.id));
-  } catch (_) {}
-
-  const applyStyleToNewFeatures = () => {
-    try {
-      const all = draw.getAll?.()?.features || [];
-      const newIds: string[] = [];
-      for (const f of all) {
-        const id = f?.id ? String(f.id) : '';
-        if (!id) continue;
-        if (!knownIds.has(id)) {
-          knownIds.add(id);
-          newIds.push(id);
-        }
-      }
-      if (newIds.length) applyStyleToIds(newIds);
-    } catch (_) {}
-  };
-
-  const onDrawModeChange = (e: any) => {
-    // Only stamp defaults once drawing is finished (prevents flicker/blink while dragging).
-    try {
-      const m = String(e?.mode || '');
-      if (m === 'simple_select' || m === 'direct_select') {
-        applyStyleToNewFeatures();
-        applyDefaultsToUnstyled();
-      }
-    } catch (_) {}
-  };
-  const onDrawSelectionChange = () => {
-    try {
-      const ids: string[] = (draw.getSelectedIds && draw.getSelectedIds()) || [];
-      if (!ids.length) return;
-      const f = draw.get(ids[0]);
-      const p = (f?.properties || {}) as any;
-      if (typeof p.stroke === 'string' && p.stroke) {
-        currentColor = p.stroke;
-        colorBtn.style.background = currentColor;
-        colorBtn.style.setProperty('--fm-current-color', currentColor);
-        try { applyGlobalDrawStyle(); } catch (_) {}
-      }
-      if (typeof p.strokeWidth === 'number' && Number.isFinite(p.strokeWidth)) {
-        currentStroke = p.strokeWidth;
-        try { applyGlobalDrawStyle(); } catch (_) {}
-      }
-      // Keep selection highlighting in the palette UI
-      try {
-        Array.from(colorPop.querySelectorAll('.fm-color-opt')).forEach((el) => {
-          (el as HTMLElement).classList.toggle('selected', (el as HTMLElement).style.background === currentColor);
-        });
-      } catch (_) {}
-    } catch (_) {}
-  };
-  try {
-    (map as AnyMap).on('draw.modechange', onDrawModeChange);
-    (map as AnyMap).on('draw.selectionchange', onDrawSelectionChange);
-  } catch (_) {}
-
+  // Close popovers on outside click
   const onDocClick = () => {
     try { colorPop.classList.remove('show'); } catch (_) {}
     try { strokePop.classList.remove('show'); } catch (_) {}
   };
   document.addEventListener('click', onDocClick);
 
-  // ESC should always exit drawing mode back to Select.
-  // This answers the "how do I stop drawing?" question for line/polygon modes.
+  // ESC to return to select mode
   const onKeyDown = (e: KeyboardEvent) => {
-    try {
-      if (e.key !== 'Escape') return;
+    if (e.key === 'Escape') {
       e.preventDefault();
-      e.stopPropagation();
-      try { colorPop.classList.remove('show'); } catch (_) {}
-      try { strokePop.classList.remove('show'); } catch (_) {}
-      try { setMode('select'); } catch (_) {}
-    } catch (_) {}
+      colorPop.classList.remove('show');
+      strokePop.classList.remove('show');
+      setMode('select');
+    }
   };
   document.addEventListener('keydown', onKeyDown, true);
 
-  // If drawing is represented as a layer in the panel, hook it up via visibilityState.
-  const drawingLayerId = dcfg.layerId || 'drawings';
-  const setVisible = (v: boolean) => setDrawVisibility(map as AnyMap, v);
-  // Apply initial visibility based on layer state (if present)
-  try {
-    const v = (config as any).__visibilityState?.[drawingLayerId];
-    if (v === false) setVisible(false);
-  } catch (_) {}
+  // Load initial GeoJSON if provided
+  if (dcfg.initialGeoJSON?.features?.length) {
+    try {
+      dcfg.initialGeoJSON.features.forEach((f: any) => {
+        if (f.geometry?.type === 'LineString' || f.geometry?.type === 'Polygon') {
+          draw.addFeatures([f]);
+          if (f.properties?.stroke) {
+            featureStyles[f.id || ''] = {
+              color: f.properties.stroke,
+              stroke: f.properties.strokeWidth || defaultWidth,
+            };
+          }
+        }
+      });
+    } catch (_) {}
+  }
 
-  return {
-    destroy: () => {
-      try { document.removeEventListener('click', onDocClick); } catch (_) {}
-      try { document.removeEventListener('keydown', onKeyDown, true as any); } catch (_) {}
-      try { toolbar.remove(); } catch (_) {}
-      try {
-        (map as AnyMap).off('draw.modechange', onDrawModeChange);
-        (map as AnyMap).off('draw.selectionchange', onDrawSelectionChange);
-      } catch (_) {}
-      try { (map as AnyMap).off('styledata', onStyleData); } catch (_) {}
-      try { (map as AnyMap).removeControl(draw); } catch (_) {}
-    },
-    setVisible,
-    getGeoJSON: () => {
-      try { return draw.getAll?.() || { type: 'FeatureCollection', features: [] }; } catch (_) {
-        return { type: 'FeatureCollection', features: [] };
-      }
+  // Visibility control
+  let isVisible = true;
+  const setVisible = (v: boolean) => {
+    isVisible = v;
+    toolbar.style.display = v ? 'flex' : 'none';
+    svgOverlay.style.display = v ? 'block' : 'none';
+    // Terra Draw doesn't have a visibility toggle, but we can disable interaction
+    if (!v) {
+      try { draw.setMode('static'); } catch (_) {}
     }
   };
+
+  // Get all drawings as GeoJSON
+  const getGeoJSON = () => {
+    const features: any[] = [];
+
+    // Terra Draw features
+    try {
+      const terraFeatures = draw.getSnapshot() || [];
+      terraFeatures.forEach((f: any) => {
+        const style = featureStyles[f.id] || {};
+        features.push({
+          ...f,
+          properties: {
+            ...f.properties,
+            stroke: style.color || currentColor,
+            strokeWidth: style.stroke || currentStroke,
+            fill: hexToRgba(style.color || currentColor, 0.25),
+          },
+        });
+      });
+    } catch (_) {}
+
+    // Freehand paths as LineStrings
+    freehandPaths.forEach((path) => {
+      features.push({
+        type: 'Feature',
+        id: path.id,
+        properties: {
+          stroke: path.color,
+          strokeWidth: path.stroke,
+          drawingType: path.type,
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: path.points.map(p => [p.lng, p.lat]),
+        },
+      });
+    });
+
+    return { type: 'FeatureCollection', features };
+  };
+
+  // Cleanup
+  const destroy = () => {
+    try { document.removeEventListener('click', onDocClick); } catch (_) {}
+    try { document.removeEventListener('keydown', onKeyDown, true as any); } catch (_) {}
+    try { toolbar.remove(); } catch (_) {}
+    try { svgOverlay.remove(); } catch (_) {}
+    try { (map as any).off('move', redrawFreehandPaths); } catch (_) {}
+    try { (map as any).off('zoom', redrawFreehandPaths); } catch (_) {}
+    try { draw.stop(); } catch (_) {}
+  };
+
+  return { destroy, setVisible, getGeoJSON };
 }
-
-

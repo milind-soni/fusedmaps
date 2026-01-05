@@ -1,11 +1,11 @@
 /**
  * Drawing mode (experimental)
  *
- * Uses Mapbox GL Draw under the hood, but provides a custom bottom toolbar UI
- * inspired by `open_felt.py`.
+ * Hybrid approach inspired by `open_felt.py`:
+ * - SVG overlay for freehand/arrow (direct color application, no expression issues)
+ * - Terra Draw for shapes (polygon, line, rectangle, circle) with per-feature style functions
  *
- * NOTE: We intentionally keep this module self-contained and only load external
- * dependencies (mapbox-gl-draw) when enabled.
+ * This fixes the coloring issues that plagued the Mapbox GL Draw approach.
  */
 import type { FusedMapsConfig } from '../types';
 export declare function setupDrawing(map: mapboxgl.Map, config: FusedMapsConfig): Promise<{

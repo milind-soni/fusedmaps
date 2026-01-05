@@ -500,7 +500,10 @@ export async function setupDrawing(
         (el as HTMLElement).classList.toggle('selected', (el as HTMLElement).style.background === currentColor);
       });
       colorPop.classList.remove('show');
+      // Only recolor selected features (if any). Otherwise, this sets the color for the *next* draw.
       applyStyleToSelection();
+      // If we're currently in a drawing mode, re-enter it so the next feature picks up the new opts.
+      try { setMode(currentMode); } catch (_) {}
     });
     colorPop.appendChild(opt);
   });
@@ -539,6 +542,7 @@ export async function setupDrawing(
       });
       strokePop.classList.remove('show');
       applyStyleToSelection();
+      try { setMode(currentMode); } catch (_) {}
     });
     strokePop.appendChild(opt);
   });
@@ -583,23 +587,33 @@ export async function setupDrawing(
   ];
 
   const applyGlobalDrawStyle = () => {
-    // Update paint properties so the current toolbar color/width applies immediately,
-    // including for the active "hot" feature while dragging.
-    const stroke = ['coalesce', ['get', 'stroke'], currentColor];
-    const fill = ['coalesce', ['get', 'fill'], withAlpha(currentColor, 0.25)];
-    const width = ['coalesce', ['get', 'strokeWidth'], currentStroke];
+    // IMPORTANT:
+    // Do NOT mutate the global Draw style defaults based on the toolbar selection.
+    // If we set the Mapbox GL Draw paint expressions to fall back to `currentColor`,
+    // every existing feature (that relies on fallback defaults) can appear to change color.
+    //
+    // Desired behavior:
+    // - Changing color/stroke affects *the next feature you draw* (and the active "hot" preview),
+    //   not every existing feature.
+    //
+    // We therefore only update the "hot" layers (active drawing/editing) to use currentColor/currentStroke
+    // as fallbacks. Cold/static layers keep their original defaults.
+    const hotStroke = ['coalesce', ['get', 'stroke'], currentColor];
+    const hotFill = ['coalesce', ['get', 'fill'], withAlpha(currentColor, 0.25)];
+    const hotWidth = ['coalesce', ['get', 'strokeWidth'], currentStroke];
     try {
       for (const id of DRAW_LAYER_IDS) {
+        if (!id.includes('-hot')) continue;
         if (!(map as any).getLayer?.(id)) continue;
         if (id.includes('fill')) {
-          try { (map as any).setPaintProperty(id, 'fill-color', fill); } catch (_) {}
+          try { (map as any).setPaintProperty(id, 'fill-color', hotFill); } catch (_) {}
         }
         if (id.includes('stroke') || id.includes('line')) {
-          try { (map as any).setPaintProperty(id, 'line-color', stroke); } catch (_) {}
-          try { (map as any).setPaintProperty(id, 'line-width', width); } catch (_) {}
+          try { (map as any).setPaintProperty(id, 'line-color', hotStroke); } catch (_) {}
+          try { (map as any).setPaintProperty(id, 'line-width', hotWidth); } catch (_) {}
         }
         if (id.includes('point')) {
-          try { (map as any).setPaintProperty(id, 'circle-color', stroke); } catch (_) {}
+          try { (map as any).setPaintProperty(id, 'circle-color', hotStroke); } catch (_) {}
         }
       }
     } catch (_) {}

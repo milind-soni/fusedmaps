@@ -858,13 +858,35 @@ export async function setupDrawing(
     } catch (_) {}
   }
 
+  // Hide/show Terra Draw layers on the map
+  function setTerraDrawLayersVisibility(visible: boolean) {
+    try {
+      const style = (map as any).getStyle?.();
+      if (!style?.layers) return;
+      
+      // Terra Draw creates layers with 'terra-draw' in their ID
+      for (const layer of style.layers) {
+        const id = (layer as any)?.id;
+        if (typeof id === 'string' && id.includes('terra-draw')) {
+          try {
+            (map as any).setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   // Visibility control
   let isVisible = true;
   const setVisible = (v: boolean) => {
     isVisible = v;
     toolbar.style.display = v ? 'flex' : 'none';
     svgOverlay.style.display = v ? 'block' : 'none';
-    // Terra Draw doesn't have a visibility toggle, but we can disable interaction
+    
+    // Hide/show Terra Draw layers
+    setTerraDrawLayersVisibility(v);
+    
+    // Disable interaction when hidden
     if (!v) {
       try { draw.setMode('static'); } catch (_) {}
     }

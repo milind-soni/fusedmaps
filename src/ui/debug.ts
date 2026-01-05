@@ -1432,15 +1432,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const onDomainSliderInput = () => {
     // While dragging: update only the input boxes
     syncDomainInputsFromSlider();
-    // For PMTiles (and other non-hex layers), users expect live recolor while dragging.
-    // Do a lightweight repaint on the next animation frame to avoid thrashing.
-    try { markDomainFromUser(); } catch (_) {}
-    try {
-      (window as any).__fm_domain_raf && cancelAnimationFrame((window as any).__fm_domain_raf);
-      (window as any).__fm_domain_raf = requestAnimationFrame(() => {
-        try { applyUIToLayer(); } catch (_) {}
-      });
-    } catch (_) {}
   };
 
   const onDomainSliderChange = () => {

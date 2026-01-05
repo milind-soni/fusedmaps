@@ -6,6 +6,8 @@
  */
 import type { FusedMapsConfig, FusedMapsInstance } from './types';
 export * from './types';
+export { createLayerStore, LayerStore } from './state';
+export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
 /**
  * Initialize a FusedMaps instance
  */

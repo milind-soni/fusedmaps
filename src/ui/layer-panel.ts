@@ -1,21 +1,26 @@
 /**
  * Layer visibility toggle panel
  * Matching the original map_utils.py design with eye icons and gradient strips
+ * 
+ * Now integrates with LayerStore for centralized state management.
  */
 
-import type { LayerConfig, HexLayerConfig, VectorLayerConfig } from '../types';
+import type { LayerConfig, HexLayerConfig, VectorLayerConfig, PMTilesLayerConfig } from '../types';
 import { getPaletteColors, toRgba } from '../color/palettes';
+import type { LayerStore } from '../state';
 
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
 
 let visibilityCallback: VisibilityCallback | null = null;
-let lastLayers: LayerConfig[] = [];
-let lastVisibilityState: Record<string, boolean> = {};
+let unsubscribeStore: (() => void) | null = null;
 let installedListeners = false;
 
 // Eye icon SVGs
 const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
 const EYE_CLOSED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>';
+
+// Drag icons for reordering
+const DRAG_HANDLE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.5"><path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>';
 
 /**
  * Setup the layer panel
@@ -23,11 +28,11 @@ const EYE_CLOSED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="cu
 export function setupLayerPanel(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
-  onVisibilityChange: VisibilityCallback
-): void {
+  onVisibilityChange: VisibilityCallback,
+  store?: LayerStore
+): { destroy: () => void } {
   visibilityCallback = onVisibilityChange;
-  lastLayers = layers;
-  lastVisibilityState = visibilityState;
+  const _store = store;
   
   // Create panel container if it doesn't exist
   let panel = document.getElementById('layer-panel');
@@ -47,40 +52,86 @@ export function setupLayerPanel(
   
   // Expose layer item click handler
   (window as any).onLayerItemClick = (e: Event, layerId: string) => {
-    // If click was on the eye icon, don't toggle (eye handles its own click)
+    // If click was on the eye icon or drag handle, don't toggle
     try {
-      if (e && (e.target as HTMLElement).closest?.('.layer-eye')) return;
+      const target = e.target as HTMLElement;
+      if (target.closest?.('.layer-eye') || target.closest?.('.layer-drag')) return;
     } catch (_) {}
     
-    const currentState = visibilityState[layerId] !== false;
+    const currentState = _store ? _store.get(layerId)?.visible !== false : visibilityState[layerId] !== false;
     if (visibilityCallback) {
       visibilityCallback(layerId, !currentState);
     }
   };
   
+  // Initial render
   updateLayerPanel(layers, visibilityState);
 
-  // Keep the "gutter" gradient strips in sync when layer styles change (palette/domain/etc).
-  // We reuse the existing legend update event since it's already dispatched on style edits.
+  // Subscribe to store changes for automatic updates (when provided)
+  if (_store) {
+    unsubscribeStore = _store.on('*', (event) => {
+      if (event.type === 'visibility' || event.type === 'reorder' || event.type === 'add' || event.type === 'remove' || event.type === 'batch') {
+        renderPanel(_store);
+      }
+    });
+  }
+
+  // Keep the "gutter" gradient strips in sync when layer styles change
   if (!installedListeners) {
     installedListeners = true;
     try {
       window.addEventListener('fusedmaps:legend:update', () => {
-        try { updateLayerPanel(lastLayers, lastVisibilityState); } catch (_) {}
+        try { if (_store) renderPanel(_store); } catch (_) {}
       });
     } catch (_) {}
   }
+
+  return {
+    destroy: () => {
+      if (unsubscribeStore) {
+        unsubscribeStore();
+        unsubscribeStore = null;
+      }
+    }
+  };
 }
 
 /**
- * Update the layer panel UI
+ * Render the panel from store state
+ */
+function renderPanel(store: LayerStore): void {
+  const list = document.getElementById('layer-list');
+  if (!list) return;
+  
+  const layers = store.getAll();
+  
+  list.innerHTML = layers.map(layerState => {
+    const layer = layerState.config;
+    const visible = layerState.visible;
+    const stripBg = getLayerStripGradient(layer);
+    const eyeIcon = visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
+    
+    return `
+      <div class="layer-item ${visible ? '' : 'disabled'}" 
+           data-layer-id="${layer.id}"
+           data-order="${layerState.order}"
+           style="--layer-strip: ${stripBg};" 
+           onclick="onLayerItemClick(event, '${layer.id}')">
+        <span class="layer-drag" title="Drag to reorder">${DRAG_HANDLE_SVG}</span>
+        <span class="layer-name">${layer.name}</span>
+        <span class="layer-eye" onclick="event.stopPropagation(); toggleLayerVisibility('${layer.id}', ${!visible})">${eyeIcon}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Update the layer panel UI (legacy interface for compatibility)
  */
 export function updateLayerPanel(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>
 ): void {
-  lastLayers = layers;
-  lastVisibilityState = visibilityState;
   const list = document.getElementById('layer-list');
   if (!list) return;
   
@@ -151,6 +202,19 @@ function getLayerStripGradient(layer: LayerConfig): string {
       if (paletteName) {
         const cols = getPaletteColors(paletteName, 7);
         if (cols?.length) stripBg = toGradient(cols) || stripBg;
+      }
+    }
+  } else if (layer.layerType === 'pmtiles') {
+    const pmLayer = layer as PMTilesLayerConfig;
+    if (pmLayer.fillColorConfig && typeof pmLayer.fillColorConfig === 'object') {
+      const paletteName = (pmLayer.fillColorConfig as any).colors;
+      if (paletteName) {
+        let cols = getPaletteColors(paletteName, 7);
+        if (cols?.length) {
+          const wantsReverse = !!(pmLayer.fillColorConfig as any).reverse;
+          if (wantsReverse) cols = [...cols].reverse();
+          stripBg = toGradient(cols) || stripBg;
+        }
       }
     }
   } else if (layer.layerType === 'raster') {

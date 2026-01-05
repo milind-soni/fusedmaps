@@ -153,7 +153,7 @@ function resolvePalette(paletteName: string, steps: number = 7): string[] {
 /**
  * Build a Mapbox GL color expression from a color config
  */
-function buildColorExpression(
+export function buildPMTilesColorExpression(
   colorConfig: any,
   attribute: string,
   defaultColor: string = '#ff8c00'
@@ -321,13 +321,13 @@ export async function addPMTilesLayers(
       const renderPolygons = (layer as any).renderPolygons !== false && (layer.vectorLayer as any)?.renderPolygons !== false;
       
       // Determine colors
-      const fillColorExpr = buildColorExpression(
+      const fillColorExpr = buildPMTilesColorExpression(
         layer.fillColorConfig || vectorStyle.getFillColor,
         layer.colorAttribute || 'value',
         '#ff8c00'
       );
       
-      const lineColorExpr = buildColorExpression(
+      const lineColorExpr = buildPMTilesColorExpression(
         layer.lineColorConfig || vectorStyle.getLineColor,
         layer.colorAttribute || 'value',
         '#ffffff'

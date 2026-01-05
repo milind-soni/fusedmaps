@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>FusedMaps - Layer Store Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
+  <link href="dist/fusedmaps.css" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { width: 100%; height: 100%; }
+    
+    /* Test controls */
+    .test-controls {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(30, 30, 30, 0.95);
+      padding: 16px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-family: system-ui, sans-serif;
+      color: #fff;
+      max-width: 300px;
+    }
+    .test-controls h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #E8FF59;
+    }
+    .test-controls button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+    }
+    .test-controls button:hover {
+      background: #444;
+    }
+    .test-controls button:active {
+      background: #555;
+    }
+    .test-controls .info {
+      font-size: 11px;
+      color: #888;
+      padding: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <div class="test-controls">
+    <h3>Layer Store Test</h3>
+    <button onclick="addNewLayer()">➕ Add Random Layer</button>
+    <button onclick="removeLastLayer()">➖ Remove Last Layer</button>
+    <button onclick="toggleFirstLayer()">👁 Toggle First Layer</button>
+    <button onclick="moveLayerUp()">⬆️ Move First Layer Up</button>
+    <button onclick="moveLayerDown()">⬇️ Move First Layer Down</button>
+    <button onclick="updateLayerColor()">🎨 Change First Layer Color</button>
+    <button onclick="logStore()">📋 Log Store State</button>
+    <div class="info" id="layer-count">Layers: 0</div>
+  </div>
+
+  <script src="dist/fusedmaps.umd.js"></script>
+  <script>
+    // Sample GeoJSON data
+    function randomPoint() {
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { name: 'Random Point', value: Math.floor(Math.random() * 100) },
+            geometry: {
+              type: 'Point',
+              coordinates: [-122 + Math.random() * 0.1, 37.7 + Math.random() * 0.1]
+            }
+          }
+        ]
+      };
+    }
+
+    function randomPolygon() {
+      const cx = -122 + Math.random() * 0.1;
+      const cy = 37.7 + Math.random() * 0.1;
+      const size = 0.01 + Math.random() * 0.02;
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { name: 'Random Polygon', area: Math.floor(Math.random() * 1000) },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [cx - size, cy - size],
+                [cx + size, cy - size],
+                [cx + size, cy + size],
+                [cx - size, cy + size],
+                [cx - size, cy - size]
+              ]]
+            }
+          }
+        ]
+      };
+    }
+
+    // Initial layer
+    const initialLayers = [
+      {
+        id: 'layer-1',
+        name: 'Initial Layer',
+        layerType: 'vector',
+        geojson: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { name: 'San Francisco', value: 42 },
+              geometry: {
+                type: 'Polygon',
+                coordinates: [[
+                  [-122.42, 37.76],
+                  [-122.40, 37.76],
+                  [-122.40, 37.78],
+                  [-122.42, 37.78],
+                  [-122.42, 37.76]
+                ]]
+              }
+            }
+          ]
+        },
+        fillColorRgba: 'rgba(100, 200, 100, 0.6)',
+        lineColorRgba: 'rgba(255, 255, 255, 0.8)',
+        lineWidth: 2,
+        isFilled: true,
+        isStroked: true
+      }
+    ];
+
+    // Initialize FusedMaps
+    const instance = FusedMaps.init({
+      containerId: 'map',
+      mapboxToken: 'pk.eyJ1IjoiaXNhYWNmdXNlZGxhYnMiLCJhIjoiY2xicGdwdHljMHQ1bzN4cWhtNThvbzdqcSJ9.73fb6zHMeO_c8eAXpZVNrA',
+      styleUrl: 'mapbox://styles/mapbox/dark-v11',
+      initialViewState: {
+        longitude: -122.41,
+        latitude: 37.77,
+        zoom: 12
+      },
+      layers: initialLayers,
+      sidebar: 'show',
+      ui: {
+        legend: true,
+        layerPanel: true,
+        tooltip: true,
+        theme: 'dark'
+      }
+    });
+
+    let layerCounter = 1;
+
+    function updateLayerCount() {
+      const count = instance.getLayers().length;
+      document.getElementById('layer-count').textContent = `Layers: ${count}`;
+    }
+
+    // Test functions
+    function addNewLayer() {
+      layerCounter++;
+      const isPolygon = Math.random() > 0.5;
+      const colors = [
+        'rgba(255, 107, 107, 0.6)',
+        'rgba(78, 205, 196, 0.6)',
+        'rgba(69, 183, 209, 0.6)',
+        'rgba(150, 206, 180, 0.6)',
+        'rgba(255, 234, 167, 0.6)',
+        'rgba(221, 160, 221, 0.6)',
+        'rgba(152, 216, 200, 0.6)'
+      ];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      const newLayer = {
+        id: `layer-${layerCounter}`,
+        name: `Layer ${layerCounter} (${isPolygon ? 'Polygon' : 'Point'})`,
+        layerType: 'vector',
+        geojson: isPolygon ? randomPolygon() : randomPoint(),
+        fillColorRgba: color,
+        lineColorRgba: '#ffffff',
+        lineWidth: 1,
+        pointRadius: 8,
+        isFilled: true,
+        isStroked: true
+      };
+      
+      const state = instance.addLayer(newLayer);
+      console.log('Added layer:', state);
+      updateLayerCount();
+    }
+
+    function removeLastLayer() {
+      const layers = instance.getLayers();
+      if (layers.length === 0) {
+        console.log('No layers to remove');
+        return;
+      }
+      const lastLayer = layers[layers.length - 1];
+      const removed = instance.removeLayer(lastLayer.config.id);
+      console.log('Removed layer:', lastLayer.config.id, removed);
+      updateLayerCount();
+    }
+
+    function toggleFirstLayer() {
+      const layers = instance.getLayers();
+      if (layers.length === 0) return;
+      const first = layers[0];
+      instance.setLayerVisibility(first.config.id, !first.visible);
+      console.log('Toggled layer:', first.config.id, 'to', !first.visible);
+    }
+
+    function moveLayerUp() {
+      const layers = instance.getLayers();
+      if (layers.length < 2) {
+        console.log('Need at least 2 layers to reorder');
+        return;
+      }
+      const first = layers[0];
+      instance.moveLayerUp(first.config.id);
+      console.log('Moved layer up:', first.config.id);
+    }
+
+    function moveLayerDown() {
+      const layers = instance.getLayers();
+      if (layers.length < 2) return;
+      const last = layers[layers.length - 1];
+      instance.moveLayerDown(last.config.id);
+      console.log('Moved layer down:', last.config.id);
+    }
+
+    function updateLayerColor() {
+      const layers = instance.getLayers();
+      if (layers.length === 0) return;
+      const first = layers[0];
+      const colors = [
+        'rgba(255, 107, 107, 0.6)',
+        'rgba(78, 205, 196, 0.6)',
+        'rgba(69, 183, 209, 0.6)',
+        'rgba(150, 206, 180, 0.6)',
+        'rgba(255, 234, 167, 0.6)'
+      ];
+      const newColor = colors[Math.floor(Math.random() * colors.length)];
+      instance.updateLayer(first.config.id, { fillColorRgba: newColor });
+      console.log('Updated layer color:', first.config.id, 'to', newColor);
+    }
+
+    function logStore() {
+      console.log('=== Layer Store State ===');
+      const layers = instance.getLayers();
+      layers.forEach((l, i) => {
+        console.log(`[${i}] ${l.config.id}: "${l.config.name}" visible=${l.visible} order=${l.order}`);
+      });
+      console.log('Total layers:', layers.length);
+      console.log('Store export:', instance.store.export());
+    }
+
+    // Initial count
+    setTimeout(updateLayerCount, 100);
+
+    // Expose instance globally for console testing
+    window.fused = instance;
+    console.log('FusedMaps instance available as `fused`');
+    console.log('Try: fused.addLayer({...}), fused.removeLayer("id"), fused.getLayers()');
+  </script>
+</body>
+</html>
+

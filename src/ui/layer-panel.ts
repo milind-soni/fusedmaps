@@ -14,6 +14,44 @@ type VisibilityCallback = (layerId: string, visible: boolean) => void;
 let visibilityCallback: VisibilityCallback | null = null;
 let unsubscribeStore: (() => void) | null = null;
 let installedListeners = false;
+let clickHandlerInstalled = false;
+let activeStore: LayerStore | null = null;
+let activeVisibilityState: Record<string, boolean> = {};
+let panelEl: HTMLElement | null = null;
+
+function getCurrentVisible(layerId: string): boolean {
+  try {
+    if (activeStore) return activeStore.get(layerId)?.visible !== false;
+    return activeVisibilityState[layerId] !== false;
+  } catch (_) {
+    return true;
+  }
+}
+
+function handlePanelClick(e: MouseEvent): void {
+  try {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // Ignore clicks on drag handle (reorder not implemented yet)
+    if (target.closest?.('.layer-drag')) return;
+
+    const item = target.closest?.('.layer-item') as HTMLElement | null;
+    if (!item) return;
+    const layerId = item.getAttribute('data-layer-id') || '';
+    if (!layerId) return;
+
+    const isEye = !!target.closest?.('.layer-eye');
+
+    // Clicking on the item body toggles; clicking on the eye also toggles.
+    // (We don't need stopPropagation because this is a single delegated handler.)
+    if (isEye || target.closest?.('.layer-item')) {
+      const current = getCurrentVisible(layerId);
+      visibilityCallback?.(layerId, !current);
+      e.preventDefault();
+    }
+  } catch (_) {}
+}
 
 // Eye icon SVGs
 const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
@@ -33,6 +71,8 @@ export function setupLayerPanel(
 ): { destroy: () => void } {
   visibilityCallback = onVisibilityChange;
   const _store = store;
+  activeStore = _store || null;
+  activeVisibilityState = visibilityState || {};
   
   // Create panel container if it doesn't exist
   let panel = document.getElementById('layer-panel');
@@ -42,30 +82,19 @@ export function setupLayerPanel(
     panel.innerHTML = `<div id="layer-list"></div>`;
     document.body.appendChild(panel);
   }
+  panelEl = panel;
   
-  // Expose toggle function globally
-  (window as any).toggleLayerVisibility = (layerId: string, visible: boolean) => {
-    if (visibilityCallback) {
-      visibilityCallback(layerId, visible);
-    }
-  };
-  
-  // Expose layer item click handler
-  (window as any).onLayerItemClick = (e: Event, layerId: string) => {
-    // If click was on the eye icon or drag handle, don't toggle
+  // One delegated click handler for the whole panel (no window globals, no inline onclick)
+  if (!clickHandlerInstalled) {
     try {
-      const target = e.target as HTMLElement;
-      if (target.closest?.('.layer-eye') || target.closest?.('.layer-drag')) return;
+      panel.addEventListener('click', handlePanelClick as any);
+      clickHandlerInstalled = true;
     } catch (_) {}
-    
-    const currentState = _store ? _store.get(layerId)?.visible !== false : visibilityState[layerId] !== false;
-    if (visibilityCallback) {
-      visibilityCallback(layerId, !currentState);
-    }
-  };
+  }
   
   // Initial render
-  updateLayerPanel(layers, visibilityState);
+  if (_store) renderPanel(_store);
+  else updateLayerPanel(layers, visibilityState);
 
   // Subscribe to store changes for automatic updates (when provided)
   if (_store) {
@@ -92,6 +121,13 @@ export function setupLayerPanel(
         unsubscribeStore();
         unsubscribeStore = null;
       }
+      // Remove click handler if this is the last/only panel instance
+      try {
+        panelEl?.removeEventListener('click', handlePanelClick as any);
+      } catch (_) {}
+      clickHandlerInstalled = false;
+      panelEl = null;
+      activeStore = null;
     }
   };
 }
@@ -115,11 +151,10 @@ function renderPanel(store: LayerStore): void {
       <div class="layer-item ${visible ? '' : 'disabled'}" 
            data-layer-id="${layer.id}"
            data-order="${layerState.order}"
-           style="--layer-strip: ${stripBg};" 
-           onclick="onLayerItemClick(event, '${layer.id}')">
+           style="--layer-strip: ${stripBg};">
         <span class="layer-drag" title="Drag to reorder">${DRAG_HANDLE_SVG}</span>
         <span class="layer-name">${layer.name}</span>
-        <span class="layer-eye" onclick="event.stopPropagation(); toggleLayerVisibility('${layer.id}', ${!visible})">${eyeIcon}</span>
+        <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
       </div>
     `;
   }).join('');
@@ -134,6 +169,7 @@ export function updateLayerPanel(
 ): void {
   const list = document.getElementById('layer-list');
   if (!list) return;
+  activeVisibilityState = visibilityState || {};
   
   list.innerHTML = layers.map(layer => {
     const visible = visibilityState[layer.id] !== false;
@@ -143,10 +179,9 @@ export function updateLayerPanel(
     return `
       <div class="layer-item ${visible ? '' : 'disabled'}" 
            data-layer-id="${layer.id}" 
-           style="--layer-strip: ${stripBg};" 
-           onclick="onLayerItemClick(event, '${layer.id}')">
+           style="--layer-strip: ${stripBg};">
         <span class="layer-name">${layer.name}</span>
-        <span class="layer-eye" onclick="event.stopPropagation(); toggleLayerVisibility('${layer.id}', ${!visible})">${eyeIcon}</span>
+        <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
       </div>
     `;
   }).join('');

@@ -11,6 +11,10 @@ import { hexToGeoJSON, updateStaticHexLayer } from '../layers/hex';
 import { getLayerGeoJSONs } from '../layers';
 import { buildPMTilesColorExpression } from '../layers/pmtiles';
 import { buildColorExpr } from '../color/expressions';
+import { deepDelta, toPyLiteral } from './debug/export';
+import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from './debug/palettes';
+import { ensureDebugShell, queryDebugElements } from './debug/template';
+import { applyDebugUIToLayer } from './debug/apply';
 
 export interface DebugHandle {
   destroy: () => void;
@@ -43,21 +47,6 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function getCurrentLayerVisibility(map: mapboxgl.Map, layerId: string): boolean {
-  try {
-    const style: any = map.getStyle?.();
-    const layers: any[] = style?.layers || [];
-    const ids = [`${layerId}-fill`, `${layerId}-extrusion`, `${layerId}-outline`];
-    for (const id of ids) {
-      const l = layers.find((x: any) => x && x.id === id);
-      if (!l) continue;
-      const vis = l.layout?.visibility;
-      return vis !== 'none';
-    }
-  } catch (_) {}
-  return true;
-}
-
 function ensureColorContinuousCfg(obj: any) {
   if (!obj || typeof obj !== 'object') return null;
   if (obj['@@function'] !== 'colorContinuous') return null;
@@ -87,45 +76,9 @@ function getVectorAttrCandidates(layer: VectorLayerConfig): string[] {
   }
 }
 
-function setPaintSafe(map: mapboxgl.Map, layerId: string, prop: string, value: any) {
-  try {
-    if (map.getLayer(layerId)) {
-      map.setPaintProperty(layerId, prop as any, value as any);
-    }
-  } catch (_) {}
-}
+// (Mapbox paint helpers and hexToRgb moved to ./debug/apply)
 
-function setPaintSafePrefix(map: mapboxgl.Map, layerIdPrefix: string, prop: string, value: any) {
-  try {
-    const layers: any[] = (map.getStyle?.()?.layers || []) as any[];
-    for (const l of layers) {
-      const id = l?.id as string | undefined;
-      if (id && id.startsWith(layerIdPrefix) && map.getLayer(id)) {
-        try {
-          map.setPaintProperty(id, prop as any, value as any);
-        } catch (_) {}
-      }
-    }
-  } catch (_) {}
-}
-
-function hexToRgbArr(hex: string, withAlpha255?: number): number[] | null {
-  try {
-    const c = String(hex || '').trim();
-    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return null;
-    const r = parseInt(c.slice(1, 3), 16);
-    const g = parseInt(c.slice(3, 5), 16);
-    const b = parseInt(c.slice(5, 7), 16);
-    if (typeof withAlpha255 === 'number' && Number.isFinite(withAlpha255)) {
-      return [r, g, b, Math.max(0, Math.min(255, Math.round(withAlpha255)))];
-    }
-    return [r, g, b];
-  } catch (_) {
-    return null;
-  }
-}
-
-// --- Defaults + delta helpers (debug output only) ---
+// --- Defaults (debug output only) ---
 const DEFAULT_HEX_STYLE: any = {
   filled: true,
   stroked: true,
@@ -168,285 +121,9 @@ const DEFAULT_VECTOR_STYLE: any = {
   }
 };
 
-function isPlainObject(x: any) {
-  return !!x && typeof x === 'object' && !Array.isArray(x);
-}
-
-function deepEqual(a: any, b: any): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
-    return true;
-  }
-  if (isPlainObject(a) && isPlainObject(b)) {
-    const ka = Object.keys(a);
-    const kb = Object.keys(b);
-    if (ka.length !== kb.length) return false;
-    for (const k of ka) {
-      if (!(k in b)) return false;
-      if (!deepEqual(a[k], b[k])) return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-function deepDelta(base: any, cur: any): any {
-  // Return only keys in `cur` that differ from `base`.
-  if (deepEqual(base, cur)) return undefined;
-  if (Array.isArray(cur)) return cur;
-  if (!isPlainObject(cur)) return cur;
-
-  const out: any = {};
-  for (const k of Object.keys(cur)) {
-    const d = deepDelta(base?.[k], cur[k]);
-    if (d !== undefined) out[k] = d;
-  }
-  return Object.keys(out).length ? out : undefined;
-}
-
-function toPyLiteral(x: any, indent = 0): string {
-  const pad = (n: number) => '  '.repeat(n);
-  const next = indent + 1;
-
-  if (x === null || x === undefined) return 'None';
-  const t = typeof x;
-  if (t === 'boolean') return x ? 'True' : 'False';
-  if (t === 'number') return Number.isFinite(x) ? String(x) : 'None';
-  if (t === 'string') {
-    // Special marker: allow embedding a raw Python symbol in the export, e.g. "@@py:df".
-    // This lets users get `data=df` in the paste-back snippet (the browser can't infer var names).
-    if (x.startsWith('@@py:')) {
-      const sym = x.slice('@@py:'.length).trim();
-      // Safety: only allow simple identifiers / dotted paths.
-      if (/^[A-Za-z_][A-Za-z0-9_\\.]*$/.test(sym)) return sym;
-    }
-    return JSON.stringify(x);
-  }
-  if (Array.isArray(x)) {
-    if (!x.length) return '[]';
-    const items = x.map((v) => `${pad(next)}${toPyLiteral(v, next)}`);
-    return `[\n${items.join(',\n')}\n${pad(indent)}]`;
-  }
-  if (isPlainObject(x)) {
-    const keys = Object.keys(x);
-    if (!keys.length) return '{}';
-    const items = keys.map((k) => `${pad(next)}${JSON.stringify(k)}: ${toPyLiteral((x as any)[k], next)}`);
-    return `{\n${items.join(',\n')}\n${pad(indent)}}`;
-  }
-  // Fallback for anything else
-  try {
-    return JSON.stringify(String(x));
-  } catch {
-    return 'None';
-  }
-}
-
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
   const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
-  let shell = document.getElementById('debug-shell') as HTMLElement | null;
-  if (!shell) {
-    shell = document.createElement('div');
-    shell.id = 'debug-shell';
-    shell.innerHTML = `
-      <div id="debug-panel">
-        <div id="debug-content">
-          <div class="debug-section">
-            <div class="debug-section-title">Editing Layer</div>
-            <div class="debug-row">
-              <span class="debug-label">Layer</span>
-              <select class="debug-select" id="dbg-layer-select"></select>
-            </div>
-          </div>
-
-          <div class="debug-section" id="dbg-hex-section">
-            <div class="debug-section-title">Hex Layer</div>
-            <div class="debug-toggles">
-              <label class="debug-checkbox"><input type="checkbox" id="dbg-filled" checked /> Filled</label>
-              <label class="debug-checkbox"><input type="checkbox" id="dbg-stroked" checked /> Stroked</label>
-              <label class="debug-checkbox"><input type="checkbox" id="dbg-extruded" /> Extruded</label>
-            </div>
-            <div id="dbg-extrusion-controls" style="display:none;margin-top:8px;">
-              <div class="debug-row">
-                <span class="debug-label">Height attr</span>
-                <select class="debug-select" id="dbg-elev-attr"></select>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Height scale</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-elev-scale" step="0.1" value="1" />
-              </div>
-            </div>
-            <div class="debug-row" style="margin-top:8px;">
-              <span class="debug-label">Opacity</span>
-              <input type="range" class="debug-slider" id="dbg-opacity-slider" min="0" max="1" step="0.05" value="1" />
-              <input type="number" class="debug-input debug-input-sm" id="dbg-opacity" step="0.1" min="0" max="1" value="1" />
-            </div>
-          </div>
-
-          <div class="debug-section" id="fill-color-section">
-            <div class="debug-section-title">Fill Color</div>
-            <div class="debug-row">
-              <span class="debug-label">Function</span>
-              <select class="debug-select" id="dbg-fill-fn">
-                <option value="colorContinuous">colorContinuous</option>
-                <option value="static">Static Color</option>
-              </select>
-            </div>
-            <div id="fill-fn-options">
-              <div class="debug-row">
-                <span class="debug-label">Attribute</span>
-                <select class="debug-select" id="dbg-attr"></select>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Palette</span>
-                <select class="debug-select pal-hidden" id="dbg-palette"></select>
-                <div class="pal-dd" id="dbg-palette-dd">
-                  <button type="button" class="pal-trigger" id="dbg-palette-trigger" title="Palette">
-                    <span class="pal-name" id="dbg-palette-name">Palette</span>
-                    <span class="pal-swatch" id="dbg-palette-swatch"></span>
-                  </button>
-                  <div class="pal-menu" id="dbg-palette-menu" style="display:none;"></div>
-                </div>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label"></span>
-                <label class="debug-checkbox" style="margin-left:auto;"><input type="checkbox" id="dbg-fill-reverse" /> Reverse</label>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Domain</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-domain-min" step="0.1" placeholder="min" />
-                <span style="color:#666;">–</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-domain-max" step="0.1" placeholder="max" />
-              </div>
-            <div class="debug-row">
-              <span class="debug-label"></span>
-              <div class="debug-dual-range" aria-label="Domain range">
-                <input type="range" class="debug-range-min" id="dbg-domain-range-min" min="0" max="100" step="0.1" value="0" />
-                <input type="range" class="debug-range-max" id="dbg-domain-range-max" min="0" max="100" step="0.1" value="100" />
-              </div>
-            </div>
-              <div class="debug-row">
-                <span class="debug-label">Steps</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-steps" step="1" min="2" max="20" value="7" />
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Null Color</span>
-                <input type="color" class="debug-color" id="dbg-null-color" value="#b8b8b8" />
-                <span class="debug-color-label" id="dbg-null-color-label">#b8b8b8</span>
-              </div>
-            </div>
-            <div id="fill-static-options" style="display:none;">
-              <div class="debug-row">
-                <span class="debug-label">Color</span>
-                <input type="color" class="debug-color" id="dbg-fill-static" value="#0090ff" />
-                <span class="debug-color-label" id="dbg-fill-static-label">#0090ff</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="debug-section" id="line-color-section">
-            <div class="debug-section-title">Line Color</div>
-            <div class="debug-row">
-              <span class="debug-label">Function</span>
-              <select class="debug-select" id="dbg-line-fn">
-                <option value="colorContinuous">colorContinuous</option>
-                <option value="static" selected>Static Color</option>
-              </select>
-            </div>
-            <div id="line-fn-options" style="display:none;">
-              <div class="debug-row">
-                <span class="debug-label">Attribute</span>
-                <select class="debug-select" id="dbg-line-attr"></select>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Palette</span>
-                <select class="debug-select pal-hidden" id="dbg-line-palette"></select>
-                <div class="pal-dd" id="dbg-line-palette-dd">
-                  <button type="button" class="pal-trigger" id="dbg-line-palette-trigger" title="Palette">
-                    <span class="pal-name" id="dbg-line-palette-name">Palette</span>
-                    <span class="pal-swatch" id="dbg-line-palette-swatch"></span>
-                  </button>
-                  <div class="pal-menu" id="dbg-line-palette-menu" style="display:none;"></div>
-                </div>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label"></span>
-                <label class="debug-checkbox" style="margin-left:auto;"><input type="checkbox" id="dbg-line-reverse" /> Reverse</label>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Domain</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-line-domain-min" step="0.1" placeholder="min" />
-                <span style="color:#666;">–</span>
-                <input type="number" class="debug-input debug-input-sm" id="dbg-line-domain-max" step="0.1" placeholder="max" />
-              </div>
-            </div>
-            <div id="line-static-options">
-              <div class="debug-row">
-                <span class="debug-label">Color</span>
-                <input type="color" class="debug-color" id="dbg-line-static" value="#ffffff" />
-                <span class="debug-color-label" id="dbg-line-static-label">#ffffff</span>
-              </div>
-              <div class="debug-row">
-                <span class="debug-label">Line Width</span>
-                <input type="range" class="debug-slider" id="dbg-line-width-slider" min="0" max="5" step="0.5" value="1" />
-                <input type="number" class="debug-input debug-input-sm" id="dbg-line-width" step="0.5" min="0" max="10" value="1" />
-              </div>
-            </div>
-          </div>
-
-          <div class="debug-section" id="dbg-viewstate-section">
-            <div class="debug-section-title">View State</div>
-            <div class="debug-row">
-              <span class="debug-label">Longitude</span>
-              <input type="number" class="debug-input" id="dbg-lng" step="0.0001" />
-            </div>
-            <div class="debug-row">
-              <span class="debug-label">Latitude</span>
-              <input type="number" class="debug-input" id="dbg-lat" step="0.0001" />
-            </div>
-            <div class="debug-row">
-              <span class="debug-label">Zoom</span>
-              <input type="number" class="debug-input" id="dbg-zoom" step="0.1" min="0" max="22" />
-            </div>
-            <div class="debug-row">
-              <span class="debug-label">Pitch</span>
-              <input type="number" class="debug-input" id="dbg-pitch" step="1" min="0" max="85" />
-            </div>
-            <div class="debug-row">
-              <span class="debug-label">Bearing</span>
-              <input type="number" class="debug-input" id="dbg-bearing" step="1" />
-            </div>
-          </div>
-
-          <div class="debug-section" id="sql-section" style="display:none;">
-            <div class="debug-section-title">SQL <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
-            <textarea id="dbg-sql" class="debug-output" style="height:60px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
-          </div>
-
-          <div class="debug-section">
-            <details id="dbg-view-details">
-              <summary class="debug-section-title" style="cursor:pointer; user-select:none;">Current ViewState</summary>
-              <textarea id="dbg-view-output" class="debug-output" readonly></textarea>
-            </details>
-          </div>
-
-          <div class="debug-section">
-            <div class="debug-section-title">Layer Config</div>
-            <textarea id="dbg-output" class="debug-output" readonly></textarea>
-          </div>
-        </div>
-        <div id="debug-resize-handle" title="Drag to resize"></div>
-      </div>
-      <div id="debug-toggle" title="Toggle sidebar">&#x2039;</div>
-    `;
-    document.body.appendChild(shell);
-  }
-
-  const panel = document.getElementById('debug-panel') as HTMLElement;
-  const toggle = document.getElementById('debug-toggle') as HTMLElement;
-  const resizeHandle = document.getElementById('debug-resize-handle') as HTMLElement;
+  const { shell, panel, toggle, resizeHandle } = ensureDebugShell();
 
   // Initial open/closed state (only relevant when mounted)
   try {
@@ -460,178 +137,95 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateDebugTogglePosition(shell!, panel, toggle);
   } catch (_) {}
 
-  const layerSelect = document.getElementById('dbg-layer-select') as HTMLSelectElement;
-
-  const hexSection = document.getElementById('dbg-hex-section') as HTMLElement;
-  const viewStateSection = document.getElementById('dbg-viewstate-section') as HTMLElement;
-  const fillColorSection = document.getElementById('fill-color-section') as HTMLElement;
-  const lineColorSection = document.getElementById('line-color-section') as HTMLElement;
-
-  const filledEl = document.getElementById('dbg-filled') as HTMLInputElement;
-  const strokedEl = document.getElementById('dbg-stroked') as HTMLInputElement;
-  const extrudedEl = document.getElementById('dbg-extruded') as HTMLInputElement;
-  const extrusionControls = document.getElementById('dbg-extrusion-controls') as HTMLElement;
-  const elevAttrEl = document.getElementById('dbg-elev-attr') as HTMLSelectElement;
-  const elevScaleEl = document.getElementById('dbg-elev-scale') as HTMLInputElement;
-  const opacitySliderEl = document.getElementById('dbg-opacity-slider') as HTMLInputElement;
-  const opacityEl = document.getElementById('dbg-opacity') as HTMLInputElement;
-
-  const fillFnEl = document.getElementById('dbg-fill-fn') as HTMLSelectElement;
-  const fillFnOptions = document.getElementById('fill-fn-options') as HTMLElement;
-  const fillStaticOptions = document.getElementById('fill-static-options') as HTMLElement;
-  const fillAttrEl = document.getElementById('dbg-attr') as HTMLSelectElement;
-  const fillPaletteEl = document.getElementById('dbg-palette') as HTMLSelectElement;
-  const fillPalTrigger = document.getElementById('dbg-palette-trigger') as HTMLButtonElement;
-  const fillPalSwatch = document.getElementById('dbg-palette-swatch') as HTMLElement;
-  const fillPalMenu = document.getElementById('dbg-palette-menu') as HTMLElement;
-  const fillDomainMinEl = document.getElementById('dbg-domain-min') as HTMLInputElement;
-  const fillDomainMaxEl = document.getElementById('dbg-domain-max') as HTMLInputElement;
-  const fillRangeMinEl = document.getElementById('dbg-domain-range-min') as HTMLInputElement;
-  const fillRangeMaxEl = document.getElementById('dbg-domain-range-max') as HTMLInputElement;
-  const fillStepsEl = document.getElementById('dbg-steps') as HTMLInputElement;
-  const fillReverseEl = document.getElementById('dbg-fill-reverse') as HTMLInputElement;
-  const fillNullEl = document.getElementById('dbg-null-color') as HTMLInputElement;
-  const fillNullLabel = document.getElementById('dbg-null-color-label') as HTMLElement;
-  const fillStaticEl = document.getElementById('dbg-fill-static') as HTMLInputElement;
-  const fillStaticLabel = document.getElementById('dbg-fill-static-label') as HTMLElement;
-
-  const lineFnEl = document.getElementById('dbg-line-fn') as HTMLSelectElement;
-  const lineFnOptions = document.getElementById('line-fn-options') as HTMLElement;
-  const lineStaticOptions = document.getElementById('line-static-options') as HTMLElement;
-  const lineAttrEl = document.getElementById('dbg-line-attr') as HTMLSelectElement;
-  const linePaletteEl = document.getElementById('dbg-line-palette') as HTMLSelectElement;
-  const linePalTrigger = document.getElementById('dbg-line-palette-trigger') as HTMLButtonElement;
-  const linePalSwatch = document.getElementById('dbg-line-palette-swatch') as HTMLElement;
-  const linePalMenu = document.getElementById('dbg-line-palette-menu') as HTMLElement;
-  const lineDomainMinEl = document.getElementById('dbg-line-domain-min') as HTMLInputElement;
-  const lineDomainMaxEl = document.getElementById('dbg-line-domain-max') as HTMLInputElement;
-  const lineReverseEl = document.getElementById('dbg-line-reverse') as HTMLInputElement;
-  const lineStaticEl = document.getElementById('dbg-line-static') as HTMLInputElement;
-  const lineStaticLabel = document.getElementById('dbg-line-static-label') as HTMLElement;
-  const lineWidthSliderEl = document.getElementById('dbg-line-width-slider') as HTMLInputElement;
-  const lineWidthEl = document.getElementById('dbg-line-width') as HTMLInputElement;
-
-  const lngEl = document.getElementById('dbg-lng') as HTMLInputElement;
-  const latEl = document.getElementById('dbg-lat') as HTMLInputElement;
-  const zoomEl = document.getElementById('dbg-zoom') as HTMLInputElement;
-  const pitchEl = document.getElementById('dbg-pitch') as HTMLInputElement;
-  const bearingEl = document.getElementById('dbg-bearing') as HTMLInputElement;
-  const viewOut = document.getElementById('dbg-view-output') as HTMLTextAreaElement;
-  const layerOut = document.getElementById('dbg-output') as HTMLTextAreaElement;
-
-  const sqlSection = document.getElementById('sql-section') as HTMLElement;
-  const sqlStatusEl = document.getElementById('sql-status') as HTMLElement;
-  const sqlInputEl = document.getElementById('dbg-sql') as HTMLTextAreaElement;
+  const {
+    layerSelect,
+    hexSection,
+    viewStateSection,
+    fillColorSection,
+    lineColorSection,
+    filledEl,
+    strokedEl,
+    extrudedEl,
+    extrusionControls,
+    elevAttrEl,
+    elevScaleEl,
+    opacitySliderEl,
+    opacityEl,
+    fillFnEl,
+    fillFnOptions,
+    fillStaticOptions,
+    fillAttrEl,
+    fillPaletteEl,
+    fillPalTrigger,
+    fillPalSwatch,
+    fillPalMenu,
+    fillDomainMinEl,
+    fillDomainMaxEl,
+    fillRangeMinEl,
+    fillRangeMaxEl,
+    fillStepsEl,
+    fillReverseEl,
+    fillNullEl,
+    fillNullLabel,
+    fillStaticEl,
+    fillStaticLabel,
+    lineFnEl,
+    lineFnOptions,
+    lineStaticOptions,
+    lineAttrEl,
+    linePaletteEl,
+    linePalTrigger,
+    linePalSwatch,
+    linePalMenu,
+    lineDomainMinEl,
+    lineDomainMaxEl,
+    lineReverseEl,
+    lineStaticEl,
+    lineStaticLabel,
+    lineWidthSliderEl,
+    lineWidthEl,
+    lngEl,
+    latEl,
+    zoomEl,
+    pitchEl,
+    bearingEl,
+    viewOut,
+    layerOut,
+    sqlSection,
+    sqlStatusEl,
+    sqlInputEl,
+  } = queryDebugElements();
 
   const initial: ViewState = config.initialViewState;
 
-  const palettes = Object.keys((window as any).cartocolor || {}).sort((a, b) => a.localeCompare(b));
-  const setPaletteOptions = (sel: HTMLSelectElement) => {
-    sel.innerHTML = palettes.map((p) => `<option value="${p}">${p}</option>`).join('');
-  };
-  setPaletteOptions(fillPaletteEl);
-  setPaletteOptions(linePaletteEl);
-
-  const getPaletteColors = (name: string, steps: number): string[] | null => {
-    try {
-      const pal = (window as any).cartocolor?.[name];
-      if (!pal) return null;
-      const keys = Object.keys(pal)
-        .map((x: any) => Number(x))
-        .filter((n: number) => Number.isFinite(n))
-        .sort((a: number, b: number) => a - b);
-      const best = keys.find((n: number) => n >= steps) ?? keys[keys.length - 1];
-      const cols = pal[best];
-      return Array.isArray(cols) ? [...cols] : null;
-    } catch (_) {
-      return null;
-    }
-  };
-
-  const paletteGradient = (paletteName: string, steps = 9, reverse = false): string => {
-    const cols0 = getPaletteColors(paletteName, Math.max(steps, 3));
-    const cols = (reverse && cols0?.length) ? [...cols0].reverse() : cols0;
-    if (!cols?.length) return 'linear-gradient(90deg, #555, #999)';
-    const g = cols.map((c: string, i: number) => `${c} ${(i / Math.max(1, cols.length - 1)) * 100}%`).join(', ');
-    return `linear-gradient(90deg, ${g})`;
-  };
+  const palettes = getPaletteNames();
+  setPaletteOptions(fillPaletteEl, palettes);
+  setPaletteOptions(linePaletteEl, palettes);
 
   const getPreviewSteps = () => {
     const s = parseInt(fillStepsEl?.value || '7', 10);
     return Number.isFinite(s) ? Math.max(2, Math.min(20, s)) : 7;
   };
 
-  const updatePalSwatch = (
-    sel: HTMLSelectElement,
-    swatchEl: HTMLElement,
-    triggerEl: HTMLButtonElement,
-    reverse: boolean
-  ) => {
-    const name = sel.value || 'Palette';
-    swatchEl.style.background = paletteGradient(name, getPreviewSteps(), reverse);
-    triggerEl.title = name;
-  };
-
-  const closeMenus = () => {
-    try { fillPalMenu.style.display = 'none'; } catch (_) {}
-    try { linePalMenu.style.display = 'none'; } catch (_) {}
-  };
-
-  const buildPalMenu = (
-    sel: HTMLSelectElement,
-    menuEl: HTMLElement,
-    swatchEl: HTMLElement,
-    triggerEl: HTMLButtonElement,
-    reverse: boolean
-  ) => {
-    menuEl.innerHTML = palettes
-      .map((p) => {
-        const bg = paletteGradient(p, getPreviewSteps(), reverse);
-        return `<div class="pal-item" data-pal="${p}" title="${p}">
-          <div class="pal-item-swatch" style="background:${bg};"></div>
-        </div>`;
-      })
-      .join('');
-    menuEl.querySelectorAll('.pal-item').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        const pal = (el as HTMLElement).getAttribute('data-pal') || '';
-        if (pal) sel.value = pal;
-        updatePalSwatch(sel, swatchEl, triggerEl, reverse);
-        menuEl.style.display = 'none';
-        applyUIToLayer();
-      });
-    });
-  };
-
-  const attachPalDropdown = (
-    sel: HTMLSelectElement,
-    menuEl: HTMLElement,
-    swatchEl: HTMLElement,
-    triggerEl: HTMLButtonElement
-  ) => {
-    const isFill = sel === fillPaletteEl;
-    const reverse = isFill ? !!fillReverseEl.checked : !!lineReverseEl.checked;
-    buildPalMenu(sel, menuEl, swatchEl, triggerEl, reverse);
-    updatePalSwatch(sel, swatchEl, triggerEl, reverse);
-    triggerEl.addEventListener('click', (e) => {
-      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      const isOpen = menuEl.style.display !== 'none';
-      closeMenus();
-      // Rebuild menu each open so gradient reflects current reverse/steps
-      try {
-        const reverseNow = isFill ? !!fillReverseEl.checked : !!lineReverseEl.checked;
-        buildPalMenu(sel, menuEl, swatchEl, triggerEl, reverseNow);
-        updatePalSwatch(sel, swatchEl, triggerEl, reverseNow);
-      } catch (_) {}
-      menuEl.style.display = isOpen ? 'none' : 'block';
-    });
-  };
-
-  // Close palette menus when clicking elsewhere
-  const onDocClick = () => closeMenus();
-  document.addEventListener('click', onDocClick);
-  window.addEventListener('blur', onDocClick);
+  const palMgr = createPaletteDropdownManager(palettes);
+  const fillPal = palMgr.attach({
+    selectEl: fillPaletteEl,
+    menuEl: fillPalMenu,
+    swatchEl: fillPalSwatch,
+    triggerEl: fillPalTrigger,
+    getSteps: getPreviewSteps,
+    getReverse: () => !!fillReverseEl.checked,
+    onPicked: () => applyUIToLayer(),
+  });
+  const linePal = palMgr.attach({
+    selectEl: linePaletteEl,
+    menuEl: linePalMenu,
+    swatchEl: linePalSwatch,
+    triggerEl: linePalTrigger,
+    getSteps: getPreviewSteps,
+    getReverse: () => !!lineReverseEl.checked,
+    onPicked: () => applyUIToLayer(),
+  });
 
   // Find editable layers.
   // Note: originally this panel was hex-only; we also support vector layers and pmtiles now.
@@ -873,7 +467,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (cc.attr) fillAttrEl.value = String(cc.attr);
         if (cc.colors) fillPaletteEl.value = String(cc.colors);
         try { fillReverseEl.checked = !!(cc as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger, !!fillReverseEl.checked);
+      try { fillPal.refresh(); } catch (_) {}
         const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -932,7 +526,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (fcCfg.attr) fillAttrEl.value = String(fcCfg.attr);
         if (fcCfg.colors) fillPaletteEl.value = String(fcCfg.colors);
         try { fillReverseEl.checked = !!(fcCfg as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-        updatePalSwatch(fillPaletteEl, fillPalSwatch, fillPalTrigger, !!fillReverseEl.checked);
+      try { fillPal.refresh(); } catch (_) {}
         const dom = Array.isArray(fcCfg.domain) ? fcCfg.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -975,7 +569,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
         if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
         try { lineReverseEl.checked = !!(lcCC as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger, !!lineReverseEl.checked);
+      try { linePal.refresh(); } catch (_) {}
         const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -1008,7 +602,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (lcCfg.attr) lineAttrEl.value = String(lcCfg.attr);
         if (lcCfg.colors) linePaletteEl.value = String(lcCfg.colors);
         try { lineReverseEl.checked = !!(lcCfg as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-        updatePalSwatch(linePaletteEl, linePalSwatch, linePalTrigger, !!lineReverseEl.checked);
+      try { linePal.refresh(); } catch (_) {}
         const dom = Array.isArray(lcCfg.domain) ? lcCfg.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -1040,263 +634,39 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const applyUIToLayer = () => {
     const layer = getActiveLayer();
     if (!layer) return;
-    const isHex = (layer as any).layerType === 'hex';
-    const isVector = (layer as any).layerType === 'vector';
-    const isPmtiles = (layer as any).layerType === 'pmtiles';
-
-    if (isHex) {
-      (layer as any).hexLayer = (layer as any).hexLayer || {};
-    }
-    const hexCfg: any = isHex ? (layer as any).hexLayer : {};
-
-    const op = parseFloat(opacityEl.value);
-    const opClamped = Number.isFinite(op) ? clamp(op, 0, 1) : 1;
-
-    if (isHex) {
-      hexCfg.filled = !!filledEl.checked;
-      hexCfg.stroked = !!strokedEl.checked;
-      hexCfg.extruded = !!extrudedEl.checked;
-      hexCfg.opacity = opClamped;
-
-      // Extrusion controls (hex only)
-      try {
-        if (extrusionControls) extrusionControls.style.display = hexCfg.extruded ? 'block' : 'none';
-        const s = parseFloat(elevScaleEl?.value || '1');
-        hexCfg.elevationScale = Number.isFinite(s) ? s : 1;
-        const ep = String(elevAttrEl?.value || '').trim();
-        if (ep) hexCfg.elevationProperty = ep;
-        else delete hexCfg.elevationProperty;
-      } catch (_) {}
-    } else if (isVector || isPmtiles) {
-      (layer as any).isFilled = !!filledEl.checked;
-      (layer as any).isStroked = !!strokedEl.checked;
-      (layer as any).opacity = opClamped;
-      try { (layer as any).vectorLayer = { ...((layer as any).vectorLayer || {}), filled: !!filledEl.checked, stroked: !!strokedEl.checked, opacity: opClamped }; } catch (_) {}
-    }
-
-    // Fill
-    if (isHex) {
-      if (fillFnEl.value === 'static') {
-        const c = fillStaticEl.value || '#0090ff';
-        const r = parseInt(c.slice(1, 3), 16);
-        const g = parseInt(c.slice(3, 5), 16);
-        const b = parseInt(c.slice(5, 7), 16);
-        hexCfg.getFillColor = [r, g, b];
-      } else {
-        const attr = fillAttrEl.value || 'data_avg';
-        const colors = fillPaletteEl.value || 'Earth';
-        const reverse = !!fillReverseEl.checked;
-        const d0 = parseFloat(fillDomainMinEl.value);
-        const d1 = parseFloat(fillDomainMaxEl.value);
-        const steps = parseInt(fillStepsEl.value || '7', 10);
-        const nc = fillNullEl.value || '#b8b8b8';
-        const nr = parseInt(nc.slice(1, 3), 16);
-        const ng = parseInt(nc.slice(3, 5), 16);
-        const nb = parseInt(nc.slice(5, 7), 16);
-        hexCfg.getFillColor = {
-          '@@function': 'colorContinuous',
-          attr,
-          domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
-          colors,
-          reverse,
-          steps: Number.isFinite(steps) ? steps : 7,
-          nullColor: [nr, ng, nb],
-          // Default to autoDomain unless user explicitly overrides the domain (see domain handlers below).
-          autoDomain: (hexCfg.getFillColor?.autoDomain !== false)
-        };
-      }
-    } else if (isVector || isPmtiles) {
-      if (fillFnEl.value === 'static') {
-        const c = fillStaticEl.value || '#0090ff';
-        (layer as any).fillColorConfig = null;
-        (layer as any).fillColorRgba = c;
-        try {
-          const arr = hexToRgbArr(c, 200) || hexToRgbArr(c) || null;
-          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = arr || c;
-        } catch (_) {}
-      } else {
-        const attr = fillAttrEl.value || 'value';
-        const colors = fillPaletteEl.value || 'ArmyRose';
-        const reverse = !!fillReverseEl.checked;
-        const d0 = parseFloat(fillDomainMinEl.value);
-        const d1 = parseFloat(fillDomainMaxEl.value);
-        const steps = parseInt(fillStepsEl.value || '7', 10);
-        const nc = fillNullEl.value || '#b8b8b8';
-        const nr = parseInt(nc.slice(1, 3), 16);
-        const ng = parseInt(nc.slice(3, 5), 16);
-        const nb = parseInt(nc.slice(5, 7), 16);
-        (layer as any).fillColorRgba = null;
-        const cfgObj = {
-          '@@function': 'colorContinuous',
-          attr,
-          domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
-          colors,
-          reverse,
-          steps: Number.isFinite(steps) ? steps : 7,
-          nullColor: [nr, ng, nb],
-        };
-        (layer as any).fillColorConfig = cfgObj;
-        if (isPmtiles) (layer as any).colorAttribute = attr;
-        try {
-          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getFillColor = cfgObj;
-        } catch (_) {}
-      }
-    }
-
-    // Line
-    if (isHex) {
-      if (lineFnEl.value === 'static') {
-        const c = lineStaticEl.value || '#ffffff';
-        const r = parseInt(c.slice(1, 3), 16);
-        const g = parseInt(c.slice(3, 5), 16);
-        const b = parseInt(c.slice(5, 7), 16);
-        hexCfg.getLineColor = [r, g, b];
-      } else {
-        const attr = lineAttrEl.value || 'data_avg';
-        const colors = linePaletteEl.value || 'Earth';
-        const reverse = !!lineReverseEl.checked;
-        const d0 = parseFloat(lineDomainMinEl.value);
-        const d1 = parseFloat(lineDomainMaxEl.value);
-        hexCfg.getLineColor = {
-          '@@function': 'colorContinuous',
-          attr,
-          domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
-          colors,
-          reverse,
-          steps: parseInt(fillStepsEl.value || '7', 10) || 7,
-          autoDomain: (hexCfg.getLineColor?.autoDomain !== false)
-        };
-      }
-    } else if (isVector || isPmtiles) {
-      if (lineFnEl.value === 'static') {
-        const c = lineStaticEl.value || '#ffffff';
-        (layer as any).lineColorConfig = null;
-        (layer as any).lineColorRgba = c;
-        try {
-          const arr = hexToRgbArr(c, 255) || hexToRgbArr(c) || null;
-          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getLineColor = arr || c;
-        } catch (_) {}
-      } else {
-        const attr = lineAttrEl.value || 'value';
-        const colors = linePaletteEl.value || 'ArmyRose';
-        const reverse = !!lineReverseEl.checked;
-        const d0 = parseFloat(lineDomainMinEl.value);
-        const d1 = parseFloat(lineDomainMaxEl.value);
-        (layer as any).lineColorRgba = null;
-        const cfgObj = {
-          '@@function': 'colorContinuous',
-          attr,
-          domain: [Number.isFinite(d0) ? d0 : 0, Number.isFinite(d1) ? d1 : 1],
-          colors,
-          reverse,
-          steps: parseInt(fillStepsEl.value || '7', 10) || 7,
-        };
-        (layer as any).lineColorConfig = cfgObj;
-        try {
-          if ((layer as any).vectorLayer) (layer as any).vectorLayer.getLineColor = cfgObj;
-        } catch (_) {}
-      }
-    }
-
-    const lw = parseFloat(lineWidthEl.value);
-    const lwClamped = Number.isFinite(lw) ? clamp(lw, 0, 10) : 1;
-    if (isHex) {
-      hexCfg.lineWidthMinPixels = lwClamped;
-    } else if (isVector || isPmtiles) {
-      (layer as any).lineWidth = lwClamped;
-      try {
-        if ((layer as any).vectorLayer) (layer as any).vectorLayer.lineWidthMinPixels = lwClamped;
-      } catch (_) {}
-    }
-
-    updateLayerOutput();
-    findDeckOverlayOnMap();
-    rebuildDeck();
-
-    // Non-tile hex layers are Mapbox GL layers, not Deck.gl. Rebuild them so UI edits apply.
-    try {
-      const isStaticHex = layer.layerType === 'hex' && !(layer as any).isTileLayer;
-      if (isStaticHex) {
-        // SQL-backed hex layers no longer keep `layer.data`; their latest geometry lives in `layerGeoJSONs`.
-        const isSql = !!(layer as any).parquetData || !!(layer as any).parquetUrl;
-        const g = isSql
-          ? (getLayerGeoJSONs()?.[layer.id] || ({ type: 'FeatureCollection', features: [] } as any))
-          : hexToGeoJSON((layer as any).data || []);
-        const visible = getCurrentLayerVisibility(map, layer.id);
-        updateStaticHexLayer(map, layer as HexLayerConfig, g, visible);
-      }
-    } catch (_) {}
-
-    // Vector layers are Mapbox GL layers. Update paint properties directly so edits apply instantly.
-    try {
-      if (isVector) {
-        const v: any = layer as any;
-        const geojson = v.geojson;
-        const vecData = geojson?.features?.map((f: any) => f?.properties || {}) || [];
-
-        const fillExpr = (v.fillColorConfig as any)?.['@@function']
-          ? buildColorExpr(v.fillColorConfig, vecData)
-          : (v.fillColorRgba || '#0090ff');
-
-        const lineExpr = (v.lineColorConfig as any)?.['@@function']
-          ? buildColorExpr(v.lineColorConfig, vecData)
-          : (v.lineColorRgba || '#ffffff');
-
-        const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
-        const lineOpacity = (v.isStroked === false) ? 0 : 1;
-
-        // Polygons (prefix-based for PMTiles multi-source-layer rendering)
-        setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
-        setPaintSafe(map, `${v.id}-outline`, 'line-color', lineExpr);
-        setPaintSafe(map, `${v.id}-outline`, 'line-width', lwClamped);
-        setPaintSafe(map, `${v.id}-outline`, 'line-opacity', lineOpacity);
-
-        // Lines
-        setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'line-width', lwClamped);
-        setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
-
-        // Points (circle)
-        setPaintSafe(map, `${v.id}-circle`, 'circle-color', fillExpr);
-        setPaintSafe(map, `${v.id}-circle`, 'circle-opacity', fillOpacity);
-        setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-color', lineExpr);
-        setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-width', lwClamped);
-      }
-    } catch (_) {}
-
-    // PMTiles layers use Mapbox GL vector layers. Build color expressions and update paint.
-    try {
-      if (isPmtiles) {
-        const v: any = layer as any;
-        const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
-        const lineOpacity = (v.isStroked === false) ? 0 : 1;
-
-        const attr = v.colorAttribute || 'value';
-        const fillExpr = v.fillColorConfig
-          ? buildPMTilesColorExpression(v.fillColorConfig, attr, '#ff8c00')
-          : (v.fillColorRgba || '#ff8c00');
-
-        const lineExpr = v.lineColorConfig
-          ? buildPMTilesColorExpression(v.lineColorConfig, attr, '#ffffff')
-          : (v.lineColorRgba || '#ffffff');
-
-        // PMTiles layers: -circles, -fill, -line
-        // Apply stroke width only when stroked is true
-        const effectiveLineWidth = (v.isStroked === false) ? 0 : lwClamped;
-        
-        // PMTiles now renders multiple Mapbox layers per source-layer, so update via prefix.
-        setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
-        setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'line-width', effectiveLineWidth);
-        setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
-        setPaintSafePrefix(map, `${v.id}-`, 'circle-color', fillExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'circle-opacity', fillOpacity);
-        setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-color', lineExpr);
-        setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-width', effectiveLineWidth);
-      }
-    } catch (e) { console.warn('[FusedMaps] PMTiles update error:', e); }
+    applyDebugUIToLayer({
+      map,
+      layer,
+      els: {
+        filledEl,
+        strokedEl,
+        extrudedEl,
+        extrusionControls,
+        elevAttrEl,
+        elevScaleEl,
+        opacityEl,
+        fillFnEl,
+        fillAttrEl,
+        fillPaletteEl,
+        fillReverseEl,
+        fillDomainMinEl,
+        fillDomainMaxEl,
+        fillStepsEl,
+        fillNullEl,
+        fillStaticEl,
+        lineFnEl,
+        lineAttrEl,
+        linePaletteEl,
+        lineReverseEl,
+        lineDomainMinEl,
+        lineDomainMaxEl,
+        lineStaticEl,
+        lineWidthEl,
+      },
+      updateLayerOutput,
+      findDeckOverlayOnMap,
+      rebuildDeck,
+    });
   };
 
   // Domain slider behavior (map_utils style)
@@ -1446,7 +816,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   opacityEl.addEventListener('change', () => { opacitySliderEl.value = opacityEl.value; applyUIToLayer(); });
   [fillAttrEl, fillStepsEl, fillReverseEl].forEach((el) => el.addEventListener('change', () => {
     // keep palette swatches/menu in sync with reverse + steps
-    attachPalDropdown(fillPaletteEl, fillPalMenu, fillPalSwatch, fillPalTrigger);
+    try { fillPal.refresh(); } catch (_) {}
+    try { linePal.refresh(); } catch (_) {}
     applyUIToLayer();
   }));
   // Domain inputs -> slider (no repaint while typing)
@@ -1463,7 +834,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   fillNullEl.addEventListener('input', () => { fillNullLabel.textContent = fillNullEl.value; applyUIToLayer(); });
   fillStaticEl.addEventListener('input', () => { fillStaticLabel.textContent = fillStaticEl.value; applyUIToLayer(); });
   [lineAttrEl, lineDomainMinEl, lineDomainMaxEl, lineReverseEl].forEach((el) => el.addEventListener('change', () => {
-    attachPalDropdown(linePaletteEl, linePalMenu, linePalSwatch, linePalTrigger);
+    try { linePal.refresh(); } catch (_) {}
     applyUIToLayer();
   }));
   lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
@@ -1520,8 +891,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   // Initial render
   updateFillFnOptions();
   updateLineFnOptions();
-  attachPalDropdown(fillPaletteEl, fillPalMenu, fillPalSwatch, fillPalTrigger);
-  attachPalDropdown(linePaletteEl, linePalMenu, linePalSwatch, linePalTrigger);
+  try { fillPal.refresh(); } catch (_) {}
+  try { linePal.refresh(); } catch (_) {}
   readLayerToUI();
   updateFromMapStop();
   updateDebugTogglePosition(shell!, panel, toggle);
@@ -1529,8 +900,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   return {
     destroy: () => {
-      try { document.removeEventListener('click', onDocClick); } catch (_) {}
-      try { window.removeEventListener('blur', onDocClick); } catch (_) {}
+      try { palMgr.destroy(); } catch (_) {}
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}

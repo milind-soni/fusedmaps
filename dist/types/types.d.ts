@@ -160,26 +160,7 @@ export interface PMTilesLayerConfig extends BaseLayerConfig {
     vectorLayer?: VectorLayerStyle;
     fillDomainFromUser?: boolean;
 }
-export type DrawingMode = 'select' | 'freehand' | 'line' | 'polygon' | 'rectangle' | 'circle' | 'arrow';
-export interface DrawingStyleConfig {
-    stroke?: string;
-    fill?: string;
-    strokeWidth?: number;
-}
-export interface DrawingConfig {
-    enabled?: boolean;
-    position?: 'bottom' | 'top';
-    layerId?: string;
-    layerName?: string;
-    defaultMode?: DrawingMode;
-    tools?: DrawingMode[];
-    style?: DrawingStyleConfig;
-    initialGeoJSON?: FeatureCollection;
-}
-export interface DrawingLayerConfig extends BaseLayerConfig {
-    layerType: 'drawing';
-}
-export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig | PMTilesLayerConfig | DrawingLayerConfig;
+export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig | PMTilesLayerConfig;
 export interface UIConfig {
     tooltip?: boolean;
     legend?: boolean;
@@ -228,7 +209,6 @@ export interface FusedMapsConfig {
     messaging?: MessagingConfig;
     highlightOnClick?: boolean;
     palettes?: string[];
-    drawing?: DrawingConfig;
     /**
      * Sidebar / inspector panel.
      * - undefined: do not mount sidebar at all (no toggle).

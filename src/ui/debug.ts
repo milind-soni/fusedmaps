@@ -9,6 +9,7 @@ import type { FusedMapsConfig, HexLayerConfig, VectorLayerConfig, ViewState } fr
 import { getViewState } from '../core/map';
 import { hexToGeoJSON, updateStaticHexLayer } from '../layers/hex';
 import { getLayerGeoJSONs } from '../layers';
+import { buildPMTilesColorExpression } from '../layers/pmtiles';
 import { buildColorExpr } from '../color/expressions';
 
 export interface DebugHandle {
@@ -284,11 +285,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
             </div>
           </div>
 
-          <div class="debug-section" id="drawing-section" style="display:none;">
-            <div class="debug-section-title">Drawings</div>
-            <textarea id="dbg-drawing-geojson" class="debug-output" style="height:160px;font-family:monospace;font-size:11px;resize:vertical;" readonly></textarea>
-          </div>
-
           <div class="debug-section" id="fill-color-section">
             <div class="debug-section-title">Fill Color</div>
             <div class="debug-row">
@@ -468,8 +464,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const hexSection = document.getElementById('dbg-hex-section') as HTMLElement;
   const viewStateSection = document.getElementById('dbg-viewstate-section') as HTMLElement;
-  const drawingSection = document.getElementById('drawing-section') as HTMLElement;
-  const drawingGeoEl = document.getElementById('dbg-drawing-geojson') as HTMLTextAreaElement;
   const fillColorSection = document.getElementById('fill-color-section') as HTMLElement;
   const lineColorSection = document.getElementById('line-color-section') as HTMLElement;
 
@@ -640,9 +634,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   window.addEventListener('blur', onDocClick);
 
   // Find editable layers.
-  // Note: originally this panel was hex-only; we also support vector layers, pmtiles, and drawings now.
+  // Note: originally this panel was hex-only; we also support vector layers and pmtiles now.
   const editableLayers = config.layers.filter((l) =>
-    l.layerType === 'hex' || l.layerType === 'vector' || l.layerType === 'pmtiles' || (l as any).layerType === 'drawing'
+    l.layerType === 'hex' || l.layerType === 'vector' || l.layerType === 'pmtiles'
   ) as any[];
   layerSelect.innerHTML = editableLayers.map((l) => `<option value="${l.id}">${l.name || l.id}</option>`).join('');
   if (!layerSelect.value && editableLayers.length) layerSelect.value = editableLayers[0].id;
@@ -794,32 +788,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       // For drawings, users expect the full FeatureCollection (geojson.io style).
       let s = `layers = ${toPyLiteral(layersOut, 0)}`;
 
-      // If drawing is enabled, include a `drawing = {...}` block with full GeoJSON.
-      try {
-        const dh: any = (config as any).__drawingHandle;
-        const drawingCfg: any = (config as any).drawing;
-        if (drawingCfg?.enabled) {
-          const fc = dh?.getGeoJSON?.() || { type: 'FeatureCollection', features: [] };
-          const drawingOut: any = {
-            enabled: true,
-            position: drawingCfg.position || 'bottom',
-            layer_id: drawingCfg.layerId || 'drawings',
-            layer_name: drawingCfg.layerName || 'Drawings',
-            default_mode: drawingCfg.defaultMode || 'freehand',
-            tools: drawingCfg.tools || ['select', 'freehand', 'line', 'polygon', 'rectangle', 'circle'],
-            style: drawingCfg.style || { stroke: '#6366f1', strokeWidth: 4 },
-            // Full GeoJSON output (can be large; intentionally not delta/truncated).
-            initial_geojson: fc
-          };
-          s += `\n\ndrawing = ${toPyLiteral(drawingOut, 0)}`;
-        }
-      } catch (_) {}
-
-      // Keep truncation for general layer config (but do not truncate drawings unless absurd).
+      // Keep truncation for general layer config
       if (s.length > MAX_STRINGIFY_CHARS) {
-        // If we included drawings, allow a larger cap before truncation.
-        const cap = (s.includes('\n\ndrawing = ')) ? Math.max(MAX_STRINGIFY_CHARS, 1_000_000) : MAX_STRINGIFY_CHARS;
-        if (s.length > cap) s = s.slice(0, cap) + '\n... (truncated)\n';
+        s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
       }
       layerOut.value = s;
     } catch (_) {
@@ -845,7 +816,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     const isHex = (layer as any).layerType === 'hex';
     const isVector = (layer as any).layerType === 'vector';
     const isPmtiles = (layer as any).layerType === 'pmtiles';
-    const isDrawing = (layer as any).layerType === 'drawing';
     const hexCfg: any = isHex ? ((layer as any).hexLayer || {}) : {};
 
     // Toggle section visibility
@@ -853,21 +823,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     try { if (fillColorSection) fillColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (lineColorSection) lineColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (sqlSection) sqlSection.style.display = 'none'; } catch (_) {} // re-set below for sql hex
-    try { if (drawingSection) drawingSection.style.display = isDrawing ? 'block' : 'none'; } catch (_) {}
     try { if (viewStateSection) viewStateSection.style.display = 'block'; } catch (_) {}
-
-    if (isDrawing) {
-      try {
-        const dh: any = (config as any).__drawingHandle;
-        const fc = dh?.getGeoJSON?.() || { type: 'FeatureCollection', features: [] };
-        if (drawingGeoEl) drawingGeoEl.value = JSON.stringify(fc, null, 2);
-      } catch (_) {
-        if (drawingGeoEl) drawingGeoEl.value = '';
-      }
-      // Keep paste-back output fresh
-      try { updateLayerOutput(); } catch (_) {}
-      return;
-    }
 
     // Basic toggles
     if (isHex) {
@@ -1316,60 +1272,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
         const lineOpacity = (v.isStroked === false) ? 0 : 1;
 
-        // Build PMTiles-compatible color expression
-        const buildPMTilesColorExpr = (colorConfig: any, defaultColor: string): any => {
-          if (!colorConfig) return defaultColor;
-          if (typeof colorConfig === 'string') return colorConfig;
-          if (Array.isArray(colorConfig)) return colorConfig;
-          
-          const fn = colorConfig['@@function'];
-          const attr = colorConfig.attr || v.colorAttribute || 'value';
-          
-          if (fn === 'colorContinuous') {
-            const domain = colorConfig.domain || [0, 100];
-            const steps = colorConfig.steps || 7;
-            const reverse = !!colorConfig.reverse;
-            
-            // Resolve palette name to colors
-            let colors = colorConfig.colors;
-            if (typeof colors === 'string') {
-              const cartocolor = (window as any).cartocolor;
-              if (cartocolor && cartocolor[colors]) {
-                const pal = cartocolor[colors];
-                const availSteps = Object.keys(pal).map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
-                const best = availSteps.find(s => s <= steps) || availSteps[availSteps.length - 1];
-                colors = pal[best] || ['#440154', '#21918c', '#fde725'];
-              } else {
-                colors = ['#440154', '#21918c', '#fde725'];
-              }
-            }
-            if (!colors || !Array.isArray(colors)) {
-              colors = ['#440154', '#21918c', '#fde725'];
-            }
-            if (reverse && colors.length > 1) {
-              colors = [...colors].reverse();
-            }
-            
-            // Build interpolate expression
-            const expr: any[] = ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', attr]], 0]];
-            const numColors = colors.length;
-            for (let i = 0; i < numColors; i++) {
-              const t = i / (numColors - 1);
-              const value = domain[0] + t * (domain[1] - domain[0]);
-              expr.push(value, colors[i]);
-            }
-            return expr;
-          }
-          
-          return defaultColor;
-        };
-
+        const attr = v.colorAttribute || 'value';
         const fillExpr = v.fillColorConfig
-          ? buildPMTilesColorExpr(v.fillColorConfig, '#ff8c00')
+          ? buildPMTilesColorExpression(v.fillColorConfig, attr, '#ff8c00')
           : (v.fillColorRgba || '#ff8c00');
-        
+
         const lineExpr = v.lineColorConfig
-          ? buildPMTilesColorExpr(v.lineColorConfig, '#ffffff')
+          ? buildPMTilesColorExpression(v.lineColorConfig, attr, '#ffffff')
           : (v.lineColorRgba || '#ffffff');
 
         // PMTiles layers: -circles, -fill, -line
@@ -1600,30 +1509,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     window.addEventListener('fusedmaps:sql:status', onSqlStatus as any);
   } catch (_) {}
 
-  // Drawing changes: keep the Drawings GeoJSON + exported config fresh.
-  // Without this, users draw shapes but don't see updates until they manually switch layers.
-  const onDrawChanged = () => {
-    try {
-      const active = getActiveLayer();
-      if ((active as any)?.layerType === 'drawing') {
-        try {
-          const dh: any = (config as any).__drawingHandle;
-          const fc = dh?.getGeoJSON?.() || { type: 'FeatureCollection', features: [] };
-          if (drawingGeoEl) drawingGeoEl.value = JSON.stringify(fc, null, 2);
-        } catch (_) {
-          if (drawingGeoEl) drawingGeoEl.value = '';
-        }
-      }
-      try { updateLayerOutput(); } catch (_) {}
-    } catch (_) {}
-  };
-  try {
-    (map as any).on?.('draw.create', onDrawChanged);
-    (map as any).on?.('draw.update', onDrawChanged);
-    (map as any).on?.('draw.delete', onDrawChanged);
-    (map as any).on?.('draw.modechange', onDrawChanged);
-    (map as any).on?.('draw.selectionchange', onDrawChanged);
-  } catch (_) {}
 
   // Update viewstate only on "stop"
   try {
@@ -1655,13 +1540,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         map.off('pitchend', updateFromMapStop);
       } catch (_) {}
       try { window.removeEventListener('fusedmaps:sql:status', onSqlStatus as any); } catch (_) {}
-      try {
-        (map as any).off?.('draw.create', onDrawChanged);
-        (map as any).off?.('draw.update', onDrawChanged);
-        (map as any).off?.('draw.delete', onDrawChanged);
-        (map as any).off?.('draw.modechange', onDrawChanged);
-        (map as any).off?.('draw.selectionchange', onDrawChanged);
-      } catch (_) {}
       try { shell?.remove(); } catch (_) {}
     }
   };

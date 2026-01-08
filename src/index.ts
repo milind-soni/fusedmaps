@@ -13,7 +13,6 @@ import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
 import { setupWidgets } from './ui/widgets';
 import { setupDebugPanel } from './ui/debug';
-import { setupDrawing } from './ui/drawing';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
@@ -30,21 +29,6 @@ export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
  */
 export function init(config: FusedMapsConfig): FusedMapsInstance {
   const containerId = config.containerId || 'map';
-
-  // If drawing is enabled, inject a "drawing layer" entry so it behaves like another layer
-  // in the layer panel (toggle visibility, ordering, etc.).
-  const drawingLayerId = config.drawing?.enabled ? (config.drawing.layerId || 'drawings') : null;
-  if (drawingLayerId) {
-    const exists = (config.layers || []).some((l: any) => l && l.id === drawingLayerId);
-    if (!exists) {
-      (config.layers as any).push({
-        id: drawingLayerId,
-        name: config.drawing?.layerName || 'Drawings',
-        layerType: 'drawing',
-        visible: true,
-      } as any);
-    }
-  }
 
   // Initialize layer store
   const store = createLayerStore();
@@ -79,8 +63,6 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   let deckOverlay: unknown = null;
   let legendUpdateHandler: any = null;
   let duckHandle: any = null;
-  let drawingHandle: any = null;
-  const getDrawingHandle = () => drawingHandle;
   
   // Helper to get visibility state from store (for compatibility)
   const getVisibilityState = () => store.getVisibilityState();
@@ -101,10 +83,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Setup UI components
   if (config.ui?.layerPanel !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
-      handleVisibilityChange(layerId, visible, map, store, deckOverlay, {
-        drawingLayerId: drawingLayerId || undefined,
-        getDrawingHandle,
-      });
+      handleVisibilityChange(layerId, visible, map, store, deckOverlay);
     }, store);
   }
   
@@ -137,22 +116,6 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
       setupTooltip(map, store.getAllConfigs(), getVisibilityState(), deckOverlay);
-    }
-
-    // Drawing (experimental)
-    if (config.drawing?.enabled) {
-      setupDrawing(map, config).then((h) => {
-        drawingHandle = h;
-        try { (config as any).__drawingHandle = h; } catch (_) {}
-        // Apply current visibility (may have been toggled before drawing finished loading)
-        try {
-          const lid = drawingLayerId || (config.drawing?.layerId || 'drawings');
-          const vis = store.get(lid)?.visible !== false;
-          drawingHandle?.setVisible?.(vis);
-        } catch (_) {}
-      }).catch((e) => {
-        console.error('[FusedMaps] Failed to setup drawing:', e);
-      });
     }
     
     // Setup interactions
@@ -310,9 +273,6 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         duckHandle?.destroy?.();
       } catch (_) {}
       try {
-        drawingHandle?.destroy?.();
-      } catch (_) {}
-      try {
         if (legendUpdateHandler) {
           window.removeEventListener('fusedmaps:legend:update', legendUpdateHandler);
         }
@@ -327,20 +287,11 @@ function handleVisibilityChange(
   visible: boolean,
   map: mapboxgl.Map,
   store: LayerStore,
-  deckOverlay: unknown,
-  opts?: { drawingLayerId?: string; getDrawingHandle?: () => any }
+  deckOverlay: unknown
 ) {
   store.setVisible(layerId, visible);
 
-  // Drawing layer is handled by drawing module (it manages its own Mapbox layers)
-  if (opts?.drawingLayerId && layerId === opts.drawingLayerId) {
-    try {
-      const h = opts.getDrawingHandle?.();
-      h?.setVisible?.(visible);
-    } catch (_) {}
-  } else {
-    setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay);
-  }
+  setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay);
 
   updateLayerPanel(store.getAllConfigs(), store.getVisibilityState());
   updateLegend(store.getAllConfigs(), store.getVisibilityState(), store.getAllGeoJSONs());

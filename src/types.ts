@@ -308,6 +308,18 @@ export interface FusedMapsInstance {
   /** Access to the layer store for advanced operations */
   store: ILayerStore;
   
+  /**
+   * AI/tool-calling friendly state snapshot.
+   * Safe to JSON.stringify.
+   */
+  getState: () => FusedMapsState;
+
+  /**
+   * Apply one or more high-level actions (AI/tool-calling friendly).
+   * Returns the post-dispatch state snapshot.
+   */
+  dispatch: (action: FusedMapsAction | FusedMapsAction[]) => FusedMapsState;
+
   // Legacy API
   setLayerVisibility: (layerId: string, visible: boolean) => void;
   updateLegend: () => void;
@@ -330,6 +342,46 @@ export interface FusedMapsInstance {
   
   destroy: () => void;
 }
+
+// ============================================================
+// AI / Tool-calling Action + State API
+// ============================================================
+
+export interface LngLatBoundsLike {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+export interface LayerSummary {
+  id: string;
+  name: string;
+  layerType: LayerConfig['layerType'];
+  visible: boolean;
+  order: number;
+  /** Optional known property keys (best-effort; may be empty for tile layers). */
+  propertyKeys?: string[];
+  /** Optional known tooltip columns (from config). */
+  tooltipColumns?: string[];
+}
+
+export interface FusedMapsState {
+  viewState: ViewState;
+  bounds?: LngLatBoundsLike;
+  layers: LayerSummary[];
+}
+
+export type FusedMapsAction =
+  | { type: 'setViewState'; viewState: Partial<ViewState>; options?: { duration?: number } }
+  | { type: 'fitBounds'; bounds: [number, number, number, number]; options?: { padding?: number; maxZoom?: number; duration?: number } }
+  | { type: 'setLayerVisibility'; layerId: string; visible: boolean }
+  | { type: 'updateLayer'; layerId: string; changes: Partial<LayerConfig> }
+  | { type: 'addLayer'; layer: LayerConfig; options?: { order?: number } }
+  | { type: 'removeLayer'; layerId: string }
+  | { type: 'moveLayerUp'; layerId: string }
+  | { type: 'moveLayerDown'; layerId: string }
+  | { type: 'updateLegend' };
 
 // ============================================================
 // Utility Types

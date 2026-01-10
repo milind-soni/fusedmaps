@@ -5,7 +5,7 @@
  * using Mapbox GL JS and Deck.gl.
  */
 
-import type { FusedMapsConfig, FusedMapsInstance, LayerConfig } from './types';
+import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
@@ -170,12 +170,135 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   });
   
   // Return instance with control methods
-  return {
+  const getState = (): FusedMapsState => {
+    const viewState = getViewState(map);
+    let bounds: LngLatBoundsLike | undefined = undefined;
+    try {
+      const b = map.getBounds();
+      bounds = {
+        west: b.getWest(),
+        south: b.getSouth(),
+        east: b.getEast(),
+        north: b.getNorth()
+      };
+    } catch (_) {}
+
+    // Best-effort property keys from computed GeoJSONs (non-tile)
+    const geojsons = store.getAllGeoJSONs();
+    const layers: LayerSummary[] = store.getAll().map((s) => {
+      const cfg = s.config as any;
+      const tooltipColumns: string[] | undefined =
+        (Array.isArray(cfg.tooltipColumns) ? cfg.tooltipColumns :
+         Array.isArray(cfg.hexLayer?.tooltipColumns) ? cfg.hexLayer.tooltipColumns :
+         Array.isArray(cfg.hexLayer?.tooltipAttrs) ? cfg.hexLayer.tooltipAttrs :
+         Array.isArray(cfg.vectorLayer?.tooltipColumns) ? cfg.vectorLayer.tooltipColumns :
+         Array.isArray(cfg.vectorLayer?.tooltipAttrs) ? cfg.vectorLayer.tooltipAttrs :
+         undefined);
+
+      let propertyKeys: string[] | undefined = undefined;
+      try {
+        const gj: any = geojsons[s.config.id];
+        const f0 = gj?.features?.[0];
+        const props = f0?.properties;
+        if (props && typeof props === 'object') {
+          propertyKeys = Object.keys(props).slice(0, 200);
+        }
+      } catch (_) {}
+
+      return {
+        id: s.config.id,
+        name: s.config.name,
+        layerType: s.config.layerType,
+        visible: s.visible,
+        order: s.order,
+        ...(propertyKeys ? { propertyKeys } : {}),
+        ...(tooltipColumns ? { tooltipColumns } : {})
+      };
+    });
+
+    return { viewState, ...(bounds ? { bounds } : {}), layers };
+  };
+
+  const dispatch = (actionOrActions: FusedMapsAction | FusedMapsAction[]): FusedMapsState => {
+    const actions = Array.isArray(actionOrActions) ? actionOrActions : [actionOrActions];
+    for (const action of actions) {
+      if (!action || typeof action !== 'object') continue;
+
+      switch (action.type) {
+        case 'setViewState': {
+          const vs = (action as any).viewState || {};
+          const duration = Number.isFinite((action as any).options?.duration) ? (action as any).options.duration : null;
+          if (duration && duration > 0) {
+            try {
+              map.easeTo({ ...vs, duration });
+              break;
+            } catch (_) {}
+          }
+          applyViewState(map, vs);
+          break;
+        }
+        case 'fitBounds': {
+          const b = (action as any).bounds;
+          if (Array.isArray(b) && b.length === 4) {
+            const [west, south, east, north] = b;
+            const opts = (action as any).options || {};
+            try {
+              map.fitBounds([[west, south], [east, north]] as any, {
+                padding: Number.isFinite(opts.padding) ? opts.padding : 50,
+                maxZoom: Number.isFinite(opts.maxZoom) ? opts.maxZoom : 15,
+                duration: Number.isFinite(opts.duration) ? opts.duration : 500
+              } as any);
+            } catch (_) {}
+          }
+          break;
+        }
+        case 'setLayerVisibility': {
+          handleVisibilityChange((action as any).layerId, !!(action as any).visible, map, store, deckOverlay);
+          break;
+        }
+        case 'updateLayer': {
+          const layerId = (action as any).layerId;
+          const changes = (action as any).changes || {};
+          try { (instance as any).updateLayer(layerId, changes); } catch (_) {}
+          break;
+        }
+        case 'addLayer': {
+          try { (instance as any).addLayer((action as any).layer, (action as any).options); } catch (_) {}
+          break;
+        }
+        case 'removeLayer': {
+          try { (instance as any).removeLayer((action as any).layerId); } catch (_) {}
+          break;
+        }
+        case 'moveLayerUp': {
+          try { (instance as any).moveLayerUp((action as any).layerId); } catch (_) {}
+          break;
+        }
+        case 'moveLayerDown': {
+          try { (instance as any).moveLayerDown((action as any).layerId); } catch (_) {}
+          break;
+        }
+        case 'updateLegend': {
+          try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs()); } catch (_) {}
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    return getState();
+  };
+
+  const instance: FusedMapsInstance = {
     map,
     deckOverlay,
     
     // Layer store access
     store,
+
+    // AI/tool-calling API
+    getState,
+    dispatch,
     
     // Legacy API
     setLayerVisibility: (layerId: string, visible: boolean) => {
@@ -280,6 +403,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       map.remove?.();
     }
   };
+
+  return instance;
 }
 
 function handleVisibilityChange(

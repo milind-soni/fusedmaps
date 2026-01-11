@@ -202,6 +202,100 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
   const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
 
+  // --- SQL editor: optional CodeMirror (lazy-loaded) ---
+  let sqlCM: any = null;
+  let sqlCMLoading = false;
+  let sqlCMBound = false;
+  let scheduleSqlFn: (() => void) | null = null;
+
+  const bindCodeMirrorChange = () => {
+    try {
+      if (!sqlCM || sqlCMBound) return;
+      sqlCMBound = true;
+      sqlCM.on('change', () => {
+        try { scheduleSqlFn?.(); } catch (_) {}
+      });
+    } catch (_) {}
+  };
+
+  const loadCodeMirror = async () => {
+    try {
+      if (sqlCM || sqlCMLoading) return;
+      sqlCMLoading = true;
+
+      // If already present (another iframe / prior init), just mount.
+      if ((window as any).CodeMirror) {
+        try {
+          const CM = (window as any).CodeMirror;
+          sqlCM = CM.fromTextArea(sqlInputEl, {
+            mode: 'text/x-sql',
+            theme: 'material-darker',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2,
+            indentWithTabs: false,
+          });
+          sqlCM.setSize('100%', '180px');
+        } catch (_) {}
+        bindCodeMirrorChange();
+        return;
+      }
+
+      // CSS (only once)
+      const ensureCss = (href: string) => {
+        if (document.querySelector(`link[href="${href}"]`)) return;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        document.head.appendChild(link);
+      };
+      ensureCss('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css');
+      ensureCss('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css');
+
+      // JS (only once)
+      const loadScript = (src: string) =>
+        new Promise<void>((resolve, reject) => {
+          if (document.querySelector(`script[src="${src}"]`)) return resolve();
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error(`failed to load ${src}`));
+          document.head.appendChild(s);
+        });
+
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js');
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js');
+
+      // Mount
+      try {
+        const CM = (window as any).CodeMirror;
+        if (!CM) return;
+        sqlCM = CM.fromTextArea(sqlInputEl, {
+          mode: 'text/x-sql',
+          theme: 'material-darker',
+          lineNumbers: true,
+          lineWrapping: true,
+          indentUnit: 2,
+          tabSize: 2,
+          indentWithTabs: false,
+        });
+        sqlCM.setSize('100%', '180px');
+      } catch (_) {}
+      bindCodeMirrorChange();
+    } finally {
+      sqlCMLoading = false;
+    }
+  };
+
+  const getSqlEditorValue = (): string => {
+    try {
+      if (sqlCM) return String(sqlCM.getValue() || '').trim();
+    } catch (_) {}
+    return String(sqlInputEl?.value || '').trim();
+  };
+
   const setActiveTab = (tab: 'ui' | 'sql', persist = true) => {
     try {
       const isUi = tab === 'ui';
@@ -217,6 +311,15 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       }
       if (persist) {
         try { localStorage.setItem('fusedmaps:debug:tab', tab); } catch (_) {}
+      }
+    } catch (_) {}
+
+    // Lazy-load CodeMirror only when SQL tab is opened.
+    try {
+      if (tab === 'sql') {
+        loadCodeMirror().then(() => {
+          try { sqlCM?.refresh?.(); } catch (_) {}
+        });
       }
     } catch (_) {}
   };
@@ -677,6 +780,19 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           sqlInputEl.placeholder = 'Select a DuckDB (parquetUrl/parquetData) hex layer to enable SQL.';
         }
       }
+      // If CodeMirror is mounted, keep it in sync too.
+      try {
+        if (sqlCM) {
+          if (isSql) {
+            sqlCM.setValue(String((layer as any).sql || 'SELECT * FROM data'));
+            sqlCM.setOption('readOnly', false);
+          } else {
+            sqlCM.setValue('-- Select a DuckDB-backed hex layer to enable SQL');
+            sqlCM.setOption('readOnly', 'nocursor');
+          }
+          try { sqlCM.refresh?.(); } catch (_) {}
+        }
+      } catch (_) {}
       if (sqlStatusEl) sqlStatusEl.textContent = isSql ? '' : 'disabled';
     } catch (_) {}
   };
@@ -898,9 +1014,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     if (!layer) return;
     const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
     if (!isSql) return;
-    const sql = String(sqlInputEl?.value || '').trim() || 'SELECT * FROM data';
+    const sql = getSqlEditorValue() || 'SELECT * FROM data';
     // Normalize away trailing newlines so the config output stays stable/readable.
     try { if (sqlInputEl) sqlInputEl.value = sql; } catch (_) {}
+    try { if (sqlCM) sqlCM.setValue(sql); } catch (_) {}
     (layer as any).sql = sql;
     try { updateLayerOutput(); } catch (_) {}
     if (sqlStatusEl) sqlStatusEl.textContent = 'typing...';
@@ -911,7 +1028,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } catch (_) {}
     }, 500);
   };
+  scheduleSqlFn = scheduleSql;
   try {
+    // textarea fallback (when CodeMirror isn't mounted)
     sqlInputEl?.addEventListener('input', scheduleSql);
   } catch (_) {}
 
@@ -956,6 +1075,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       try { tabSqlBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
+      try { scheduleSqlFn = null; } catch (_) {}
+      try { sqlCM?.toTextArea?.(); } catch (_) {}
+      try { sqlCM = null; } catch (_) {}
       try {
         map.off('moveend', updateFromMapStop);
         map.off('rotateend', updateFromMapStop);

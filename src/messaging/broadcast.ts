@@ -28,31 +28,14 @@ export function enableBroadcast(
     const bounds = getBoundsArray(map);
     if (boundsEqual(bounds, lastBounds)) return;
     lastBounds = bounds;
-    
+
     const [west, south, east, north] = bounds;
-    
-    // Send unified filter message
     bus.send({
       type: 'filter',
       fromComponent: componentId,
       timestamp: Date.now(),
       dataset: dataset,
-      filter: {
-        type: 'spatial',
-        field: 'geometry',
-        values: [west, south, east, north]
-      }
-    });
-    
-    // Also send legacy format for backwards compatibility
-    bus.send({
-      type: 'spatial_filter',
-      source: componentId,
-      timestamp: Date.now(),
-      bounds: {
-        sw: { lng: west, lat: south },
-        ne: { lng: east, lat: north }
-      }
+      filter: { type: 'spatial', field: 'geometry', values: [west, south, east, north] }
     });
   }
   

@@ -10,10 +10,7 @@ import { hexToGeoJSON, updateStaticHexLayer } from '../../layers/hex';
 import { getLayerGeoJSONs } from '../../layers';
 import { buildColorExpr } from '../../color/expressions';
 import { buildPMTilesColorExpression } from '../../layers/pmtiles';
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
+import { clamp, parseHexColor } from '../../utils';
 
 function getCurrentLayerVisibility(map: mapboxgl.Map, layerId: string): boolean {
   try {
@@ -23,49 +20,30 @@ function getCurrentLayerVisibility(map: mapboxgl.Map, layerId: string): boolean 
     for (const id of ids) {
       const l = layers.find((x: any) => x && x.id === id);
       if (!l) continue;
-      const vis = l.layout?.visibility;
-      return vis !== 'none';
+      return l.layout?.visibility !== 'none';
     }
-  } catch (_) {}
+  } catch {}
   return true;
 }
 
 function setPaintSafe(map: mapboxgl.Map, layerId: string, prop: string, value: any) {
   try {
-    if (map.getLayer(layerId)) {
-      map.setPaintProperty(layerId, prop as any, value as any);
-    }
-  } catch (_) {}
+    if (map.getLayer(layerId)) map.setPaintProperty(layerId, prop as any, value as any);
+  } catch {}
 }
 
-function setPaintSafePrefix(map: mapboxgl.Map, layerIdPrefix: string, prop: string, value: any) {
+function setPaintBatch(map: mapboxgl.Map, prefix: string, props: Record<string, any>) {
   try {
     const layers: any[] = (map.getStyle?.()?.layers || []) as any[];
     for (const l of layers) {
       const id = l?.id as string | undefined;
-      if (id && id.startsWith(layerIdPrefix) && map.getLayer(id)) {
-        try {
-          map.setPaintProperty(id, prop as any, value as any);
-        } catch (_) {}
+      if (id && id.startsWith(prefix) && map.getLayer(id)) {
+        for (const [prop, value] of Object.entries(props)) {
+          try { map.setPaintProperty(id, prop as any, value as any); } catch {}
+        }
       }
     }
-  } catch (_) {}
-}
-
-function hexToRgbArr(hex: string, withAlpha255?: number): number[] | null {
-  try {
-    const c = String(hex || '').trim();
-    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return null;
-    const r = parseInt(c.slice(1, 3), 16);
-    const g = parseInt(c.slice(3, 5), 16);
-    const b = parseInt(c.slice(5, 7), 16);
-    if (typeof withAlpha255 === 'number' && Number.isFinite(withAlpha255)) {
-      return [r, g, b, Math.max(0, Math.min(255, Math.round(withAlpha255)))];
-    }
-    return [r, g, b];
-  } catch (_) {
-    return null;
-  }
+  } catch {}
 }
 
 export interface DebugApplyElements {
@@ -183,9 +161,9 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
       layer.fillColorConfig = null;
       layer.fillColorRgba = c;
       try {
-        const arr = hexToRgbArr(c, 200) || hexToRgbArr(c) || null;
+        const arr = parseHexColor(c, 200) || parseHexColor(c);
         if (layer.vectorLayer) layer.vectorLayer.getFillColor = arr || c;
-      } catch (_) {}
+      } catch {}
     } else {
       const attr = els.fillAttrEl.value || 'value';
       const colors = els.fillPaletteEl.value || 'ArmyRose';
@@ -245,9 +223,9 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
       layer.lineColorConfig = null;
       layer.lineColorRgba = c;
       try {
-        const arr = hexToRgbArr(c, 255) || hexToRgbArr(c) || null;
+        const arr = parseHexColor(c, 255) || parseHexColor(c);
         if (layer.vectorLayer) layer.vectorLayer.getLineColor = arr || c;
-      } catch (_) {}
+      } catch {}
     } else {
       const attr = els.lineAttrEl.value || 'value';
       const colors = els.linePaletteEl.value || 'ArmyRose';
@@ -302,36 +280,24 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
   try {
     if (isVector) {
       const v: any = layer;
-      const geojson = v.geojson;
-      const vecData = geojson?.features?.map((f: any) => f?.properties || {}) || [];
-
+      const vecData = v.geojson?.features?.map((f: any) => f?.properties || {}) || [];
       const fillExpr = (v.fillColorConfig as any)?.['@@function']
-        ? buildColorExpr(v.fillColorConfig, vecData)
-        : (v.fillColorRgba || '#0090ff');
-
+        ? buildColorExpr(v.fillColorConfig, vecData) : (v.fillColorRgba || '#0090ff');
       const lineExpr = (v.lineColorConfig as any)?.['@@function']
-        ? buildColorExpr(v.lineColorConfig, vecData)
-        : (v.lineColorRgba || '#ffffff');
-
+        ? buildColorExpr(v.lineColorConfig, vecData) : (v.lineColorRgba || '#ffffff');
       const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
       const lineOpacity = (v.isStroked === false) ? 0 : 1;
 
-      setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
-      setPaintSafe(map, `${v.id}-outline`, 'line-color', lineExpr);
-      setPaintSafe(map, `${v.id}-outline`, 'line-width', lwClamped);
-      setPaintSafe(map, `${v.id}-outline`, 'line-opacity', lineOpacity);
-
-      setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'line-width', lwClamped);
-      setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
-
+      setPaintBatch(map, `${v.id}-`, {
+        'fill-color': fillExpr, 'fill-opacity': fillOpacity,
+        'line-color': lineExpr, 'line-width': lwClamped, 'line-opacity': lineOpacity,
+      });
       setPaintSafe(map, `${v.id}-circle`, 'circle-color', fillExpr);
       setPaintSafe(map, `${v.id}-circle`, 'circle-opacity', fillOpacity);
       setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-color', lineExpr);
       setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-width', lwClamped);
     }
-  } catch (_) {}
+  } catch {}
 
   // PMTiles layers use Mapbox GL vector layers. Build color expressions and update paint.
   try {
@@ -339,30 +305,21 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
       const v: any = layer;
       const fillOpacity = (v.isFilled === false) ? 0 : opClamped;
       const lineOpacity = (v.isStroked === false) ? 0 : 1;
-
       const attr = v.colorAttribute || 'value';
       const fillExpr = v.fillColorConfig
-        ? buildPMTilesColorExpression(v.fillColorConfig, attr, '#ff8c00')
-        : (v.fillColorRgba || '#ff8c00');
-
+        ? buildPMTilesColorExpression(v.fillColorConfig, attr, '#ff8c00') : (v.fillColorRgba || '#ff8c00');
       const lineExpr = v.lineColorConfig
-        ? buildPMTilesColorExpression(v.lineColorConfig, attr, '#ffffff')
-        : (v.lineColorRgba || '#ffffff');
+        ? buildPMTilesColorExpression(v.lineColorConfig, attr, '#ffffff') : (v.lineColorRgba || '#ffffff');
+      const lw = (v.isStroked === false) ? 0 : lwClamped;
 
-      const effectiveLineWidth = (v.isStroked === false) ? 0 : lwClamped;
-
-      setPaintSafePrefix(map, `${v.id}-`, 'fill-color', fillExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'fill-opacity', fillOpacity);
-      setPaintSafePrefix(map, `${v.id}-`, 'line-color', lineExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'line-width', effectiveLineWidth);
-      setPaintSafePrefix(map, `${v.id}-`, 'line-opacity', lineOpacity);
-      setPaintSafePrefix(map, `${v.id}-`, 'circle-color', fillExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'circle-opacity', fillOpacity);
-      setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-color', lineExpr);
-      setPaintSafePrefix(map, `${v.id}-`, 'circle-stroke-width', effectiveLineWidth);
+      setPaintBatch(map, `${v.id}-`, {
+        'fill-color': fillExpr, 'fill-opacity': fillOpacity,
+        'line-color': lineExpr, 'line-width': lw, 'line-opacity': lineOpacity,
+        'circle-color': fillExpr, 'circle-opacity': fillOpacity,
+        'circle-stroke-color': lineExpr, 'circle-stroke-width': lw,
+      });
     }
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[FusedMaps] PMTiles update error:', e);
   }
 }

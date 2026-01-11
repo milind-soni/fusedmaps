@@ -2,8 +2,6 @@
  * View state management utilities
  */
 
-import type { ViewState } from '../types';
-
 /**
  * Get bounds array from map [west, south, east, north]
  */
@@ -26,17 +24,6 @@ export function boundsEqual(
 ): boolean {
   if (!a || !b) return false;
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
-}
-
-/**
- * Check if view state values are approximately equal
- */
-export function viewStateEqual(a: ViewState, b: ViewState, epsilon = 1e-6): boolean {
-  return (
-    Math.abs(a.longitude - b.longitude) < epsilon &&
-    Math.abs(a.latitude - b.latitude) < epsilon &&
-    Math.abs(a.zoom - b.zoom) < 0.001
-  );
 }
 
 

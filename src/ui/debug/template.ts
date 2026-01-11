@@ -14,8 +14,8 @@ export function getDebugShellHtml(): string {
       <div id="debug-panel">
         <div id="debug-content">
           <div class="debug-tabs" role="tablist" aria-label="Debug tabs">
-            <button type="button" class="debug-tab-btn active" id="dbg-tab-ui" data-tab="ui" role="tab" aria-selected="true">UI</button>
-            <button type="button" class="debug-tab-btn" id="dbg-tab-sql" data-tab="sql" role="tab" aria-selected="false">SQL</button>
+            <button type="button" class="debug-tab-btn active" id="dbg-tab-btn-ui" data-tab="ui" role="tab" aria-selected="true">UI</button>
+            <button type="button" class="debug-tab-btn" id="dbg-tab-btn-sql" data-tab="sql" role="tab" aria-selected="false">SQL</button>
           </div>
 
           <div class="debug-tab-panel" id="dbg-tab-panel-ui" role="tabpanel" aria-label="UI tab">
@@ -305,77 +305,73 @@ export interface DebugElements {
   sqlInputEl: HTMLTextAreaElement;
 }
 
+const elementIds: Record<keyof DebugElements, string> = {
+  layerSelect: 'dbg-layer-select',
+  hexSection: 'dbg-hex-section',
+  viewStateSection: 'dbg-viewstate-section',
+  fillColorSection: 'fill-color-section',
+  lineColorSection: 'line-color-section',
+  filledEl: 'dbg-filled',
+  strokedEl: 'dbg-stroked',
+  extrudedEl: 'dbg-extruded',
+  extrusionControls: 'dbg-extrusion-controls',
+  elevAttrEl: 'dbg-elev-attr',
+  elevScaleEl: 'dbg-elev-scale',
+  opacitySliderEl: 'dbg-opacity-slider',
+  opacityEl: 'dbg-opacity',
+  fillFnEl: 'dbg-fill-fn',
+  fillFnOptions: 'fill-fn-options',
+  fillStaticOptions: 'fill-static-options',
+  fillAttrEl: 'dbg-attr',
+  fillPaletteEl: 'dbg-palette',
+  fillPalTrigger: 'dbg-palette-trigger',
+  fillPalSwatch: 'dbg-palette-swatch',
+  fillPalMenu: 'dbg-palette-menu',
+  fillDomainMinEl: 'dbg-domain-min',
+  fillDomainMaxEl: 'dbg-domain-max',
+  fillRangeMinEl: 'dbg-domain-range-min',
+  fillRangeMaxEl: 'dbg-domain-range-max',
+  fillStepsEl: 'dbg-steps',
+  fillReverseEl: 'dbg-fill-reverse',
+  fillNullEl: 'dbg-null-color',
+  fillNullLabel: 'dbg-null-color-label',
+  fillStaticEl: 'dbg-fill-static',
+  fillStaticLabel: 'dbg-fill-static-label',
+  lineFnEl: 'dbg-line-fn',
+  lineFnOptions: 'line-fn-options',
+  lineStaticOptions: 'line-static-options',
+  lineAttrEl: 'dbg-line-attr',
+  linePaletteEl: 'dbg-line-palette',
+  linePalTrigger: 'dbg-line-palette-trigger',
+  linePalSwatch: 'dbg-line-palette-swatch',
+  linePalMenu: 'dbg-line-palette-menu',
+  lineDomainMinEl: 'dbg-line-domain-min',
+  lineDomainMaxEl: 'dbg-line-domain-max',
+  lineReverseEl: 'dbg-line-reverse',
+  lineStaticEl: 'dbg-line-static',
+  lineStaticLabel: 'dbg-line-static-label',
+  lineWidthSliderEl: 'dbg-line-width-slider',
+  lineWidthEl: 'dbg-line-width',
+  lngEl: 'dbg-lng',
+  latEl: 'dbg-lat',
+  zoomEl: 'dbg-zoom',
+  pitchEl: 'dbg-pitch',
+  bearingEl: 'dbg-bearing',
+  viewOut: 'dbg-view-output',
+  layerOut: 'dbg-output',
+  sqlSection: 'sql-section',
+  sqlStatusEl: 'sql-status',
+  sqlInputEl: 'dbg-sql',
+};
+
 export function queryDebugElements(): DebugElements {
-  const req = <T extends HTMLElement>(id: string) => {
-    const el = document.getElementById(id) as T | null;
+  const result = {} as DebugElements;
+  for (const [key, id] of Object.entries(elementIds)) {
+    const el = document.getElementById(id);
     if (!el) throw new Error(`[FusedMaps] Debug panel missing element #${id}`);
-    return el;
-  };
-
-  return {
-    layerSelect: req<HTMLSelectElement>('dbg-layer-select'),
-
-    hexSection: req<HTMLElement>('dbg-hex-section'),
-    viewStateSection: req<HTMLElement>('dbg-viewstate-section'),
-    fillColorSection: req<HTMLElement>('fill-color-section'),
-    lineColorSection: req<HTMLElement>('line-color-section'),
-
-    filledEl: req<HTMLInputElement>('dbg-filled'),
-    strokedEl: req<HTMLInputElement>('dbg-stroked'),
-    extrudedEl: req<HTMLInputElement>('dbg-extruded'),
-    extrusionControls: req<HTMLElement>('dbg-extrusion-controls'),
-    elevAttrEl: req<HTMLSelectElement>('dbg-elev-attr'),
-    elevScaleEl: req<HTMLInputElement>('dbg-elev-scale'),
-    opacitySliderEl: req<HTMLInputElement>('dbg-opacity-slider'),
-    opacityEl: req<HTMLInputElement>('dbg-opacity'),
-
-    fillFnEl: req<HTMLSelectElement>('dbg-fill-fn'),
-    fillFnOptions: req<HTMLElement>('fill-fn-options'),
-    fillStaticOptions: req<HTMLElement>('fill-static-options'),
-    fillAttrEl: req<HTMLSelectElement>('dbg-attr'),
-    fillPaletteEl: req<HTMLSelectElement>('dbg-palette'),
-    fillPalTrigger: req<HTMLButtonElement>('dbg-palette-trigger'),
-    fillPalSwatch: req<HTMLElement>('dbg-palette-swatch'),
-    fillPalMenu: req<HTMLElement>('dbg-palette-menu'),
-    fillDomainMinEl: req<HTMLInputElement>('dbg-domain-min'),
-    fillDomainMaxEl: req<HTMLInputElement>('dbg-domain-max'),
-    fillRangeMinEl: req<HTMLInputElement>('dbg-domain-range-min'),
-    fillRangeMaxEl: req<HTMLInputElement>('dbg-domain-range-max'),
-    fillStepsEl: req<HTMLInputElement>('dbg-steps'),
-    fillReverseEl: req<HTMLInputElement>('dbg-fill-reverse'),
-    fillNullEl: req<HTMLInputElement>('dbg-null-color'),
-    fillNullLabel: req<HTMLElement>('dbg-null-color-label'),
-    fillStaticEl: req<HTMLInputElement>('dbg-fill-static'),
-    fillStaticLabel: req<HTMLElement>('dbg-fill-static-label'),
-
-    lineFnEl: req<HTMLSelectElement>('dbg-line-fn'),
-    lineFnOptions: req<HTMLElement>('line-fn-options'),
-    lineStaticOptions: req<HTMLElement>('line-static-options'),
-    lineAttrEl: req<HTMLSelectElement>('dbg-line-attr'),
-    linePaletteEl: req<HTMLSelectElement>('dbg-line-palette'),
-    linePalTrigger: req<HTMLButtonElement>('dbg-line-palette-trigger'),
-    linePalSwatch: req<HTMLElement>('dbg-line-palette-swatch'),
-    linePalMenu: req<HTMLElement>('dbg-line-palette-menu'),
-    lineDomainMinEl: req<HTMLInputElement>('dbg-line-domain-min'),
-    lineDomainMaxEl: req<HTMLInputElement>('dbg-line-domain-max'),
-    lineReverseEl: req<HTMLInputElement>('dbg-line-reverse'),
-    lineStaticEl: req<HTMLInputElement>('dbg-line-static'),
-    lineStaticLabel: req<HTMLElement>('dbg-line-static-label'),
-    lineWidthSliderEl: req<HTMLInputElement>('dbg-line-width-slider'),
-    lineWidthEl: req<HTMLInputElement>('dbg-line-width'),
-
-    lngEl: req<HTMLInputElement>('dbg-lng'),
-    latEl: req<HTMLInputElement>('dbg-lat'),
-    zoomEl: req<HTMLInputElement>('dbg-zoom'),
-    pitchEl: req<HTMLInputElement>('dbg-pitch'),
-    bearingEl: req<HTMLInputElement>('dbg-bearing'),
-    viewOut: req<HTMLTextAreaElement>('dbg-view-output'),
-    layerOut: req<HTMLTextAreaElement>('dbg-output'),
-
-    sqlSection: req<HTMLElement>('sql-section'),
-    sqlStatusEl: req<HTMLElement>('sql-status'),
-    sqlInputEl: req<HTMLTextAreaElement>('dbg-sql'),
-  };
+    (result as any)[key] = el;
+  }
+  return result;
 }
 
 

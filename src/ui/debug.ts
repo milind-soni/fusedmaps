@@ -7,26 +7,15 @@
 
 import type { FusedMapsConfig, HexLayerConfig, VectorLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
-import { hexToGeoJSON, updateStaticHexLayer } from '../layers/hex';
-import { getLayerGeoJSONs } from '../layers';
-import { buildPMTilesColorExpression } from '../layers/pmtiles';
-import { buildColorExpr } from '../color/expressions';
 import { deepDelta, toPyLiteral } from './debug/export';
 import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from './debug/palettes';
 import { ensureDebugShell, queryDebugElements } from './debug/template';
 import { applyDebugUIToLayer } from './debug/apply';
 import { createSqlPanel, type SqlPanel } from './debug/sql_panel';
+import { clamp, fmt, rgbToHex } from '../utils';
 
 export interface DebugHandle {
   destroy: () => void;
-}
-
-function fmt(n: number, digits: number) {
-  try {
-    return Number.isFinite(n) ? n.toFixed(digits) : '';
-  } catch {
-    return '';
-  }
 }
 
 function isEditingInputs(root: HTMLElement) {
@@ -39,13 +28,8 @@ function updateDebugTogglePosition(shell: HTMLElement, panel: HTMLElement, toggl
   try {
     const w = panel.getBoundingClientRect().width || 280;
     shell.style.setProperty('--debug-panel-w', `${w}px`);
-    const collapsed = panel.classList.contains('collapsed');
-    toggle.style.left = collapsed ? '0px' : `var(--debug-panel-w, ${w}px)`;
-  } catch (_) {}
-}
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
+    toggle.style.left = panel.classList.contains('collapsed') ? '0px' : `var(--debug-panel-w, ${w}px)`;
+  } catch {}
 }
 
 function ensureColorContinuousCfg(obj: any) {
@@ -198,8 +182,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   } = queryDebugElements();
 
   // --- Tabs (UI | SQL) ---
-  const tabUiBtn = document.getElementById('dbg-tab-ui') as HTMLButtonElement | null;
-  const tabSqlBtn = document.getElementById('dbg-tab-sql') as HTMLButtonElement | null;
+  const tabUiBtn = document.getElementById('dbg-tab-btn-ui') as HTMLButtonElement | null;
+  const tabSqlBtn = document.getElementById('dbg-tab-btn-sql') as HTMLButtonElement | null;
   const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
   const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
 
@@ -548,14 +532,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         } catch (_) {}
         fillStepsEl.value = String(cc.steps ?? 7);
         const nc = Array.isArray(cc.nullColor) ? cc.nullColor : [184, 184, 184];
-        const hex = `#${nc.slice(0, 3).map((x: any) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+        const hex = rgbToHex(nc);
         fillNullEl.value = hex;
         fillNullLabel.textContent = hex;
       } else if (Array.isArray(fc)) {
         fillFnEl.value = 'static';
-        try { fillReverseEl.checked = false; } catch (_) {}
-        const arr = fc as any[];
-        const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+        try { fillReverseEl.checked = false; } catch {}
+        const hex = rgbToHex(fc as number[]);
         fillStaticEl.value = hex;
         fillStaticLabel.textContent = hex;
       } else {
@@ -607,7 +590,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         } catch (_) {}
         fillStepsEl.value = String(fcCfg.steps ?? 7);
         const nc = Array.isArray(fcCfg.nullColor) ? fcCfg.nullColor : [184, 184, 184];
-        const hex = `#${nc.slice(0, 3).map((x: any) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+        const hex = rgbToHex(nc);
         fillNullEl.value = hex;
         fillNullLabel.textContent = hex;
       } else {
@@ -635,14 +618,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
       } else if (Array.isArray(lc)) {
         lineFnEl.value = 'static';
-        try { lineReverseEl.checked = false; } catch (_) {}
-        const arr = lc as any[];
-        const hex = `#${arr.slice(0, 3).map((x) => clamp(Number(x), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+        try { lineReverseEl.checked = false; } catch {}
+        const hex = rgbToHex(lc as number[]);
         lineStaticEl.value = hex;
         lineStaticLabel.textContent = hex;
       } else {
         lineFnEl.value = 'static';
-        try { lineReverseEl.checked = false; } catch (_) {}
+        try { lineReverseEl.checked = false; } catch {}
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;

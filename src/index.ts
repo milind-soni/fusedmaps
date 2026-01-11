@@ -1,6 +1,6 @@
 /**
  * FusedMaps - Interactive map library for Fused.io
- * 
+ *
  * Renders H3 hexagon layers, GeoJSON vectors, MVT tiles, and raster tiles
  * using Mapbox GL JS and Deck.gl.
  */
@@ -17,6 +17,21 @@ import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
 import { createLayerStore, LayerStore } from './state';
+
+const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
+
+function validateLayerConfig(config: any): { valid: boolean; error?: string } {
+  if (!config || typeof config !== 'object') {
+    return { valid: false, error: 'Layer config must be an object' };
+  }
+  if (!config.id || typeof config.id !== 'string') {
+    return { valid: false, error: 'Layer config must have a string id' };
+  }
+  if (!config.layerType || !VALID_LAYER_TYPES.includes(config.layerType)) {
+    return { valid: false, error: `Layer config must have a valid layerType: ${VALID_LAYER_TYPES.join(', ')}` };
+  }
+  return { valid: true };
+}
 
 // Re-export types
 export * from './types';
@@ -59,11 +74,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
   const debugHandle = sidebarMode ? setupDebugPanel(map, config) : null;
   
-  // Deck.gl overlay (for tile layers)
-  let deckOverlay: unknown = null;
-  let legendUpdateHandler: any = null;
-  let duckHandle: any = null;
-  
+  // Deck.gl overlay (for tile layers) - use object ref to avoid stale closures
+  const overlayRef = { current: null as unknown };
+  let legendUpdateHandler: (() => void) | null = null;
+  let duckHandle: { destroy?: () => void } | null = null;
+
+  // Global event handlers (stored for cleanup)
+  const resizeHandler = () => map.resize();
+  const visibilityHandler = () => { if (!document.hidden) setTimeout(resizeHandler, 100); };
+
   // Helper to get visibility state from store (for compatibility)
   const getVisibilityState = () => store.getVisibilityState();
   
@@ -83,7 +102,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Setup UI components
   if (config.ui?.layerPanel !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
-      handleVisibilityChange(layerId, visible, map, store, deckOverlay);
+      handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
     }, store);
   }
   
@@ -94,7 +113,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // Add layers when map loads
   map.on('load', () => {
     const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-    deckOverlay = result.deckOverlay;
+    overlayRef.current = result.deckOverlay;
     
     // Sync GeoJSONs from layer system to store
     const geoJSONs = getLayerGeoJSONs();
@@ -115,12 +134,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
-      setupTooltip(map, store.getAllConfigs(), getVisibilityState(), deckOverlay);
+      setupTooltip(map, store.getAllConfigs(), getVisibilityState(), overlayRef.current);
     }
-    
+
     // Setup interactions
     if (config.highlightOnClick !== false) {
-      setupHighlight(map, store.getAllConfigs(), getVisibilityState(), deckOverlay);
+      setupHighlight(map, store.getAllConfigs(), getVisibilityState(), overlayRef.current);
     }
     
     // Setup messaging
@@ -160,14 +179,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     }
   });
   
-  // Handle resize
+  // Handle resize - store handlers for cleanup
   map.on('load', () => {
-    [100, 500, 1000].forEach(t => setTimeout(() => map.resize(), t));
+    [100, 500, 1000].forEach(t => setTimeout(resizeHandler, t));
   });
-  window.addEventListener('resize', () => map.resize());
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) setTimeout(() => map.resize(), 100);
-  });
+  window.addEventListener('resize', resizeHandler);
+  document.addEventListener('visibilitychange', visibilityHandler);
   
   // Return instance with control methods
   const getState = (): FusedMapsState => {
@@ -253,7 +270,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
           break;
         }
         case 'setLayerVisibility': {
-          handleVisibilityChange((action as any).layerId, !!(action as any).visible, map, store, deckOverlay);
+          handleVisibilityChange((action as any).layerId, !!(action as any).visible, map, store, overlayRef.current);
           break;
         }
         case 'updateLayer': {
@@ -291,8 +308,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   const instance: FusedMapsInstance = {
     map,
-    deckOverlay,
-    
+    get deckOverlay() { return overlayRef.current; },
+
     // Layer store access
     store,
 
@@ -302,7 +319,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     
     // Legacy API
     setLayerVisibility: (layerId: string, visible: boolean) => {
-      handleVisibilityChange(layerId, visible, map, store, deckOverlay);
+      handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
     },
     updateLegend: () => {
       updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
@@ -310,28 +327,37 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     
     // New Layer Management API
     addLayer: (layerConfig: LayerConfig, options?: { order?: number }) => {
+      const validation = validateLayerConfig(layerConfig);
+      if (!validation.valid) {
+        console.warn('[FusedMaps] addLayer:', validation.error);
+        return null;
+      }
       const state = store.add(layerConfig, options);
       // Incremental render
       try {
         addSingleLayer(map, state.config, state.visible, config);
-      } catch (e) {
+      } catch {
         // Fallback to full rebuild if incremental add fails
         const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-        deckOverlay = result.deckOverlay;
+        overlayRef.current = result.deckOverlay;
       }
       refreshUI();
       return state;
     },
     
     removeLayer: (layerId: string) => {
+      if (!layerId || typeof layerId !== 'string') {
+        console.warn('[FusedMaps] removeLayer: layerId must be a non-empty string');
+        return false;
+      }
       const layer = store.get(layerId)?.config;
       const removed = store.remove(layerId);
       if (removed) {
         try {
           if (layer) removeSingleLayer(map, layer);
-        } catch (e) {
+        } catch {
           const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-          deckOverlay = result.deckOverlay;
+          overlayRef.current = result.deckOverlay;
         }
         refreshUI();
       }
@@ -339,11 +365,19 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     },
     
     updateLayer: (layerId: string, changes: Partial<LayerConfig>) => {
+      if (!layerId || typeof layerId !== 'string') {
+        console.warn('[FusedMaps] updateLayer: layerId must be a non-empty string');
+        return null;
+      }
+      if (!changes || typeof changes !== 'object') {
+        console.warn('[FusedMaps] updateLayer: changes must be an object');
+        return null;
+      }
       const before = store.get(layerId)?.config;
       const state = store.update(layerId, changes);
       if (state) {
         const onlyVisible =
-          Object.keys(changes || {}).length === 1 &&
+          Object.keys(changes).length === 1 &&
           Object.prototype.hasOwnProperty.call(changes, 'visible');
         if (!onlyVisible && before) {
           // Prefer paint/layout updates in place (no flicker)
@@ -353,9 +387,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
             try {
               removeSingleLayer(map, before);
               addSingleLayer(map, state.config, state.visible, config);
-            } catch (e) {
+            } catch {
               const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-              deckOverlay = result.deckOverlay;
+              overlayRef.current = result.deckOverlay;
             }
           }
         }
@@ -371,35 +405,28 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       store.moveUp(layerId);
       // Re-render to update z-order (safe fallback for now)
       const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-      deckOverlay = result.deckOverlay;
+      overlayRef.current = result.deckOverlay;
     },
-    
+
     moveLayerDown: (layerId: string) => {
       store.moveDown(layerId);
       const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
-      deckOverlay = result.deckOverlay;
+      overlayRef.current = result.deckOverlay;
     },
     
     destroy: () => {
-      // Cleanup
-      try { unsubscribeStore(); } catch (_) {}
-      try {
-        (deckOverlay as any)?.__fused_hex_tiles__?.destroy?.();
-      } catch (_) {}
-      try {
-        widgets?.destroy?.();
-      } catch (_) {}
-      try {
-        debugHandle?.destroy?.();
-      } catch (_) {}
-      try {
-        duckHandle?.destroy?.();
-      } catch (_) {}
-      try {
-        if (legendUpdateHandler) {
-          window.removeEventListener('fusedmaps:legend:update', legendUpdateHandler);
-        }
-      } catch (_) {}
+      // Cleanup global event handlers
+      try { window.removeEventListener('resize', resizeHandler); } catch {}
+      try { document.removeEventListener('visibilitychange', visibilityHandler); } catch {}
+      try { if (legendUpdateHandler) window.removeEventListener('fusedmaps:legend:update', legendUpdateHandler); } catch {}
+
+      // Cleanup components
+      try { unsubscribeStore(); } catch {}
+      try { (overlayRef.current as any)?.__fused_hex_tiles__?.destroy?.(); } catch {}
+      try { widgets?.destroy?.(); } catch {}
+      try { debugHandle?.destroy?.(); } catch {}
+      try { duckHandle?.destroy?.(); } catch {}
+
       map.remove?.();
     }
   };

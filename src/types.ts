@@ -325,12 +325,12 @@ export interface FusedMapsInstance {
   updateLegend: () => void;
   
   // New Layer Management API
-  /** Add a new layer at runtime */
-  addLayer: (layerConfig: LayerConfig, options?: { order?: number }) => LayerState;
+  /** Add a new layer at runtime. Returns null if validation fails. */
+  addLayer: (layerConfig: LayerConfig, options?: { order?: number }) => LayerState | null;
   /** Remove a layer by ID */
   removeLayer: (layerId: string) => boolean;
-  /** Update a layer's configuration */
-  updateLayer: (layerId: string, changes: Partial<LayerConfig>) => LayerState | undefined;
+  /** Update a layer's configuration. Returns null if validation fails. */
+  updateLayer: (layerId: string, changes: Partial<LayerConfig>) => LayerState | null | undefined;
   /** Get a layer by ID */
   getLayer: (layerId: string) => LayerState | undefined;
   /** Get all layers */

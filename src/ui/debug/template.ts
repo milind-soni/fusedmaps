@@ -13,6 +13,12 @@ export function getDebugShellHtml(): string {
   return `
       <div id="debug-panel">
         <div id="debug-content">
+          <div class="debug-tabs" role="tablist" aria-label="Debug tabs">
+            <button type="button" class="debug-tab-btn active" id="dbg-tab-ui" data-tab="ui" role="tab" aria-selected="true">UI</button>
+            <button type="button" class="debug-tab-btn" id="dbg-tab-sql" data-tab="sql" role="tab" aria-selected="false">SQL</button>
+          </div>
+
+          <div class="debug-tab-panel" id="dbg-tab-panel-ui" role="tabpanel" aria-label="UI tab">
           <div class="debug-section">
             <div class="debug-section-title">Editing Layer</div>
             <div class="debug-row">
@@ -180,11 +186,6 @@ export function getDebugShellHtml(): string {
             </div>
           </div>
 
-          <div class="debug-section" id="sql-section" style="display:none;">
-            <div class="debug-section-title">SQL <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
-            <textarea id="dbg-sql" class="debug-output" style="height:60px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
-          </div>
-
           <div class="debug-section">
             <details id="dbg-view-details">
               <summary class="debug-section-title" style="cursor:pointer; user-select:none;">Current ViewState</summary>
@@ -195,6 +196,14 @@ export function getDebugShellHtml(): string {
           <div class="debug-section">
             <div class="debug-section-title">Layer Config</div>
             <textarea id="dbg-output" class="debug-output" readonly></textarea>
+          </div>
+          </div>
+
+          <div class="debug-tab-panel" id="dbg-tab-panel-sql" role="tabpanel" aria-label="SQL tab" style="display:none;">
+            <div class="debug-section" id="sql-section">
+              <div class="debug-section-title">SQL <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
+              <textarea id="dbg-sql" class="debug-output" style="height:80px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
+            </div>
           </div>
         </div>
         <div id="debug-resize-handle" title="Drag to resize"></div>

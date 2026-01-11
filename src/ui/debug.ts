@@ -196,6 +196,49 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     sqlInputEl,
   } = queryDebugElements();
 
+  // --- Tabs (UI | SQL) ---
+  const tabUiBtn = document.getElementById('dbg-tab-ui') as HTMLButtonElement | null;
+  const tabSqlBtn = document.getElementById('dbg-tab-sql') as HTMLButtonElement | null;
+  const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
+  const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
+
+  const setActiveTab = (tab: 'ui' | 'sql', persist = true) => {
+    try {
+      const isUi = tab === 'ui';
+      if (tabUiPanel) tabUiPanel.style.display = isUi ? 'block' : 'none';
+      if (tabSqlPanel) tabSqlPanel.style.display = isUi ? 'none' : 'block';
+      if (tabUiBtn) {
+        tabUiBtn.classList.toggle('active', isUi);
+        tabUiBtn.setAttribute('aria-selected', isUi ? 'true' : 'false');
+      }
+      if (tabSqlBtn) {
+        tabSqlBtn.classList.toggle('active', !isUi);
+        tabSqlBtn.setAttribute('aria-selected', isUi ? 'false' : 'true');
+      }
+      if (persist) {
+        try { localStorage.setItem('fusedmaps:debug:tab', tab); } catch (_) {}
+      }
+    } catch (_) {}
+  };
+
+  const onTabClick = (e: any) => {
+    const el = e?.currentTarget as HTMLElement | null;
+    const tab = String(el?.getAttribute?.('data-tab') || '').toLowerCase();
+    if (tab === 'ui' || tab === 'sql') setActiveTab(tab as any, true);
+  };
+
+  try {
+    tabUiBtn?.addEventListener('click', onTabClick as any);
+    tabSqlBtn?.addEventListener('click', onTabClick as any);
+  } catch (_) {}
+
+  try {
+    const saved = String(localStorage.getItem('fusedmaps:debug:tab') || '').toLowerCase();
+    setActiveTab(saved === 'sql' ? 'sql' : 'ui', false);
+  } catch (_) {
+    setActiveTab('ui', false);
+  }
+
   const initial: ViewState = config.initialViewState;
 
   const palettes = getPaletteNames();
@@ -416,7 +459,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     try { if (hexSection) hexSection.style.display = isHex ? 'block' : 'none'; } catch (_) {}
     try { if (fillColorSection) fillColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (lineColorSection) lineColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
-    try { if (sqlSection) sqlSection.style.display = 'none'; } catch (_) {} // re-set below for sql hex
     try { if (viewStateSection) viewStateSection.style.display = 'block'; } catch (_) {}
 
     // Basic toggles
@@ -623,11 +665,19 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     // SQL (DuckDB) section: only for non-tile hex layers that have parquetData/parquetUrl
     try {
       const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
-      if (sqlSection) sqlSection.style.display = isSql ? 'block' : 'none';
-      if (sqlInputEl && isSql) {
-        sqlInputEl.value = String((layer as any).sql || 'SELECT * FROM data');
+      // SQL tab controls visibility; here we just enable/disable + set value.
+      if (sqlSection) sqlSection.style.display = 'block';
+      if (sqlInputEl) {
+        sqlInputEl.disabled = !isSql;
+        if (isSql) {
+          sqlInputEl.value = String((layer as any).sql || 'SELECT * FROM data');
+          sqlInputEl.placeholder = 'SELECT * FROM data';
+        } else {
+          sqlInputEl.value = '';
+          sqlInputEl.placeholder = 'Select a DuckDB (parquetUrl/parquetData) hex layer to enable SQL.';
+        }
       }
-      if (sqlStatusEl) sqlStatusEl.textContent = '';
+      if (sqlStatusEl) sqlStatusEl.textContent = isSql ? '' : 'disabled';
     } catch (_) {}
   };
 
@@ -902,6 +952,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     destroy: () => {
       try { palMgr.destroy(); } catch (_) {}
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
+      try { tabUiBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
+      try { tabSqlBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
       try {

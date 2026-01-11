@@ -15,6 +15,7 @@ import { deepDelta, toPyLiteral } from './debug/export';
 import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from './debug/palettes';
 import { ensureDebugShell, queryDebugElements } from './debug/template';
 import { applyDebugUIToLayer } from './debug/apply';
+import { createSqlPanel, type SqlPanel } from './debug/sql_panel';
 
 export interface DebugHandle {
   destroy: () => void;
@@ -202,101 +203,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
   const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
 
-  // --- SQL editor: optional CodeMirror (lazy-loaded) ---
-  let sqlCM: any = null;
-  let sqlCMLoading = false;
-  let sqlCMBound = false;
-  let scheduleSqlFn: (() => void) | null = null;
-
-  const bindCodeMirrorChange = () => {
-    try {
-      if (!sqlCM || sqlCMBound) return;
-      sqlCMBound = true;
-      sqlCM.on('change', () => {
-        try { scheduleSqlFn?.(); } catch (_) {}
-      });
-    } catch (_) {}
-  };
-
-  const loadCodeMirror = async () => {
-    try {
-      if (sqlCM || sqlCMLoading) return;
-      sqlCMLoading = true;
-
-      // If already present (another iframe / prior init), just mount.
-      if ((window as any).CodeMirror) {
-        try {
-          const CM = (window as any).CodeMirror;
-          sqlCM = CM.fromTextArea(sqlInputEl, {
-            mode: 'text/x-sql',
-            theme: 'material-darker',
-            lineNumbers: false,
-            gutters: [],
-            lineWrapping: true,
-            indentUnit: 2,
-            tabSize: 2,
-            indentWithTabs: false,
-          });
-          sqlCM.setSize('100%', '180px');
-        } catch (_) {}
-        bindCodeMirrorChange();
-        return;
-      }
-
-      // CSS (only once)
-      const ensureCss = (href: string) => {
-        if (document.querySelector(`link[href="${href}"]`)) return;
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        document.head.appendChild(link);
-      };
-      ensureCss('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css');
-      ensureCss('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css');
-
-      // JS (only once)
-      const loadScript = (src: string) =>
-        new Promise<void>((resolve, reject) => {
-          if (document.querySelector(`script[src="${src}"]`)) return resolve();
-          const s = document.createElement('script');
-          s.src = src;
-          s.async = true;
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error(`failed to load ${src}`));
-          document.head.appendChild(s);
-        });
-
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js');
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js');
-
-      // Mount
-      try {
-        const CM = (window as any).CodeMirror;
-        if (!CM) return;
-        sqlCM = CM.fromTextArea(sqlInputEl, {
-          mode: 'text/x-sql',
-          theme: 'material-darker',
-          lineNumbers: false,
-          gutters: [],
-          lineWrapping: true,
-          indentUnit: 2,
-          tabSize: 2,
-          indentWithTabs: false,
-        });
-        sqlCM.setSize('100%', '180px');
-      } catch (_) {}
-      bindCodeMirrorChange();
-    } finally {
-      sqlCMLoading = false;
-    }
-  };
-
-  const getSqlEditorValue = (): string => {
-    try {
-      if (sqlCM) return String(sqlCM.getValue() || '').trim();
-    } catch (_) {}
-    return String(sqlInputEl?.value || '').trim();
-  };
+  let sqlPanel: SqlPanel | null = null;
 
   const setActiveTab = (tab: 'ui' | 'sql', persist = true) => {
     try {
@@ -316,12 +223,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       }
     } catch (_) {}
 
-    // Lazy-load CodeMirror only when SQL tab is opened.
     try {
       if (tab === 'sql') {
-        loadCodeMirror().then(() => {
-          try { sqlCM?.refresh?.(); } catch (_) {}
-        });
+        sqlPanel?.onTabActivated();
       }
     } catch (_) {}
   };
@@ -539,6 +443,15 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       layerOut.value = '';
     }
   };
+
+  // SQL tab support (CodeMirror is lazy-loaded on tab activation)
+  sqlPanel = createSqlPanel({
+    sqlSection,
+    sqlStatusEl,
+    sqlInputEl,
+    getActiveLayer: () => getActiveLayer() as any,
+    updateLayerOutput,
+  });
 
   const updateFillFnOptions = () => {
     const fn = fillFnEl.value;
@@ -769,33 +682,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
     // SQL (DuckDB) section: only for non-tile hex layers that have parquetData/parquetUrl
     try {
-      const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
-      // SQL tab controls visibility; here we just enable/disable + set value.
-      if (sqlSection) sqlSection.style.display = 'block';
-      if (sqlInputEl) {
-        sqlInputEl.disabled = !isSql;
-        if (isSql) {
-          sqlInputEl.value = String((layer as any).sql || 'SELECT * FROM data');
-          sqlInputEl.placeholder = 'SELECT * FROM data';
-        } else {
-          sqlInputEl.value = '';
-          sqlInputEl.placeholder = 'Select a DuckDB (parquetUrl/parquetData) hex layer to enable SQL.';
-        }
-      }
-      // If CodeMirror is mounted, keep it in sync too.
-      try {
-        if (sqlCM) {
-          if (isSql) {
-            sqlCM.setValue(String((layer as any).sql || 'SELECT * FROM data'));
-            sqlCM.setOption('readOnly', false);
-          } else {
-            sqlCM.setValue('-- Select a DuckDB-backed hex layer to enable SQL');
-            sqlCM.setOption('readOnly', 'nocursor');
-          }
-          try { sqlCM.refresh?.(); } catch (_) {}
-        }
-      } catch (_) {}
-      if (sqlStatusEl) sqlStatusEl.textContent = isSql ? '' : 'disabled';
+      sqlPanel?.syncFromLayer(layer as any);
     } catch (_) {}
   };
 
@@ -1009,49 +896,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });
 
-  // SQL editor (debounced, live)
-  let sqlTypingTimer: any = null;
-  const scheduleSql = () => {
-    const layer = getActiveLayer();
-    if (!layer) return;
-    const isSql = layer.layerType === 'hex' && !(layer as any).isTileLayer && (!!(layer as any).parquetData || !!(layer as any).parquetUrl);
-    if (!isSql) return;
-    const sql = getSqlEditorValue() || 'SELECT * FROM data';
-    // Normalize away trailing newlines so the config output stays stable/readable.
-    try { if (sqlInputEl) sqlInputEl.value = sql; } catch (_) {}
-    try { if (sqlCM) sqlCM.setValue(sql); } catch (_) {}
-    (layer as any).sql = sql;
-    try { updateLayerOutput(); } catch (_) {}
-    if (sqlStatusEl) sqlStatusEl.textContent = 'typing...';
-    clearTimeout(sqlTypingTimer);
-    sqlTypingTimer = setTimeout(() => {
-      try {
-        window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', { detail: { layerId: layer.id, sql } }));
-      } catch (_) {}
-    }, 500);
-  };
-  scheduleSqlFn = scheduleSql;
-  try {
-    // textarea fallback (when CodeMirror isn't mounted)
-    sqlInputEl?.addEventListener('input', scheduleSql);
-  } catch (_) {}
-
-  // SQL status updates from runtime
-  const onSqlStatus = (evt: any) => {
-    try {
-      const d = evt?.detail || {};
-      const layerId = String(d.layerId || '');
-      const status = String(d.status || '');
-      const active = getActiveLayer();
-      if (!active || active.id !== layerId) return;
-      if (sqlStatusEl) sqlStatusEl.textContent = status;
-    } catch (_) {}
-  };
-  try {
-    window.addEventListener('fusedmaps:sql:status', onSqlStatus as any);
-  } catch (_) {}
-
-
   // Update viewstate only on "stop"
   try {
     map.on('moveend', updateFromMapStop);
@@ -1077,15 +921,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       try { tabSqlBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
-      try { scheduleSqlFn = null; } catch (_) {}
-      try { sqlCM?.toTextArea?.(); } catch (_) {}
-      try { sqlCM = null; } catch (_) {}
       try {
         map.off('moveend', updateFromMapStop);
         map.off('rotateend', updateFromMapStop);
         map.off('pitchend', updateFromMapStop);
       } catch (_) {}
-      try { window.removeEventListener('fusedmaps:sql:status', onSqlStatus as any); } catch (_) {}
+      try { sqlPanel?.destroy(); } catch (_) {}
+      try { sqlPanel = null; } catch (_) {}
       try { shell?.remove(); } catch (_) {}
     }
   };

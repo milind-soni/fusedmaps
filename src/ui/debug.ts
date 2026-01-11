@@ -230,7 +230,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           sqlCM = CM.fromTextArea(sqlInputEl, {
             mode: 'text/x-sql',
             theme: 'material-darker',
-            lineNumbers: true,
+            lineNumbers: false,
+            gutters: [],
             lineWrapping: true,
             indentUnit: 2,
             tabSize: 2,
@@ -275,7 +276,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         sqlCM = CM.fromTextArea(sqlInputEl, {
           mode: 'text/x-sql',
           theme: 'material-darker',
-          lineNumbers: true,
+          lineNumbers: false,
+          gutters: [],
           lineWrapping: true,
           indentUnit: 2,
           tabSize: 2,

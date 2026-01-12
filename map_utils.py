@@ -772,8 +772,11 @@ def _process_hex_layer(idx: int, df, tile_url: str, config: dict, name: str, vis
 
         data_records = _sanitize_records(df_clean.to_dict('records'))
 
-    # Extract tooltip columns
+    # Extract tooltip columns (check legacy hexLayer too)
+    legacy_hex = config.get("hexLayer") or {}
     tooltip = _extract_tooltip_columns_new(config, style)
+    if not tooltip:
+        tooltip = legacy_hex.get("tooltipAttrs") or legacy_hex.get("tooltipColumns") or []
 
     result = {
         "id": f"layer-{idx}",
@@ -786,6 +789,7 @@ def _process_hex_layer(idx: int, df, tile_url: str, config: dict, name: str, vis
         result["data"] = data_records
     if tile_url:
         result["tileUrl"] = tile_url
+        result["isTileLayer"] = True
     if style:
         result["style"] = style
     if tile_opts:
@@ -841,7 +845,11 @@ def _process_vector_layer(idx: int, df, config: dict, name: str, visible: bool) 
         feat["properties"] = {k: _sanitize_value(v) for k, v in (feat.get("properties") or {}).items()}
         feat["properties"]["_fused_idx"] = idx_f
 
+    # Extract tooltip columns (check legacy vectorLayer too)
+    legacy_vec = config.get("vectorLayer") or {}
     tooltip = _extract_tooltip_columns_new(config, style)
+    if not tooltip:
+        tooltip = legacy_vec.get("tooltipColumns") or legacy_vec.get("tooltipAttrs") or []
 
     result = {
         "id": f"layer-{idx}",

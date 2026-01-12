@@ -689,9 +689,19 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const hex = rgbToHex(lc as number[]);
         lineStaticEl.value = hex;
         lineStaticLabel.textContent = hex;
+        // Still populate attr dropdown for when user switches to colorContinuous
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
       } else {
         lineFnEl.value = 'static';
         try { lineReverseEl.checked = false; } catch {}
+        // Still populate attr dropdown for when user switches to colorContinuous
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;

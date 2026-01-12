@@ -431,6 +431,83 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   word-break: break-word;
 }
 
+/* Location Search / Geocoder */
+#location-search {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 101;
+  width: 240px;
+}
+
+#location-search input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--ui-float-bg);
+  border: 1px solid var(--ui-border-2);
+  border-radius: 8px;
+  color: var(--ui-text);
+  font-size: 13px;
+  font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
+  outline: none;
+  box-sizing: border-box;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+#location-search input::placeholder {
+  color: var(--ui-muted-2);
+}
+
+#location-search input:focus {
+  border-color: var(--ui-elements);
+}
+
+#location-search .search-results {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--ui-float-bg);
+  border: 1px solid var(--ui-border-2);
+  border-radius: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+#location-search .search-results.visible {
+  display: block;
+}
+
+#location-search .search-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#location-search .search-item:last-child {
+  border-bottom: none;
+}
+
+#location-search .search-item:hover {
+  background: var(--ui-surface);
+}
+
+#location-search .search-item .place-name {
+  font-weight: 500;
+  color: var(--ui-text);
+  font-size: 13px;
+}
+
+#location-search .search-item .place-context {
+  font-size: 11px;
+  color: var(--ui-muted);
+  margin-top: 2px;
+}
+
 /* Layer Toggle Panel */
 #layer-panel {
   position: fixed;

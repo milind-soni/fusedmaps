@@ -207,6 +207,7 @@ export interface WidgetsConfig {
     basemap?: WidgetSetting;
     layers?: WidgetSetting;
     legend?: WidgetSetting;
+    geocoder?: WidgetSetting;
 }
 export interface MessagingConfig {
     broadcast?: {

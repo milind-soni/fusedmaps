@@ -281,6 +281,7 @@ export interface WidgetsConfig {
   basemap?: WidgetSetting;   // basemap switcher
   layers?: WidgetSetting;    // layer visibility panel
   legend?: WidgetSetting;    // color legend
+  geocoder?: WidgetSetting;  // location search bar
 }
 
 // ============================================================

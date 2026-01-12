@@ -302,6 +302,7 @@ def deckgl_layers(
         "basemap": "bottom-left",    # basemap switcher
         "layers": "top-right",       # layer visibility panel
         "legend": "bottom-right",    # color legend
+        "geocoder": False,           # location search (disabled by default)
     }
     # Merge user overrides
     widget_config = {**default_widgets, **(widgets or {})}

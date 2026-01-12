@@ -13,6 +13,7 @@ import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
 import { setupWidgets } from './ui/widgets';
 import { setupDebugPanel } from './ui/debug';
+import { setupGeocoder } from './ui/geocoder';
 import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
@@ -76,13 +77,14 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     screenshotEnabled: config.ui?.screenshot !== false
   });
 
-  // Widget positions from config (defaults: controls/scale/basemap=bottom-left, layers=top-right, legend=bottom-right)
+  // Widget positions from config (defaults: controls/scale/basemap=bottom-left, layers=top-right, legend=bottom-right, geocoder=false)
   const widgetPos = config.widgets || {};
   const controlsPos = widgetPos.controls ?? 'bottom-left';
   const scalePos = widgetPos.scale ?? 'bottom-left';
   const basemapPos = widgetPos.basemap ?? 'bottom-left';
   const layersPos = widgetPos.layers ?? 'top-right';
   const legendPos = widgetPos.legend ?? 'bottom-right';
+  const geocoderPos = widgetPos.geocoder ?? false;  // Disabled by default
 
   // Widgets (zoom/home + optional screenshot + cmd-drag orbit + basemap switcher)
   const widgets = setupWidgets(map, config.initialViewState, {
@@ -138,6 +140,25 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   });
   
   // Setup UI components
+  // Geocoder (location search) - setup first so we can adjust layer panel position
+  let geocoderHandle: { destroy: () => void } | null = null;
+  if (geocoderPos !== false) {
+    geocoderHandle = setupGeocoder(map, {
+      position: geocoderPos,
+      mapboxToken: config.mapboxToken
+    });
+    // Adjust layer panel position when geocoder is in same corner
+    if (geocoderPos === layersPos) {
+      // Push layer panel down when geocoder is above it
+      setTimeout(() => {
+        const layerPanel = document.getElementById('layer-panel');
+        if (layerPanel) {
+          layerPanel.style.top = '56px';  // Below geocoder (44px input + 12px gap)
+        }
+      }, 0);
+    }
+  }
+
   if (config.ui?.layerPanel !== false && layersPos !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
@@ -502,6 +523,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       try { widgets?.destroy?.(); } catch {}
       try { debugHandle?.destroy?.(); } catch {}
       try { duckHandle?.destroy?.(); } catch {}
+      try { geocoderHandle?.destroy?.(); } catch {}
 
       map.remove?.();
     }

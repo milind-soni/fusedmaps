@@ -1309,3 +1309,19 @@ def enable_map_sync(html_input, channel: str = "default"):
     """
     return html_input
 
+
+def enable_location_listener(html_input, zoom_offset: int = 0, padding: int = 40, max_zoom: int = 16):
+    """
+    Note: In the refactored version, location listening is handled internally.
+    This function is kept for API compatibility but just returns the input.
+    """
+    return html_input
+
+
+def enable_hex_click_broadcast(html_input, channel: str = "fused-bus"):
+    """
+    Note: In the refactored version, click broadcasting is handled via config.
+    This function is kept for API compatibility but just returns the input.
+    """
+    return html_input
+

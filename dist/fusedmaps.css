@@ -691,6 +691,7 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 .fm-basemap-switcher {
   position: relative;
   margin: 0 0 10px 20px;
+  z-index: 10;
 }
 
 /* Trigger button */

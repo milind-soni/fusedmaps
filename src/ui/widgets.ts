@@ -473,10 +473,10 @@ function addBasemapSwitcher(
   wrapper.appendChild(panel);
 
   try {
-    // Add below the zoom control group
+    // Insert at beginning (column-reverse means first child appears at bottom)
     const ctrlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
     if (ctrlContainer) {
-      ctrlContainer.appendChild(wrapper);
+      ctrlContainer.insertBefore(wrapper, ctrlContainer.firstChild);
     }
   } catch (_) {}
 

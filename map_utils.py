@@ -226,6 +226,8 @@ def deckgl_layers(
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
     # --- AI Configuration ---
     ai_udf_url: typing.Optional[str] = None,  # URL to AI UDF that converts prompts to SQL
+    ai_schema: typing.Optional[str] = None,  # Schema string to pass to AI UDF (auto-extracted if not provided)
+    ai_context: typing.Optional[str] = None,  # Custom domain context for AI (e.g., CDL crop codes)
     # --- Custom injection for extending without modifying FusedMaps package ---
     custom_head: str = "",  # HTML to inject in <head> (scripts, stylesheets)
     custom_css: str = "",   # CSS rules to inject in <style>
@@ -455,6 +457,23 @@ def deckgl_layers(
     # AI UDF URL (backend prompt-to-SQL)
     if ai_udf_url:
         fusedmaps_config["aiUdfUrl"] = ai_udf_url
+
+        # Auto-extract schema from first DuckDB hex layer if not provided
+        extracted_schema = ai_schema
+        if not extracted_schema:
+            for layer in processed_layers:
+                parquet_url = layer.get("parquetUrl")
+                if layer.get("layerType") == "hex" and parquet_url:
+                    try:
+                        extracted_schema = extract_schema(parquet_url)
+                    except:
+                        pass
+                    break
+
+        if extracted_schema:
+            fusedmaps_config["aiSchema"] = extracted_schema
+        if ai_context:
+            fusedmaps_config["aiContext"] = ai_context
 
     # Add messaging config if on_click specified
     if on_click:
@@ -1137,6 +1156,99 @@ def _sanitize_records(records: list) -> list:
         {k: _sanitize_value(v) for k, v in row.items()}
         for row in records
     ]
+
+
+def extract_schema(parquet_url: str, table_name: str = "data") -> str:
+    """
+    Extract schema from a parquet file and return a formatted string for AI prompts.
+
+    Args:
+        parquet_url: URL to the parquet file
+        table_name: Name to use for the table in the schema description
+
+    Returns:
+        Formatted schema string for use in AI system prompts
+
+    Example:
+        >>> schema = extract_schema("https://example.com/data.parquet")
+        >>> print(schema)
+        Table: `data`
+        Columns:
+        - hex (VARCHAR): H3 hexagon ID - REQUIRED in all queries
+        - value (DOUBLE)
+        - category (VARCHAR)
+    """
+    import duckdb
+
+    try:
+        con = duckdb.connect()
+        # Get column info from parquet
+        schema_df = con.execute(f"DESCRIBE SELECT * FROM '{parquet_url}' LIMIT 1").df()
+
+        lines = [f"Table: `{table_name}`", "Columns:"]
+
+        for _, row in schema_df.iterrows():
+            col_name = row['column_name']
+            col_type = row['column_type']
+
+            # Add hints for special columns
+            if col_name.lower() in ('hex', 'h3', 'h3_cell', 'h3_index'):
+                lines.append(f"- {col_name} ({col_type}): H3 hexagon ID - REQUIRED in all SELECT queries")
+            else:
+                lines.append(f"- {col_name} ({col_type})")
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error extracting schema: {e}"
+
+
+def build_sql_system_prompt(
+    schema: str,
+    table_name: str = "data",
+    custom_context: str = "",
+) -> str:
+    """
+    Build a system prompt for SQL generation with the given schema.
+
+    Args:
+        schema: Schema string (from extract_schema())
+        table_name: Table name used in queries
+        custom_context: Additional domain-specific context (e.g., CDL crop codes)
+
+    Returns:
+        Complete system prompt for AI SQL generation
+    """
+    return f"""You are a DuckDB SQL query generator for geospatial hex data.
+
+Convert natural language requests into valid DuckDB SELECT statements.
+
+## Schema
+{schema}
+
+{f"## Domain Context{chr(10)}{custom_context}" if custom_context else ""}
+
+## CRITICAL RULES
+1. ALWAYS include the hex/h3 column in SELECT (required for map rendering)
+2. Use `{table_name}` as the table name
+3. Return ONLY the SQL query - no explanations, no markdown, no code blocks
+4. For filtering, use WHERE clauses
+5. Keep queries focused on filtering/aggregating the spatial data
+
+## Example Queries
+
+Filter by value:
+SELECT * FROM {table_name} WHERE value > 50
+
+Top N results:
+SELECT * FROM {table_name} ORDER BY area DESC LIMIT 100
+
+Multiple conditions:
+SELECT * FROM {table_name} WHERE category = 'A' AND value > 10
+
+Aggregation (keep hex column):
+SELECT hex, SUM(area) as total_area FROM {table_name} GROUP BY hex
+
+Return ONLY the SQL query."""
 
 
 def _compute_center_from_hex(df) -> dict:

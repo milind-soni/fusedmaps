@@ -446,6 +446,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   // AI prompt (minimal - calls backend UDF)
   const aiUdfUrl = (config as any).aiUdfUrl as string | undefined;
+  const aiSchema = (config as any).aiSchema as string | undefined;
+  const aiContext = (config as any).aiContext as string | undefined;
+
   if (aiUdfUrl) {
     try { aiPromptRow.style.display = 'flex'; } catch (_) {}
   }
@@ -461,7 +464,11 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       aiPromptStatus.textContent = 'thinking...';
       aiPromptStatus.style.color = 'var(--ui-muted-2)';
 
-      const url = aiUdfUrl + (aiUdfUrl.includes('?') ? '&' : '?') + 'prompt=' + encodeURIComponent(prompt);
+      // Build URL with prompt, schema, and context
+      let url = aiUdfUrl + (aiUdfUrl.includes('?') ? '&' : '?') + 'prompt=' + encodeURIComponent(prompt);
+      if (aiSchema) url += '&schema=' + encodeURIComponent(aiSchema);
+      if (aiContext) url += '&context=' + encodeURIComponent(aiContext);
+
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

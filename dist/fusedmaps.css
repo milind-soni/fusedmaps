@@ -687,91 +687,46 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   to { transform: rotate(360deg); }
 }
 
-/* Basemap switcher (Google Maps-ish, minimal) */
-.fm-basemap-switcher {
-  position: relative;
-  margin: 0 0 10px 20px;
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  z-index: 50;
-  user-select: none;
-}
+/* Basemap switcher - trigger button inside ctrl-group */
 .fm-basemap-trigger {
-  width: 44px;
-  height: 44px;
+  width: 29px;
+  height: 29px;
   padding: 0;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(10,10,10,0.8);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  border: none;
+  background: transparent;
   cursor: pointer;
   overflow: hidden;
   position: relative;
-  pointer-events: auto;
-}
-.fm-basemap-trigger:hover {
-  border-color: rgba(255,255,255,0.35);
 }
 .fm-basemap-trigger-thumb {
   position: absolute;
-  inset: 0;
+  inset: 2px;
+  border-radius: 4px;
 }
-.fm-basemap-trigger-label {
-  position: absolute;
-  left: 6px;
-  bottom: 5px;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.75);
-  pointer-events: none;
-}
+.fm-basemap-trigger-label,
 .fm-basemap-trigger-caret {
-  position: absolute;
-  right: 6px;
-  top: 6px;
-  font-size: 10px;
-  color: rgba(255,255,255,0.9);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.75);
-  transform: rotate(90deg);
-  transition: transform 0.16s ease;
-  pointer-events: none;
-}
-.fm-basemap-switcher.is-open .fm-basemap-trigger-caret {
-  transform: rotate(-90deg);
+  display: none;
 }
 
+/* Basemap options panel */
 .fm-basemap-options {
+  display: none;
+  gap: 4px;
+  margin: 0 0 10px 20px;
+  padding: 4px;
+  background: var(--ui-float-bg, rgba(20,20,20,0.95));
+  border: 1px solid var(--ui-border, #333);
+  border-radius: 6px;
+}
+.fm-basemap-options.is-open {
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  overflow: hidden;
-  max-width: 0;
-  opacity: 0;
-  pointer-events: none;
-  padding: 0;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  transition: max-width 0.18s ease, opacity 0.12s ease, padding 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
-.fm-basemap-switcher.is-open .fm-basemap-options {
-  max-width: 340px;
-  opacity: 1;
-  pointer-events: auto;
-  padding: 6px;
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(20,20,20,0.92);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-}
-
 .fm-basemap-option {
-  width: 64px;
-  height: 44px;
+  width: 52px;
+  height: 36px;
   padding: 0;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  border: 2px solid transparent;
   background: transparent;
   cursor: pointer;
   overflow: hidden;
@@ -779,23 +734,24 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 }
 .fm-basemap-option:hover,
 .fm-basemap-option.is-hover {
-  border-color: rgba(255,255,255,0.28);
+  border-color: rgba(255,255,255,0.3);
 }
 .fm-basemap-option.is-active {
-  border-color: rgba(255,255,255,0.45);
+  border-color: var(--ui-elements, #E8FF59);
 }
 .fm-basemap-option-thumb {
   position: absolute;
   inset: 0;
+  border-radius: 2px;
 }
 .fm-basemap-option-label {
   position: absolute;
-  left: 6px;
-  bottom: 5px;
-  font-size: 10px;
+  left: 4px;
+  bottom: 2px;
+  font-size: 8px;
   font-weight: 600;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.75);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   pointer-events: none;
 }
 

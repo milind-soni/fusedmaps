@@ -334,6 +334,10 @@ function addBasemapSwitcher(
   let activeId = findCurrentBasemap(options.currentStyle);
   let isExpanded = false;
 
+  // Wrapper for trigger + panel
+  const wrapper = document.createElement('div');
+  wrapper.className = 'fm-basemap-switcher';
+
   // Collapsed view (shows active basemap thumbnail)
   const trigger = document.createElement('button');
   trigger.type = 'button';
@@ -396,7 +400,7 @@ function addBasemapSwitcher(
 
       // Collapse panel
       isExpanded = false;
-      try { panel.classList.remove('is-open'); } catch (_) {}
+      try { wrapper.classList.remove('is-open'); } catch (_) {}
 
       // Switch map style
       try {
@@ -431,12 +435,12 @@ function addBasemapSwitcher(
 
   const close = () => {
     isExpanded = false;
-    try { panel.classList.remove('is-open'); } catch (_) {}
+    try { wrapper.classList.remove('is-open'); } catch (_) {}
   };
 
   const open = () => {
     isExpanded = true;
-    try { panel.classList.add('is-open'); } catch (_) {}
+    try { wrapper.classList.add('is-open'); } catch (_) {}
   };
 
   // Toggle on trigger click
@@ -449,7 +453,7 @@ function addBasemapSwitcher(
 
   // Close panel when clicking outside
   const closeOnOutsideClick = (e: MouseEvent) => {
-    if (isExpanded && !trigger.contains(e.target as Node) && !panel.contains(e.target as Node)) {
+    if (isExpanded && !wrapper.contains(e.target as Node)) {
       close();
     }
   };
@@ -464,13 +468,15 @@ function addBasemapSwitcher(
   document.addEventListener('click', closeOnOutsideClick);
   document.addEventListener('keydown', closeOnEscape);
 
+  // Assemble wrapper
+  wrapper.appendChild(trigger);
+  wrapper.appendChild(panel);
+
   try {
-    // Find the zoom control group and append basemap button to it
-    const ctrlGroup = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left .mapboxgl-ctrl-group');
-    if (ctrlGroup) {
-      ctrlGroup.appendChild(trigger);
-      // Place panel outside the group for proper positioning
-      ctrlGroup.parentElement?.appendChild(panel);
+    // Add below the zoom control group
+    const ctrlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
+    if (ctrlContainer) {
+      ctrlContainer.appendChild(wrapper);
     }
   } catch (_) {}
 
@@ -479,8 +485,7 @@ function addBasemapSwitcher(
       try {
         document.removeEventListener('click', closeOnOutsideClick);
         document.removeEventListener('keydown', closeOnEscape);
-        trigger.remove();
-        panel.remove();
+        wrapper.remove();
       } catch (_) {}
     },
     setActive: (id: string) => {

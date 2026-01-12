@@ -224,6 +224,8 @@ def deckgl_layers(
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
+    # --- AI Configuration ---
+    ai_config: typing.Optional[dict] = None,  # AI SQL generation config
     # --- Custom injection for extending without modifying FusedMaps package ---
     custom_head: str = "",  # HTML to inject in <head> (scripts, stylesheets)
     custom_css: str = "",   # CSS rules to inject in <style>
@@ -449,6 +451,21 @@ def deckgl_layers(
 
     if sidebar is not None:
         fusedmaps_config["sidebar"] = sidebar
+
+    # Process AI config
+    if ai_config and ai_config.get("enabled"):
+        # Auto-extract schema from DuckDB layers if not provided
+        ai_schema = ai_config.get("schema")
+        if ai_schema is None:
+            ai_schema = _extract_ai_schema(processed_layers)
+
+        fusedmaps_config["ai"] = {
+            "enabled": True,
+            "apiKey": ai_config.get("api_key") or ai_config.get("apiKey"),
+            "model": ai_config.get("model", "openai/gpt-4o-mini"),
+            "schema": ai_schema,
+            "systemPrompt": ai_config.get("system_prompt") or ai_config.get("systemPrompt"),
+        }
     
     # Add messaging config if on_click specified
     if on_click:
@@ -1131,6 +1148,47 @@ def _sanitize_records(records: list) -> list:
         {k: _sanitize_value(v) for k, v in row.items()}
         for row in records
     ]
+
+
+def _extract_ai_schema(layers: list) -> dict:
+    """Extract schema info from layers for AI SQL generation."""
+    schema = {
+        "tables": {},
+        "description": "DuckDB database with spatial data. Use 'data' as the table name."
+    }
+
+    for layer in layers:
+        layer_id = layer.get("id", "unknown")
+        layer_type = layer.get("layerType")
+
+        # Only DuckDB-backed hex layers have queryable data
+        if layer_type == "hex" and (layer.get("parquetUrl") or layer.get("parquetData")):
+            columns = []
+
+            # Extract columns from tooltipColumns
+            tooltip_cols = layer.get("tooltip") or layer.get("tooltipColumns") or []
+            for col in tooltip_cols:
+                if col and col != "hex":
+                    columns.append({"name": col, "type": "unknown"})
+
+            # Always include hex column
+            columns.insert(0, {"name": "hex", "type": "string", "description": "H3 hexagon ID"})
+
+            # Extract columns from style config if available
+            style = layer.get("style", {})
+            fill_color = style.get("fillColor")
+            if isinstance(fill_color, dict) and fill_color.get("attr"):
+                attr = fill_color["attr"]
+                if not any(c["name"] == attr for c in columns):
+                    columns.append({"name": attr, "type": "number"})
+
+            schema["tables"][layer_id] = {
+                "name": layer.get("name", layer_id),
+                "columns": columns,
+                "sql": layer.get("sql", "SELECT * FROM data"),
+            }
+
+    return schema
 
 
 def _compute_center_from_hex(df) -> dict:

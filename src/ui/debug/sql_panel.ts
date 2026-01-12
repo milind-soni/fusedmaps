@@ -13,6 +13,7 @@ export interface SqlPanelDeps {
 export interface SqlPanel {
   onTabActivated: () => void;
   syncFromLayer: (layer: AnyLayer | null) => void;
+  applySql: (sql: string) => void;
   destroy: () => void;
 }
 
@@ -198,6 +199,30 @@ export function createSqlPanel(deps: SqlPanelDeps): SqlPanel {
     try { sqlStatusEl.textContent = enabled ? '' : 'disabled'; } catch (_) {}
   };
 
+  const applySql = (sql: string) => {
+    const layer = getActiveLayer();
+    if (!isDuckDbHexLayer(layer)) return;
+
+    // Guard to prevent change events during programmatic update
+    isUpdatingSql = true;
+    try {
+      // Update textarea and CodeMirror
+      sqlInputEl.value = sql;
+      if (sqlCM) {
+        sqlCM.setValue(sql);
+      }
+      // Update layer config
+      (layer as any).sql = sql;
+      updateLayerOutput();
+    } catch (_) {}
+    isUpdatingSql = false;
+
+    // Dispatch update event
+    try {
+      window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', { detail: { layerId: layer!.id, sql } }));
+    } catch (_) {}
+  };
+
   return {
     onTabActivated: () => {
       loadCodeMirror().then(() => {
@@ -205,6 +230,7 @@ export function createSqlPanel(deps: SqlPanelDeps): SqlPanel {
       });
     },
     syncFromLayer,
+    applySql,
     destroy: () => {
       try { clearTimeout(sqlTypingTimer); } catch (_) {}
       try { sqlInputEl.removeEventListener('input', onTextareaInput); } catch (_) {}

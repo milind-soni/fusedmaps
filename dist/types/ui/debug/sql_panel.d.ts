@@ -10,6 +10,7 @@ export interface SqlPanelDeps {
 export interface SqlPanel {
     onTabActivated: () => void;
     syncFromLayer: (layer: AnyLayer | null) => void;
+    applySql: (sql: string) => void;
     destroy: () => void;
 }
 export declare function createSqlPanel(deps: SqlPanelDeps): SqlPanel;

@@ -82,8 +82,8 @@ VALID_TILE_PROPS = {
 # NOTE: Pin to a specific commit for reproducibility.
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
-# - main ref: 9882bbf (feat(debug): add AI/SQL/UI tabs)
-FUSEDMAPS_CDN_REF_DEFAULT = "fdc493d69be24f68152a57913d8676cdb64d3108"
+# - main ref: 68e492b (refactor: new clean config format)
+FUSEDMAPS_CDN_REF_DEFAULT = "68e492b"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 

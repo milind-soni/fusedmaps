@@ -45,8 +45,11 @@ function getAttrCandidates(layer: HexLayerConfig): string[] {
     const lc: any = (layer.hexLayer as any)?.getLineColor;
     if (fc?.attr) out.add(String(fc.attr));
     if (lc?.attr) out.add(String(lc.attr));
-    const tta: any = (layer.hexLayer as any)?.tooltipAttrs;
-    if (Array.isArray(tta)) tta.forEach((x) => out.add(String(x)));
+    // Check tooltipColumns/tooltipAttrs at both layer and hexLayer level
+    const ttc: any = (layer as any).tooltipColumns || (layer.hexLayer as any)?.tooltipColumns;
+    const tta: any = (layer as any).tooltipAttrs || (layer.hexLayer as any)?.tooltipAttrs;
+    if (Array.isArray(ttc)) ttc.forEach((x: any) => { if (x && x !== 'hex') out.add(String(x)); });
+    if (Array.isArray(tta)) tta.forEach((x: any) => { if (x && x !== 'hex') out.add(String(x)); });
   } catch (_) {}
   return [...out].filter(Boolean);
 }
@@ -541,9 +544,19 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const hex = rgbToHex(fc as number[]);
         fillStaticEl.value = hex;
         fillStaticLabel.textContent = hex;
+        // Still populate attr dropdown for when user switches to colorContinuous
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
       } else {
         fillFnEl.value = 'colorContinuous';
         try { fillReverseEl.checked = false; } catch (_) {}
+        // Populate attr dropdown from tooltipColumns
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
       }
     } else if (isVector || isPmtiles) {
       const v = layer as any;

@@ -208,6 +208,19 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
           store.setGeoJSON(id, geojson);
         });
 
+        // Re-trigger DuckDB SQL layers (they load async and need sources re-created)
+        const layerConfigs = store.getAllConfigs();
+        layerConfigs.forEach((layer: any) => {
+          // Check if it's a DuckDB SQL layer (hex with parquetUrl, not a tile layer)
+          if (layer.layerType === 'hex' && !layer.isTileLayer && (layer.parquetUrl || layer.parquetData)) {
+            try {
+              window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', {
+                detail: { layerId: layer.id, sql: layer.sql || 'SELECT * FROM data' }
+              }));
+            } catch (_) {}
+          }
+        });
+
         // Refresh UI
         refreshUI();
       } catch (e) {

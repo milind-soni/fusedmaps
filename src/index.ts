@@ -76,8 +76,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     screenshotEnabled: config.ui?.screenshot !== false
   });
 
-  // Widgets (zoom/home + optional screenshot + cmd-drag orbit)
-  const widgets = setupWidgets(map, config.initialViewState, config.ui?.screenshot !== false);
+  // Widgets (zoom/home + optional screenshot + cmd-drag orbit + basemap switcher)
+  const widgets = setupWidgets(map, config.initialViewState, {
+    screenshot: config.ui?.screenshot !== false,
+    basemapSwitcher: config.ui?.basemapSwitcher !== false,
+    currentStyle: config.styleUrl || ''
+  });
 
   // Sidebar panel (inspector)
   // - sidebar undefined => do not mount (no toggle)
@@ -189,6 +193,73 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         map.on('moveend', handler as any);
       } catch (_) {}
     }
+
+    // Handle basemap style changes - re-add Mapbox-native layers
+    // (Deck.gl overlay survives style changes, but Mapbox sources/layers don't)
+    let isInitialLoad = true;
+    map.on('style.load', () => {
+      // Skip the initial load (already handled above)
+      if (isInitialLoad) {
+        isInitialLoad = false;
+        return;
+      }
+
+      // Re-add Mapbox-native layers (PMTiles, MVT, vector GeoJSON, raster)
+      // Deck.gl overlay (hex tiles) survives and doesn't need re-adding
+      try {
+        const layerConfigs = store.getAllConfigs();
+        const visibility = getVisibilityState();
+
+        layerConfigs.forEach((layerConfig) => {
+          const ltype = (layerConfig as any).layerType;
+
+          // Re-add PMTiles layers
+          if (ltype === 'pmtiles') {
+            try {
+              const { addPMTilesLayer } = require('./layers/pmtiles');
+              addPMTilesLayer(map, layerConfig, visibility);
+            } catch (e) {
+              console.warn('[style.load] Failed to re-add PMTiles layer:', e);
+            }
+          }
+
+          // Re-add MVT layers
+          if (ltype === 'mvt') {
+            try {
+              const { addMVTLayer } = require('./layers/mvt');
+              addMVTLayer(map, layerConfig, visibility);
+            } catch (e) {
+              console.warn('[style.load] Failed to re-add MVT layer:', e);
+            }
+          }
+
+          // Re-add vector GeoJSON layers
+          if (ltype === 'vector' && (layerConfig as any).geojson) {
+            try {
+              const { addVectorLayer } = require('./layers/vector');
+              addVectorLayer(map, layerConfig, visibility);
+            } catch (e) {
+              console.warn('[style.load] Failed to re-add vector layer:', e);
+            }
+          }
+
+          // Re-add raster layers
+          if (ltype === 'raster') {
+            try {
+              const { addRasterLayer } = require('./layers/raster');
+              addRasterLayer(map, layerConfig, visibility);
+            } catch (e) {
+              console.warn('[style.load] Failed to re-add raster layer:', e);
+            }
+          }
+        });
+
+        // Refresh UI
+        refreshUI();
+      } catch (e) {
+        console.warn('[style.load] Error re-adding layers:', e);
+      }
+    });
   });
   
   // Handle resize - store handlers for cleanup

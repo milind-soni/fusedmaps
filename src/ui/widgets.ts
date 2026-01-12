@@ -1,5 +1,5 @@
 /**
- * Map widgets: scale, zoom/home, screenshot, and Cmd+drag orbit.
+ * Map widgets: scale, zoom/home, screenshot, basemap switcher, and Cmd+drag orbit.
  * Ported from map_utils.py for UI parity.
  */
 
@@ -9,6 +9,44 @@ export interface WidgetsHandle {
   destroy: () => void;
   setHomeViewState?: (view: ViewState) => void;
 }
+
+// ============================================================
+// Basemap Definitions
+// ============================================================
+
+export interface BasemapOption {
+  id: string;
+  label: string;
+  style: string;
+  thumbnail: string; // CSS background (gradient or image URL)
+}
+
+export const DEFAULT_BASEMAPS: BasemapOption[] = [
+  {
+    id: 'dark',
+    label: 'Dark',
+    style: 'mapbox://styles/mapbox/dark-v11',
+    thumbnail: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
+  },
+  {
+    id: 'satellite',
+    label: 'Satellite',
+    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    thumbnail: 'linear-gradient(135deg, #2d5016 0%, #1a3a0f 50%, #0d2818 100%)'
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    style: 'mapbox://styles/mapbox/light-v11',
+    thumbnail: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 50%, #d0d0d0 100%)'
+  },
+  {
+    id: 'streets',
+    label: 'Streets',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    thumbnail: 'linear-gradient(135deg, #e8e4d9 0%, #d4cfc0 50%, #b8c4a8 100%)'
+  }
+];
 
 function downloadScreenshot(map: mapboxgl.Map) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -271,15 +309,212 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
   };
 }
 
-export function setupWidgets(map: mapboxgl.Map, initialView: ViewState, screenshotEnabled: boolean): WidgetsHandle {
+// ============================================================
+// Basemap Switcher Control
+// ============================================================
+
+interface BasemapSwitcherOptions {
+  basemaps?: BasemapOption[];
+  currentStyle: string;
+  onStyleChange?: (basemap: BasemapOption) => void;
+}
+
+function addBasemapSwitcher(
+  map: mapboxgl.Map,
+  options: BasemapSwitcherOptions
+): { destroy: () => void; setActive: (id: string) => void } {
+  const basemaps = options.basemaps || DEFAULT_BASEMAPS;
+
+  // Find current basemap from style URL
+  const findCurrentBasemap = (styleUrl: string): string => {
+    const match = basemaps.find(b => styleUrl.includes(b.id));
+    return match?.id || basemaps[0]?.id || 'dark';
+  };
+
+  let activeId = findCurrentBasemap(options.currentStyle);
+
+  // Create container
+  const container = document.createElement('div');
+  container.className = 'mapboxgl-ctrl basemap-switcher';
+  container.style.cssText = `
+    background: rgba(15, 15, 15, 0.9);
+    border-radius: 8px;
+    padding: 6px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  `;
+
+  // Create thumbnail buttons
+  const buttons: Map<string, HTMLButtonElement> = new Map();
+
+  basemaps.forEach((basemap) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = basemap.label;
+    btn.setAttribute('data-basemap', basemap.id);
+    btn.style.cssText = `
+      width: 44px;
+      height: 44px;
+      border-radius: 4px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      background: ${basemap.thumbnail};
+      transition: border-color 0.15s, transform 0.1s;
+      position: relative;
+      overflow: hidden;
+    `;
+
+    // Add label overlay
+    const label = document.createElement('span');
+    label.textContent = basemap.label;
+    label.style.cssText = `
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      font-size: 8px;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      text-align: center;
+      pointer-events: none;
+    `;
+    btn.appendChild(label);
+
+    // Set active state
+    if (basemap.id === activeId) {
+      btn.style.borderColor = '#4a9eff';
+      btn.style.transform = 'scale(1.05)';
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (basemap.id === activeId) return;
+
+      // Update active states
+      buttons.forEach((b, id) => {
+        if (id === basemap.id) {
+          b.style.borderColor = '#4a9eff';
+          b.style.transform = 'scale(1.05)';
+        } else {
+          b.style.borderColor = 'transparent';
+          b.style.transform = 'scale(1)';
+        }
+      });
+
+      activeId = basemap.id;
+
+      // Switch map style
+      try {
+        (map as any).setStyle(basemap.style);
+      } catch (err) {
+        console.error('[BasemapSwitcher] Failed to set style:', err);
+      }
+
+      // Callback
+      if (options.onStyleChange) {
+        try {
+          options.onStyleChange(basemap);
+        } catch (_) {}
+      }
+    });
+
+    btn.addEventListener('mouseenter', () => {
+      if (basemap.id !== activeId) {
+        btn.style.borderColor = 'rgba(74, 158, 255, 0.5)';
+      }
+    });
+
+    btn.addEventListener('mouseleave', () => {
+      if (basemap.id !== activeId) {
+        btn.style.borderColor = 'transparent';
+      }
+    });
+
+    buttons.set(basemap.id, btn);
+    container.appendChild(btn);
+  });
+
+  // Add to map
+  const wrapper = document.createElement('div');
+  wrapper.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+  wrapper.style.cssText = 'margin-top: 8px;';
+  wrapper.appendChild(container);
+
+  try {
+    const controlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
+    if (controlContainer) {
+      controlContainer.appendChild(wrapper);
+    }
+  } catch (_) {}
+
+  return {
+    destroy: () => {
+      try {
+        wrapper.remove();
+      } catch (_) {}
+    },
+    setActive: (id: string) => {
+      const btn = buttons.get(id);
+      if (btn) {
+        buttons.forEach((b, bid) => {
+          if (bid === id) {
+            b.style.borderColor = '#4a9eff';
+            b.style.transform = 'scale(1.05)';
+          } else {
+            b.style.borderColor = 'transparent';
+            b.style.transform = 'scale(1)';
+          }
+        });
+        activeId = id;
+      }
+    }
+  };
+}
+
+// ============================================================
+// Setup All Widgets
+// ============================================================
+
+export interface WidgetsConfig {
+  screenshot?: boolean;
+  basemapSwitcher?: boolean;
+  currentStyle?: string;
+  onStyleChange?: (basemap: BasemapOption) => void;
+}
+
+export function setupWidgets(
+  map: mapboxgl.Map,
+  initialView: ViewState,
+  configOrScreenshot: boolean | WidgetsConfig = true
+): WidgetsHandle {
+  // Backwards compatibility: accept boolean for screenshotEnabled
+  const config: WidgetsConfig = typeof configOrScreenshot === 'boolean'
+    ? { screenshot: configOrScreenshot }
+    : configOrScreenshot;
+
   addScaleControl(map);
-  const zh = addZoomHomeControl(map, initialView, screenshotEnabled);
+  const zh = addZoomHomeControl(map, initialView, config.screenshot !== false);
   const cleanupOrbit = enableCmdDragOrbit(map);
+
+  let basemapSwitcherHandle: { destroy: () => void } | null = null;
+  if (config.basemapSwitcher !== false) {
+    basemapSwitcherHandle = addBasemapSwitcher(map, {
+      currentStyle: config.currentStyle || '',
+      onStyleChange: config.onStyleChange
+    });
+  }
 
   return {
     destroy: () => {
       try {
         cleanupOrbit();
+      } catch (_) {}
+      try {
+        basemapSwitcherHandle?.destroy();
       } catch (_) {}
     },
     setHomeViewState: zh?.setHomeViewState

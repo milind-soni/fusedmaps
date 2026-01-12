@@ -223,6 +223,7 @@ def deckgl_layers(
     on_click: dict = None,
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
+    basemap_switcher: bool = True,  # Show basemap switcher widget (dark/satellite/light/streets)
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
     # --- AI Configuration ---
     ai_udf_url: typing.Optional[str] = None,  # URL to AI UDF that converts prompts to SQL
@@ -446,7 +447,8 @@ def deckgl_layers(
             "legend": True,
             "layerPanel": True,
             "tooltip": True,
-            "theme": theme
+            "theme": theme,
+            "basemapSwitcher": basemap_switcher,
         },
         "highlightOnClick": highlight_on_click,
     }

@@ -6,14 +6,17 @@ import type { MessagingConfig, LayerConfig } from '../types';
 import { enableBroadcast } from './broadcast';
 import { enableClickBroadcast, type ClickBroadcastConfig } from './click-broadcast';
 import { enableSync } from './sync';
+import { enableLocationListener, type LocationListenerConfig } from './location-listener';
 
 export * from './bus';
 export * from './broadcast';
 export * from './click-broadcast';
 export * from './sync';
+export * from './location-listener';
 
 interface MessagingState {
   clickBroadcastDestroy?: () => void;
+  locationListenerDestroy?: () => void;
 }
 
 /**
@@ -55,9 +58,17 @@ export function setupMessaging(
     state.clickBroadcastDestroy = clickState.destroy;
   }
 
-  // Location listener (TODO: implement)
+  // Location listener (receives feature_click messages and flies map to bounds)
   if (config.locationListener?.enabled) {
-    // enableLocationListener(map, config.locationListener);
+    const listenerConfig: LocationListenerConfig = {
+      channel: config.locationListener.channel,
+      zoomOffset: config.locationListener.zoomOffset,
+      padding: config.locationListener.padding,
+      maxZoom: config.locationListener.maxZoom,
+      idFields: config.locationListener.idFields
+    };
+    const listenerState = enableLocationListener(map, listenerConfig);
+    state.locationListenerDestroy = listenerState.destroy;
   }
 
   return state;

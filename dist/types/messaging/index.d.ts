@@ -6,8 +6,10 @@ export * from './bus';
 export * from './broadcast';
 export * from './click-broadcast';
 export * from './sync';
+export * from './location-listener';
 interface MessagingState {
     clickBroadcastDestroy?: () => void;
+    locationListenerDestroy?: () => void;
 }
 /**
  * Setup all messaging based on config

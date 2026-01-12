@@ -222,6 +222,7 @@ def deckgl_layers(
     highlight_on_click: bool = True,
     on_click: dict = None,
     map_broadcast: typing.Optional[dict] = None,  # Viewport broadcast config: {"channel": "fused-bus", "dataset": "all"}
+    location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks and fly to bounds: {"channel": "fused-bus"}, False to disable
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
@@ -505,6 +506,17 @@ def deckgl_layers(
         messaging_config["clickBroadcast"] = {
             "enabled": True,
             **on_click
+        }
+    # Location listener: enabled by default so scatter/chart clicks fly map to bounds
+    # Pass location_listener=False to disable
+    if location_listener is not False:
+        loc_cfg = location_listener if isinstance(location_listener, dict) else {}
+        messaging_config["locationListener"] = {
+            "enabled": True,
+            "channel": loc_cfg.get("channel", "fused-bus"),
+            "zoomOffset": loc_cfg.get("zoomOffset", 0),
+            "padding": loc_cfg.get("padding", 50),
+            "maxZoom": loc_cfg.get("maxZoom", 18),
         }
     if messaging_config:
         fusedmaps_config["messaging"] = messaging_config

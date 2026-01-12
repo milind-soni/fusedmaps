@@ -195,14 +195,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     }
 
     // Handle basemap style changes - re-add all layers after style switch
-    let isInitialLoad = true;
+    // Note: This handler is set up AFTER initial load, so every style.load is a basemap switch
     map.on('style.load', () => {
-      // Skip the initial load (already handled above)
-      if (isInitialLoad) {
-        isInitialLoad = false;
-        return;
-      }
-
       // Re-add all layers after basemap change
       try {
         const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);

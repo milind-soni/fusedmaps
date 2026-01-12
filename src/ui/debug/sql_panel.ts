@@ -48,15 +48,16 @@ export function createSqlPanel(deps: SqlPanelDeps): SqlPanel {
     return String(sqlInputEl.value || '').trim();
   };
 
+  let isUpdatingSql = false; // Guard against infinite loop
+
   const dispatchSqlUpdate = () => {
+    if (isUpdatingSql) return; // Prevent re-entry
+
     const layer = getActiveLayer();
     if (!isDuckDbHexLayer(layer)) return;
     const sql = getEditorValue() || 'SELECT * FROM data';
 
-    // Normalize away trailing newlines so the config output stays stable/readable.
-    try { sqlInputEl.value = sql; } catch (_) {}
-    try { if (sqlCM) sqlCM.setValue(sql); } catch (_) {}
-
+    // Update the layer config (don't touch editor - would cause infinite loop)
     try { (layer as any).sql = sql; } catch (_) {}
     try { updateLayerOutput(); } catch (_) {}
 
@@ -166,6 +167,9 @@ export function createSqlPanel(deps: SqlPanelDeps): SqlPanel {
 
   const syncFromLayer = (layer: AnyLayer | null) => {
     const enabled = isDuckDbHexLayer(layer);
+
+    // Guard to prevent change events during sync
+    isUpdatingSql = true;
     try {
       sqlInputEl.disabled = !enabled;
       if (enabled) {
@@ -189,6 +193,7 @@ export function createSqlPanel(deps: SqlPanelDeps): SqlPanel {
         try { sqlCM.refresh?.(); } catch (_) {}
       }
     } catch (_) {}
+    isUpdatingSql = false;
 
     try { sqlStatusEl.textContent = enabled ? '' : 'disabled'; } catch (_) {}
   };

@@ -609,10 +609,9 @@ function buildHexTileDeckLayers(
         (fillCfgEffective && typeof fillCfgEffective === 'object' ? (fillCfgEffective as any).attr : null) ||
         null;
 
-      const auto = wantsAutoDomain(layer);
-      const refinementStrategy =
-        (tileCfg as any).refinementStrategy ||
-        (auto.enabled ? 'no-overlap' : 'best-available');
+      // Always default to 'best-available' for better UX - shows parent tiles while children load
+      // User can explicitly set 'no-overlap' if they want strict zoom-level matching
+      const refinementStrategy = (tileCfg as any).refinementStrategy || 'best-available';
 
       return new TileLayer({
         id: `${layer.id}-tiles-${idHash}`,
@@ -622,6 +621,7 @@ function buildHexTileDeckLayers(
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
+        maxCacheSize: 200, // Keep more tiles in memory to reduce re-fetching during pan/zoom
         refinementStrategy,
         pickable: true,
         visible,

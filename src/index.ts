@@ -114,11 +114,20 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   // Helper to get visibility state from store (for compatibility)
   const getVisibilityState = () => store.getVisibilityState();
-  
+
+  // Helper to get tile data from deck overlay (for RGB categorical legends)
+  const getTileData = () => {
+    try {
+      return (overlayRef.current as any)?.__fused_hex_tiles__?.getTileData?.() || undefined;
+    } catch (_) {
+      return undefined;
+    }
+  };
+
   // Helper to refresh UI
   const refreshUI = () => {
     try { updateLayerPanel(store.getAllConfigs(), getVisibilityState()); } catch (_) {}
-    try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs()); } catch (_) {}
+    try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData()); } catch (_) {}
   };
 
   // Subscribe to store changes for UI updates
@@ -155,7 +164,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
     // Allow tile autoDomain to trigger legend refresh without tight coupling
     legendUpdateHandler = () => {
-      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
+      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
     };
     try {
       window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
@@ -359,7 +368,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
           break;
         }
         case 'updateLegend': {
-          try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs()); } catch (_) {}
+          try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData()); } catch (_) {}
           break;
         }
         default:
@@ -385,7 +394,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
     },
     updateLegend: () => {
-      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
+      updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
     },
     
     // New Layer Management API
@@ -514,8 +523,14 @@ function handleVisibilityChange(
   const visibilityState = store.getVisibilityState();
   setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay, visibilityState);
 
+  // Get tile data for RGB categorical legends
+  let tileData: Map<string, any[]> | undefined;
+  try {
+    tileData = (deckOverlay as any)?.__fused_hex_tiles__?.getTileData?.() || undefined;
+  } catch (_) {}
+
   updateLayerPanel(store.getAllConfigs(), visibilityState);
-  updateLegend(store.getAllConfigs(), visibilityState, store.getAllGeoJSONs());
+  updateLegend(store.getAllConfigs(), visibilityState, store.getAllGeoJSONs(), tileData);
 }
 
 function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[], store: LayerStore) {

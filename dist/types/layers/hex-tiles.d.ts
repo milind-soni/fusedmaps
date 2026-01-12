@@ -17,6 +17,7 @@ export interface DeckTileOverlayState {
         y: number;
         radius?: number;
     }) => any;
+    getTileData: () => Map<string, any[]>;
     destroy: () => void;
 }
 export declare function createHexTileOverlay(map: mapboxgl.Map, layers: LayerConfig[], visibility: Record<string, boolean>): DeckTileOverlayState | null;

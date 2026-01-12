@@ -19,6 +19,7 @@ export interface DeckTileOverlayState {
   overlay: any; // deck.MapboxOverlay instance
   rebuild: (visibility?: Record<string, boolean>) => void;
   pickObject: (opts: { x: number; y: number; radius?: number }) => any;
+  getTileData: () => Map<string, any[]>; // Access cached tile data for legend building
   destroy: () => void;
 }
 
@@ -837,7 +838,10 @@ export function createHexTileOverlay(
     try { map.removeControl(overlay); } catch {}
   };
 
-  return { overlay, rebuild, pickObject, destroy };
+  // Expose tile cache for legend building (e.g., RGB-based categorical legends)
+  const getTileData = () => runtime.cache;
+
+  return { overlay, rebuild, pickObject, getTileData, destroy };
 }
 
 

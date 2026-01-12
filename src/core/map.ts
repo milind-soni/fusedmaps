@@ -35,7 +35,20 @@ export function initMap(options: MapInitOptions): mapboxgl.Map {
     // Needed for reliable canvas capture (screenshot button). May increase GPU memory usage.
     ...(screenshotEnabled ? { preserveDrawingBuffer: true } : {})
   });
-  
+
+  // Suppress benign Mapbox GL image loading errors (sprite/icon race conditions during style changes)
+  map.on('error', (e: any) => {
+    const msg = e?.error?.message || '';
+    // Suppress known benign errors
+    if (msg.includes('Could not load image') || msg.includes('not, or is no longer, usable')) {
+      // Silently ignore - these are transient sprite loading issues during style switches
+      return;
+    }
+    // Log other errors normally
+    // eslint-disable-next-line no-console
+    console.warn('[FusedMaps] Map error:', e?.error || e);
+  });
+
   return map;
 }
 

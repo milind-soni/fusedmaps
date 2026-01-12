@@ -11,7 +11,7 @@
 import type { LayerConfig } from '../types';
 export interface DeckTileOverlayState {
     overlay: any;
-    rebuild: () => void;
+    rebuild: (visibility?: Record<string, boolean>) => void;
     pickObject: (opts: {
         x: number;
         y: number;

@@ -17,7 +17,7 @@ type DeckGlobal = any;
 
 export interface DeckTileOverlayState {
   overlay: any; // deck.MapboxOverlay instance
-  rebuild: () => void;
+  rebuild: (visibility?: Record<string, boolean>) => void;
   pickObject: (opts: { x: number; y: number; radius?: number }) => any;
   destroy: () => void;
 }
@@ -749,7 +749,10 @@ export function createHexTileOverlay(
 
   const runtime = createTileRuntime();
   const loader = ensureTileLoader();
-  const build = () => buildHexTileDeckLayers(layers, visibility, runtime, loader.setLoading);
+
+  // Use a mutable ref so rebuild() can update visibility without stale closures
+  const visibilityRef = { current: visibility };
+  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, loader.setLoading);
 
   const overlay = new deck.MapboxOverlay({
     interleaved: true,
@@ -764,7 +767,11 @@ export function createHexTileOverlay(
     // ignore
   }
 
-  const rebuild = () => {
+  const rebuild = (newVisibility?: Record<string, boolean>) => {
+    // Update visibility ref if new state provided
+    if (newVisibility) {
+      visibilityRef.current = newVisibility;
+    }
     try {
       overlay.setProps({ layers: build() });
       try {

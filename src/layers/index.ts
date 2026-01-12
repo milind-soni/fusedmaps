@@ -532,19 +532,20 @@ export function setLayerVisibility(
   layerId: string,
   visible: boolean,
   layers: LayerConfig[],
-  deckOverlay: unknown
+  deckOverlay: unknown,
+  visibilityState?: Record<string, boolean>
 ): void {
   const layer = layers.find(l => l.id === layerId);
   if (!layer) return;
-  
+
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
       if (hexLayer.isTileLayer) {
-        // Rebuild deck overlay layers so visibility takes effect
+        // Rebuild deck overlay layers with current visibility state to avoid stale closure
         const state = (deckOverlay as any)?.__fused_hex_tiles__;
         try {
-          state?.rebuild?.();
+          state?.rebuild?.(visibilityState);
         } catch (e) {}
       } else {
         setHexLayerVisibility(map, layerId, visible, hexLayer.hexLayer?.extruded === true);

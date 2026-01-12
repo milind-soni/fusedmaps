@@ -510,10 +510,12 @@ function handleVisibilityChange(
 ) {
   store.setVisible(layerId, visible);
 
-  setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay);
+  // Pass current visibility state to avoid stale closure in Deck.gl overlay
+  const visibilityState = store.getVisibilityState();
+  setLayerVisibility(map, layerId, visible, store.getAllConfigs(), deckOverlay, visibilityState);
 
-  updateLayerPanel(store.getAllConfigs(), store.getVisibilityState());
-  updateLegend(store.getAllConfigs(), store.getVisibilityState(), store.getAllGeoJSONs());
+  updateLayerPanel(store.getAllConfigs(), visibilityState);
+  updateLegend(store.getAllConfigs(), visibilityState, store.getAllGeoJSONs());
 }
 
 function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[], store: LayerStore) {

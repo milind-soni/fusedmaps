@@ -7,7 +7,7 @@
 
 import type { FusedMapsConfig, HexLayerConfig, VectorLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
-import { deepDelta, toPyLiteral } from './debug/export';
+import { deepDelta, toPyLiteral, legacyStyleToNewFormat } from './debug/export';
 import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from './debug/palettes';
 import { ensureDebugShell, queryDebugElements } from './debug/template';
 import { applyDebugUIToLayer } from './debug/apply';
@@ -320,17 +320,23 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         // Only include visibility when it's explicitly off (default True).
         if (l.visible === false) base.visible = false;
 
-        // Hex (tile or static)
+        // Hex (tile or static) - use new clean format
         if (l.layerType === 'hex') {
           const hl = l.hexLayer || {};
-          const cfg: any = { hexLayer: deepDelta(DEFAULT_HEX_STYLE, hl) || {} };
+          const style = legacyStyleToNewFormat(hl);
+          const cfg: any = {};
+          if (Object.keys(style).length) cfg.style = style;
+
           if (l.isTileLayer && l.tileUrl) {
             base.type = 'hex';
             base.tile_url = l.tileUrl;
             const tl = l.tileLayerConfig || l.tileLayer || null;
             if (tl && typeof tl === 'object') {
-              const dt = deepDelta(DEFAULT_TILE_LAYER, tl);
-              if (dt && Object.keys(dt).length) cfg.tileLayer = dt;
+              const tile: any = {};
+              if (typeof tl.minZoom === 'number') tile.minZoom = tl.minZoom;
+              if (typeof tl.maxZoom === 'number') tile.maxZoom = tl.maxZoom;
+              if (typeof tl.zoomOffset === 'number') tile.zoomOffset = tl.zoomOffset;
+              if (Object.keys(tile).length) cfg.tile = tile;
             }
           } else {
             // Static hex data or DuckDB SQL-backed non-tile hex
@@ -344,37 +350,38 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
             }
           }
-          base.config = cfg;
+          if (Object.keys(cfg).length) base.config = cfg;
           return base;
         }
 
-        // Vector GeoJSON
+        // Vector GeoJSON - use new clean format
         if (l.layerType === 'vector') {
           base.type = 'vector';
           // Don't inline GeoJSON; keep paste-back snippet small and explicit.
           base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
-          base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, l.vectorLayer || {}) || {} };
+          const vl = l.vectorLayer || {};
+          const style = legacyStyleToNewFormat(vl);
+          if (Object.keys(style).length) base.config = { style };
           return base;
         }
 
-        // MVT tiles
+        // MVT tiles - use new clean format
         if (l.layerType === 'mvt') {
           base.type = 'vector';
           base.tile_url = l.tileUrl;
           base.source_layer = l.sourceLayer || 'udf';
-          // For MVT, we accept styling via vectorLayer schema in map_utils_refactored
-          const vcfg: any = {};
-          if (l.fillColorConfig) vcfg.getFillColor = l.fillColorConfig;
-          else if (l.fillColor) vcfg.getFillColor = l.fillColor;
-          if (l.lineColorConfig) vcfg.getLineColor = l.lineColorConfig;
-          else if (l.lineColor) vcfg.getLineColor = l.lineColor;
-          if (typeof l.lineWidth === 'number') vcfg.lineWidthMinPixels = l.lineWidth;
-          if (typeof l.fillOpacity === 'number') vcfg.opacity = l.fillOpacity;
-          base.config = { vectorLayer: vcfg };
+          const style: any = {};
+          if (l.fillColorConfig) style.fillColor = legacyStyleToNewFormat({ getFillColor: l.fillColorConfig }).fillColor;
+          else if (l.fillColor) style.fillColor = l.fillColor;
+          if (l.lineColorConfig) style.lineColor = legacyStyleToNewFormat({ getLineColor: l.lineColorConfig }).lineColor;
+          else if (l.lineColor) style.lineColor = l.lineColor;
+          if (typeof l.lineWidth === 'number') style.lineWidth = l.lineWidth;
+          if (typeof l.fillOpacity === 'number') style.opacity = l.fillOpacity;
+          if (Object.keys(style).length) base.config = { style };
           return base;
         }
 
-        // PMTiles (Mapbox GL source via mapbox-pmtiles)
+        // PMTiles (Mapbox GL source via mapbox-pmtiles) - use new clean format
         if (l.layerType === 'pmtiles') {
           base.type = 'pmtiles';
           // Prefer original path if available (cleaner paste-back). Otherwise fall back to URL.
@@ -384,12 +391,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           if (typeof l.minzoom === 'number') base.minzoom = l.minzoom;
           if (typeof l.maxzoom === 'number') base.maxzoom = l.maxzoom;
 
-          // Use vectorLayer style schema (same as map_utils_refactored expects)
-          // Emit a delta against DEFAULT_VECTOR_STYLE for compactness.
+          // Build merged legacy format then convert to new format
           const v: any = l.vectorLayer || {};
-
-          // Ensure key overrides from the PMTiles config are reflected in the style block
-          // even if vectorLayer is missing them (PMTiles has some top-level style fields).
           const vMerged: any = { ...v };
           if (l.fillColorConfig) vMerged.getFillColor = l.fillColorConfig;
           if (l.lineColorConfig) vMerged.getLineColor = l.lineColorConfig;
@@ -399,20 +402,21 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
           if (typeof l.isFilled === 'boolean') vMerged.filled = l.isFilled;
           if (typeof l.isStroked === 'boolean') vMerged.stroked = l.isStroked;
 
-          base.config = { vectorLayer: deepDelta(DEFAULT_VECTOR_STYLE, vMerged) || {} };
+          const style = legacyStyleToNewFormat(vMerged);
+          if (Object.keys(style).length) base.config = { style };
           return base;
         }
 
-        // Raster tiles / static raster overlay
+        // Raster tiles / static raster overlay - use new clean format
         if (l.layerType === 'raster') {
           base.type = 'raster';
           if (l.tileUrl) base.tile_url = l.tileUrl;
           if (l.imageUrl) base.image_url = l.imageUrl;
           if (l.imageBounds) base.bounds = l.imageBounds;
           const op = l.opacity ?? l.rasterLayer?.opacity;
-          base.config = (typeof op === 'number' && Number.isFinite(op) && op !== 1)
-            ? { rasterLayer: { opacity: op } }
-            : {};
+          if (typeof op === 'number' && Number.isFinite(op) && op !== 1) {
+            base.config = { style: { opacity: op } };
+          }
           return base;
         }
 

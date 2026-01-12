@@ -9,6 +9,77 @@ function isPlainObject(x: any) {
   return !!x && typeof x === 'object' && !Array.isArray(x);
 }
 
+/**
+ * Convert legacy color config (@@function format) to new clean format
+ */
+export function legacyColorToNewFormat(color: any): any {
+  if (!color || typeof color !== 'object') return color;
+  if (Array.isArray(color)) return color;
+
+  const fn = color['@@function'];
+  if (fn === 'colorContinuous') {
+    const result: any = {
+      type: 'continuous',
+      attr: color.attr,
+      palette: color.colors,
+    };
+    if (color.domain) result.domain = color.domain;
+    if (typeof color.steps === 'number') result.steps = color.steps;
+    if (color.nullColor) result.nullColor = color.nullColor;
+    if (color.reverse) result.reverse = color.reverse;
+    return result;
+  }
+  if (fn === 'colorCategories') {
+    const result: any = {
+      type: 'categorical',
+      attr: color.attr,
+    };
+    if (color.colors) result.palette = color.colors;
+    if (color.categories) result.categories = color.categories;
+    if (color.labelAttr) result.labelAttr = color.labelAttr;
+    if (color.nullColor) result.nullColor = color.nullColor;
+    return result;
+  }
+  return color;
+}
+
+/**
+ * Convert legacy hexLayer/vectorLayer to new style format
+ */
+export function legacyStyleToNewFormat(legacy: any): any {
+  if (!legacy || typeof legacy !== 'object') return {};
+
+  const style: any = {};
+
+  // Color mappings
+  if (legacy.getFillColor !== undefined) {
+    style.fillColor = legacyColorToNewFormat(legacy.getFillColor);
+  }
+  if (legacy.getLineColor !== undefined) {
+    style.lineColor = legacyColorToNewFormat(legacy.getLineColor);
+  }
+
+  // Direct properties
+  if (typeof legacy.opacity === 'number') style.opacity = legacy.opacity;
+  if (typeof legacy.filled === 'boolean') style.filled = legacy.filled;
+  if (typeof legacy.stroked === 'boolean') style.stroked = legacy.stroked;
+  if (typeof legacy.extruded === 'boolean') style.extruded = legacy.extruded;
+
+  // Elevation
+  if (legacy.elevationProperty) style.elevationAttr = legacy.elevationProperty;
+  if (typeof legacy.elevationScale === 'number') style.elevationScale = legacy.elevationScale;
+
+  // Line width
+  if (typeof legacy.lineWidthMinPixels === 'number') style.lineWidth = legacy.lineWidthMinPixels;
+  else if (typeof legacy.getLineWidth === 'number') style.lineWidth = legacy.getLineWidth;
+
+  // Point radius
+  if (typeof legacy.pointRadiusMinPixels === 'number') style.pointRadius = legacy.pointRadiusMinPixels;
+  else if (typeof legacy.pointRadius === 'number') style.pointRadius = legacy.pointRadius;
+
+  return style;
+}
+
 function deepEqual(a: any, b: any): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b) return false;

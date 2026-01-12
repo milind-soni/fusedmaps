@@ -82,8 +82,8 @@ VALID_TILE_PROPS = {
 # NOTE: Pin to a specific commit for reproducibility.
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
-# - main ref: 87281ff (collapsible basemap switcher UI)
-FUSEDMAPS_CDN_REF_DEFAULT = "87281ff"
+# - main ref: ea663aa (CSS class-based basemap switcher)
+FUSEDMAPS_CDN_REF_DEFAULT = "ea663aa"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 

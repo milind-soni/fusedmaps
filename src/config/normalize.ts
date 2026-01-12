@@ -22,14 +22,27 @@ import type {
 } from '../types';
 
 /**
+ * Convert RGB/RGBA array to rgba() string
+ */
+function arrayToRgba(arr: number[]): string {
+  if (arr.length >= 4) {
+    // RGBA - alpha is 0-255, convert to 0-1
+    return `rgba(${arr[0]},${arr[1]},${arr[2]},${arr[3] / 255})`;
+  }
+  return `rgb(${arr[0]},${arr[1]},${arr[2]})`;
+}
+
+/**
  * Convert new-style color config to legacy @@function format
  */
 export function normalizeColor(color: ColorValue | undefined): ColorConfig | undefined {
   if (!color) return undefined;
 
-  // Already a string or array - pass through
+  // Already a string - pass through
   if (typeof color === 'string') return color;
-  if (Array.isArray(color)) return color as [number, number, number, number?];
+
+  // Array - convert to rgba string so it can be used as fillColorRgba/lineColorRgba
+  if (Array.isArray(color)) return arrayToRgba(color);
 
   // New format: { type: 'continuous', ... }
   if ('type' in color) {

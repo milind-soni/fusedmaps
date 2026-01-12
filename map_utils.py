@@ -470,7 +470,7 @@ def deckgl_layers(
                         pass
                     break
 
-        if extracted_schema:
+        if extracted_schema and not extracted_schema.startswith("Error"):
             fusedmaps_config["aiSchema"] = extracted_schema
         if ai_context:
             fusedmaps_config["aiContext"] = ai_context
@@ -1199,7 +1199,8 @@ def extract_schema(parquet_url: str, table_name: str = "data") -> str:
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error extracting schema: {e}"
+        # Raise instead of returning error string
+        raise ValueError(f"Could not extract schema from {parquet_url}: {e}")
 
 
 def build_sql_system_prompt(

@@ -694,7 +694,7 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  z-index: 5;
+  z-index: 50;
   user-select: none;
 }
 .fm-basemap-trigger {
@@ -708,6 +708,7 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   cursor: pointer;
   overflow: hidden;
   position: relative;
+  pointer-events: auto;
 }
 .fm-basemap-trigger:hover {
   border-color: rgba(255,255,255,0.35);

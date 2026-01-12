@@ -332,18 +332,77 @@ function addBasemapSwitcher(
   };
 
   let activeId = findCurrentBasemap(options.currentStyle);
+  let isExpanded = false;
 
-  // Create container
-  const container = document.createElement('div');
-  container.className = 'mapboxgl-ctrl basemap-switcher';
-  container.style.cssText = `
-    background: rgba(15, 15, 15, 0.9);
+  // Create main wrapper (no mapboxgl-ctrl-group to avoid white box)
+  const wrapper = document.createElement('div');
+  wrapper.className = 'basemap-switcher-wrapper';
+  wrapper.style.cssText = `
+    position: relative;
+    margin-top: 8px;
+  `;
+
+  // Create the collapsed view (shows active basemap thumbnail)
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'basemap-trigger';
+  trigger.title = 'Change basemap';
+
+  const updateTrigger = () => {
+    const active = basemaps.find(b => b.id === activeId) || basemaps[0];
+    trigger.style.cssText = `
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      border: 2px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      background: ${active.thumbnail};
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: transform 0.15s, border-color 0.15s;
+      position: relative;
+      overflow: hidden;
+    `;
+    trigger.innerHTML = `
+      <span style="
+        position: absolute;
+        bottom: 1px;
+        left: 0;
+        right: 0;
+        font-size: 7px;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        text-align: center;
+        pointer-events: none;
+      ">${active.label}</span>
+      <span style="
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 8px;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        pointer-events: none;
+      ">▼</span>
+    `;
+  };
+  updateTrigger();
+
+  // Create expandable grid panel
+  const panel = document.createElement('div');
+  panel.className = 'basemap-panel';
+  panel.style.cssText = `
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 6px;
+    background: rgba(20, 20, 20, 0.95);
     border-radius: 8px;
     padding: 6px;
-    display: grid;
+    display: none;
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10;
   `;
 
   // Create thumbnail buttons
@@ -355,10 +414,10 @@ function addBasemapSwitcher(
     btn.title = basemap.label;
     btn.setAttribute('data-basemap', basemap.id);
     btn.style.cssText = `
-      width: 44px;
-      height: 44px;
+      width: 48px;
+      height: 48px;
       border-radius: 4px;
-      border: 2px solid transparent;
+      border: 2px solid ${basemap.id === activeId ? '#4a9eff' : 'transparent'};
       cursor: pointer;
       background: ${basemap.thumbnail};
       transition: border-color 0.15s, transform 0.1s;
@@ -382,30 +441,21 @@ function addBasemapSwitcher(
     `;
     btn.appendChild(label);
 
-    // Set active state
-    if (basemap.id === activeId) {
-      btn.style.borderColor = '#4a9eff';
-      btn.style.transform = 'scale(1.05)';
-    }
-
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
 
-      if (basemap.id === activeId) return;
-
       // Update active states
       buttons.forEach((b, id) => {
-        if (id === basemap.id) {
-          b.style.borderColor = '#4a9eff';
-          b.style.transform = 'scale(1.05)';
-        } else {
-          b.style.borderColor = 'transparent';
-          b.style.transform = 'scale(1)';
-        }
+        b.style.borderColor = id === basemap.id ? '#4a9eff' : 'transparent';
       });
 
       activeId = basemap.id;
+      updateTrigger();
+
+      // Collapse panel
+      panel.style.display = 'none';
+      isExpanded = false;
 
       // Switch map style
       try {
@@ -435,14 +485,29 @@ function addBasemapSwitcher(
     });
 
     buttons.set(basemap.id, btn);
-    container.appendChild(btn);
+    panel.appendChild(btn);
   });
 
-  // Add to map
-  const wrapper = document.createElement('div');
-  wrapper.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
-  wrapper.style.cssText = 'margin-top: 8px;';
-  wrapper.appendChild(container);
+  // Toggle panel on trigger click
+  trigger.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isExpanded = !isExpanded;
+    panel.style.display = isExpanded ? 'grid' : 'none';
+  });
+
+  // Close panel when clicking outside
+  const closeOnOutsideClick = (e: MouseEvent) => {
+    if (isExpanded && !wrapper.contains(e.target as Node)) {
+      panel.style.display = 'none';
+      isExpanded = false;
+    }
+  };
+  document.addEventListener('click', closeOnOutsideClick);
+
+  // Assemble
+  wrapper.appendChild(panel);
+  wrapper.appendChild(trigger);
 
   try {
     const controlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
@@ -454,6 +519,7 @@ function addBasemapSwitcher(
   return {
     destroy: () => {
       try {
+        document.removeEventListener('click', closeOnOutsideClick);
         wrapper.remove();
       } catch (_) {}
     },
@@ -461,15 +527,10 @@ function addBasemapSwitcher(
       const btn = buttons.get(id);
       if (btn) {
         buttons.forEach((b, bid) => {
-          if (bid === id) {
-            b.style.borderColor = '#4a9eff';
-            b.style.transform = 'scale(1.05)';
-          } else {
-            b.style.borderColor = 'transparent';
-            b.style.transform = 'scale(1)';
-          }
+          b.style.borderColor = bid === id ? '#4a9eff' : 'transparent';
         });
         activeId = id;
+        updateTrigger();
       }
     }
   };

@@ -475,7 +475,8 @@ function addBasemapSwitcher(
   try {
     const controlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
     if (controlContainer) {
-      controlContainer.appendChild(wrapper);
+      // Insert at beginning so it appears below other controls (column-reverse layout)
+      controlContainer.insertBefore(wrapper, controlContainer.firstChild);
     }
   } catch (_) {}
 

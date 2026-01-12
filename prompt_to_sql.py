@@ -4,36 +4,59 @@ Prompt to SQL UDF for FusedMaps AI integration.
 This UDF converts natural language prompts to DuckDB SQL queries.
 Deploy this as a Fused UDF and use the URL with deckgl_layers(ai_udf_url=...).
 
+IMPORTANT: Define your schema and context directly in this UDF (not via URL params)
+to avoid URL length limits and encoding issues.
+
 Usage in deckgl_layers:
     deckgl_layers(
         layers=[...],
         ai_udf_url="https://udf.ai/YOUR_UDF_ID/run?dtype_out_vector=json",
-        ai_schema="Table: `data`\nColumns:\n- hex (VARCHAR)...",
-        ai_context="## CDL Crop Codes\n1: Corn, 2: Cotton...",
     )
 """
 
 import fused
 
 
+# ============================================================
+# CUSTOMIZE THESE FOR YOUR DATA
+# ============================================================
+
+# Define your table schema here
+DEFAULT_SCHEMA = """Table: `data`
+Columns:
+- hex (VARCHAR): H3 hexagon ID - REQUIRED in all SELECT queries
+- data (INTEGER): Category/type code
+- area (DOUBLE): Area in square meters
+- pct (DOUBLE): Percentage coverage (0-100)"""
+
+# Define domain-specific context here (e.g., category codes)
+DEFAULT_CONTEXT = """## Category Codes
+1: Type A
+2: Type B
+3: Type C
+"""
+
+# ============================================================
+
+
 @fused.udf
 def udf(
     prompt: str = "Show me areas with high coverage",
-    schema: str = "",
-    context: str = "",
 ):
     """
     Convert natural language prompts to DuckDB SQL queries.
 
     Args:
         prompt: Natural language query from user (e.g., "show me tomato areas")
-        schema: Table schema string (auto-passed from frontend via ai_schema)
-        context: Domain-specific context (auto-passed from frontend via ai_context)
 
     Returns:
         SQL query string
     """
     import requests
+
+    # Use the constants defined above
+    schema = DEFAULT_SCHEMA
+    context = DEFAULT_CONTEXT
 
     def build_system_prompt(schema: str, context: str) -> str:
         """Build the system prompt for SQL generation."""
@@ -42,7 +65,7 @@ def udf(
 Convert natural language requests into valid DuckDB SELECT statements.
 
 ## Schema
-{schema if schema else "Table: `data` with hex column and various attributes"}
+{schema}
 
 {f"## Domain Context{chr(10)}{context}" if context else ""}
 
@@ -62,7 +85,7 @@ Top N results:
 SELECT * FROM data ORDER BY area DESC LIMIT 100
 
 Multiple conditions:
-SELECT * FROM data WHERE category = 1 AND pct > 10
+SELECT * FROM data WHERE data = 1 AND pct > 10
 
 Aggregation (keep hex column):
 SELECT hex, SUM(area) as total_area FROM data GROUP BY hex
@@ -106,8 +129,6 @@ Return ONLY the SQL query."""
     sql_query = sql_query.strip('"').strip("'")
 
     print(f"Prompt: {prompt}")
-    print(f"Schema: {schema[:100]}..." if len(schema) > 100 else f"Schema: {schema}")
-    print(f"Context: {context[:100]}..." if len(context) > 100 else f"Context: {context}")
     print(f"Generated SQL: {sql_query}")
 
     return sql_query

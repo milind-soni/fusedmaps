@@ -220,7 +220,7 @@ def deckgl_layers(
     initialViewState: typing.Optional[dict] = None,
     theme: str = "dark",
     highlight_on_click: bool = True,
-    on_click: dict = None,
+    on_click: typing.Union[dict, bool, None] = None,  # Click broadcast config, False to disable
     map_broadcast: typing.Optional[dict] = None,  # Viewport broadcast config: {"channel": "fused-bus", "dataset": "all"}
     location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks and fly to bounds: {"channel": "fused-bus"}, False to disable
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
@@ -502,11 +502,19 @@ def deckgl_layers(
             "channel": map_broadcast.get("channel", "fused-bus"),
             "dataset": map_broadcast.get("dataset", "all")
         }
-    if on_click:
+    # Click broadcast: enabled by default so forms/charts receive feature clicks
+    # Pass on_click=False to disable
+    if on_click is not False:
+        click_cfg = on_click if isinstance(on_click, dict) else {}
         messaging_config["clickBroadcast"] = {
             "enabled": True,
-            **on_click
+            "channel": click_cfg.get("channel", "fused-bus"),
+            "messageType": click_cfg.get("messageType", "feature_click"),
+            "includeCoords": click_cfg.get("includeCoords", True),
+            "includeLayer": click_cfg.get("includeLayer", True),
         }
+        if click_cfg.get("properties"):
+            messaging_config["clickBroadcast"]["properties"] = click_cfg["properties"]
     # Location listener: enabled by default so scatter/chart clicks fly map to bounds
     # Pass location_listener=False to disable
     if location_listener is not False:

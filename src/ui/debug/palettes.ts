@@ -81,6 +81,8 @@ function buildMenu(opts: DropdownOpts) {
       const pal = (el as HTMLElement).getAttribute('data-pal') || '';
       if (pal) opts.selectEl.value = pal;
       opts.menuEl.style.display = 'none';
+      // Update swatch to reflect the newly selected palette
+      updateSwatch(opts);
       try {
         opts.onPicked();
       } catch (_) {}

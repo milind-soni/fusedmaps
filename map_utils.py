@@ -1179,29 +1179,25 @@ def extract_schema(parquet_url: str, table_name: str = "data") -> str:
         - category (VARCHAR)
     """
     import duckdb
-
+    
     try:
         con = duckdb.connect()
-        # Get column info from parquet
-        schema_df = con.execute(f"DESCRIBE SELECT * FROM '{parquet_url}' LIMIT 1").df()
-
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        
+        # Explicitly use read_parquet instead of letting DuckDB infer the format
+        schema_df = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{parquet_url}') LIMIT 1").df()
+        
         lines = [f"Table: `{table_name}`", "Columns:"]
-
         for _, row in schema_df.iterrows():
             col_name = row['column_name']
             col_type = row['column_type']
-
-            # Add hints for special columns
             if col_name.lower() in ('hex', 'h3', 'h3_cell', 'h3_index'):
                 lines.append(f"- {col_name} ({col_type}): H3 hexagon ID - REQUIRED in all SELECT queries")
             else:
                 lines.append(f"- {col_name} ({col_type})")
-
         return "\n".join(lines)
     except Exception as e:
-        # Raise instead of returning error string
         raise ValueError(f"Could not extract schema from {parquet_url}: {e}")
-
 
 def build_sql_system_prompt(
     schema: str,

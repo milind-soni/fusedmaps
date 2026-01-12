@@ -26,10 +26,14 @@ export interface DeckTileOverlayState {
 interface TileRuntime {
   cache: Map<string, any[]>;
   inflight: Map<string, Promise<any[] | null>>;
+  retryState: Map<string, { attempts: number; lastAttempt: number }>; // Track retry attempts per tile
   tilesLoading: number;
   tileStats: Record<string, Record<string, { min: number; max: number }>>; // layerId -> "z/x/y" -> min/max
   catState: Record<string, Record<string, { lut: Map<string, number[]>; pairs: Array<{ value: string; label: string }>; next: number; debounce?: any }>>; // layerId -> attr -> state
 }
+
+const DEFAULT_MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 500; // Exponential backoff: 500ms, 1000ms, 2000ms
 
 const DEFAULT_MAX_REQUESTS = 10;
 const DEFAULT_HYPARQUET_ESM_URL = 'https://cdn.jsdelivr.net/npm/hyparquet@1.23.3/+esm';
@@ -336,6 +340,7 @@ function createTileRuntime(): TileRuntime {
   return {
     cache: new Map(),
     inflight: new Map(),
+    retryState: new Map(),
     tilesLoading: 0,
     tileStats: {},
     catState: {}
@@ -637,8 +642,30 @@ function buildHexTileDeckLayers(
             }
           }
 
+          // Check retry state - if we've exceeded max retries recently, don't retry immediately
+          const retryInfo = runtime.retryState.get(cacheKey);
+          if (retryInfo && retryInfo.attempts >= DEFAULT_MAX_RETRIES) {
+            const timeSinceLastAttempt = Date.now() - retryInfo.lastAttempt;
+            // After 30 seconds, reset retry counter and try again
+            if (timeSinceLastAttempt < 30000) {
+              return []; // Return empty rather than null to avoid infinite retry loops
+            }
+            // Reset retry state after cooldown
+            runtime.retryState.delete(cacheKey);
+          }
+
           onLoadingDelta(1);
           const p = (async () => {
+            const currentAttempt = (retryInfo?.attempts || 0) + 1;
+
+            // Helper to handle retry scheduling
+            const scheduleRetry = () => {
+              runtime.retryState.set(cacheKey, {
+                attempts: currentAttempt,
+                lastAttempt: Date.now()
+              });
+            };
+
             try {
               const res = await fetch(url, { signal });
               if (signal?.aborted) return null;
@@ -656,7 +683,7 @@ function buildHexTileDeckLayers(
                     hp = await ensureHyparquetLoaded();
                   } catch (e) {
                     console.error('[tiles] failed to auto-load hyparquet', e);
-                    // IMPORTANT: don't mark tile as loaded; allow retry after hyparquet becomes available.
+                    scheduleRetry();
                     return null;
                   }
                 }
@@ -684,6 +711,8 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
+              // Clear retry state on success
+              runtime.retryState.delete(cacheKey);
 
               // Parquet metadata min/max (instant autoDomain)
               try {
@@ -705,7 +734,26 @@ function buildHexTileDeckLayers(
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
-              // IMPORTANT: do NOT cache failures; return null so the tileset may retry.
+
+              // Track retry attempt
+              scheduleRetry();
+
+              // If we haven't exceeded max retries, schedule a retry with exponential backoff
+              if (currentAttempt < DEFAULT_MAX_RETRIES) {
+                const delay = RETRY_BASE_DELAY_MS * Math.pow(2, currentAttempt - 1);
+                console.warn(`[tiles] Tile load failed (attempt ${currentAttempt}/${DEFAULT_MAX_RETRIES}), retrying in ${delay}ms:`, tileKey);
+
+                // Schedule retry by dispatching an event that triggers rebuild
+                setTimeout(() => {
+                  try {
+                    // Dispatch event to trigger tile layer rebuild (which will retry failed tiles)
+                    window.dispatchEvent(new CustomEvent('fusedmaps:tiles:retry'));
+                  } catch (_) {}
+                }, delay);
+              } else {
+                console.warn(`[tiles] Tile load failed after ${DEFAULT_MAX_RETRIES} attempts:`, tileKey);
+              }
+
               return null;
             } finally {
               runtime.inflight.delete(cacheKey);
@@ -834,11 +882,20 @@ export function createHexTileOverlay(
     scheduleAuto(1500);
   }
 
+  // Listen for tile retry events (triggered after failed tile load with exponential backoff)
+  const onTileRetry = () => {
+    try {
+      rebuild();
+    } catch (_) {}
+  };
+  try { window.addEventListener('fusedmaps:tiles:retry', onTileRetry as any); } catch {}
+
   const destroy = () => {
     if (autoTimer) clearTimeout(autoTimer);
     try { map.off('moveend', onMoveEnd); } catch {}
     try { map.off('idle', onIdle); } catch {}
     try { window.removeEventListener('fusedmaps:autodomain:dirty', onDirty as any); } catch {}
+    try { window.removeEventListener('fusedmaps:tiles:retry', onTileRetry as any); } catch {}
     try { map.removeControl(overlay); } catch {}
   };
 

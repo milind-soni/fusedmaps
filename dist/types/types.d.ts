@@ -6,16 +6,43 @@ export interface ViewState {
     pitch?: number;
     bearing?: number;
 }
-export interface ColorContinuousConfig {
+/** Continuous color scale based on numeric attribute */
+export interface ContinuousColor {
+    type: 'continuous';
+    attr: string;
+    domain?: [number, number];
+    palette: string;
+    steps?: number;
+    nullColor?: [number, number, number];
+    reverse?: boolean;
+    autoDomain?: boolean;
+}
+/** Categorical color based on string/enum attribute */
+export interface CategoricalColor {
+    type: 'categorical';
+    attr: string;
+    categories?: Array<string | {
+        value: string | number;
+        label: string;
+    }>;
+    labelAttr?: string;
+    palette?: string;
+    nullColor?: [number, number, number];
+}
+/** Color can be: config object, RGB array, or CSS string */
+export type ColorValue = ContinuousColor | CategoricalColor | [number, number, number] | [number, number, number, number] | string;
+export interface LegacyColorContinuous {
     '@@function': 'colorContinuous';
     attr: string;
-    domain: [number, number];
+    domain?: [number, number];
     colors: string;
     steps?: number;
     nullColor?: [number, number, number, number?];
     reverse?: boolean;
+    autoDomain?: boolean;
+    _dynamicDomain?: [number, number];
 }
-export interface ColorCategoriesConfig {
+export interface LegacyColorCategories {
     '@@function': 'colorCategories';
     attr: string;
     categories?: Array<string | {
@@ -30,7 +57,84 @@ export interface ColorCategoriesConfig {
         label: string;
     }>;
 }
-export type ColorConfig = ColorContinuousConfig | ColorCategoriesConfig | [number, number, number, number?] | string;
+export type ColorConfig = LegacyColorContinuous | LegacyColorCategories | [number, number, number, number?] | string;
+export interface LayerStyle {
+    fillColor?: ColorValue;
+    lineColor?: ColorValue;
+    opacity?: number;
+    filled?: boolean;
+    stroked?: boolean;
+    extruded?: boolean;
+    elevationAttr?: string;
+    elevationScale?: number;
+    lineWidth?: number;
+    pointRadius?: number;
+}
+export interface TileOptions {
+    minZoom?: number;
+    maxZoom?: number;
+    zoomOffset?: number;
+    tileSize?: number;
+    maxRequests?: number;
+}
+interface BaseLayer {
+    id: string;
+    name: string;
+    visible?: boolean;
+    tooltip?: string[];
+    dataRef?: string;
+}
+export interface HexLayer extends BaseLayer {
+    layerType: 'hex';
+    data?: Array<Record<string, unknown>>;
+    tileUrl?: string;
+    parquetUrl?: string;
+    parquetData?: string;
+    style?: LayerStyle;
+    tile?: TileOptions;
+    sql?: string;
+    isTileLayer?: boolean;
+}
+export interface VectorLayer extends BaseLayer {
+    layerType: 'vector';
+    geojson?: FeatureCollection;
+    style?: LayerStyle;
+}
+export interface MVTLayer extends BaseLayer {
+    layerType: 'mvt';
+    tileUrl: string;
+    sourceLayer?: string;
+    style?: LayerStyle;
+    tile?: TileOptions;
+}
+export interface RasterLayer extends BaseLayer {
+    layerType: 'raster';
+    tileUrl?: string;
+    imageUrl?: string;
+    imageBounds?: [number, number, number, number];
+    opacity?: number;
+}
+export interface PMTilesLayer extends BaseLayer {
+    layerType: 'pmtiles';
+    pmtilesUrl: string;
+    pmtilesPath?: string;
+    sourceLayer?: string;
+    excludeSourceLayers?: string[];
+    style?: LayerStyle;
+    tile?: TileOptions;
+    renderPoints?: boolean;
+    renderLines?: boolean;
+    renderPolygons?: boolean;
+}
+export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
+export type HexLayerConfig = any;
+export type VectorLayerConfig = any;
+export type MVTLayerConfig = any;
+export type RasterLayerConfig = any;
+export type PMTilesLayerConfig = any;
+export type TileLayerConfig = TileOptions;
+export type ColorContinuousConfig = LegacyColorContinuous;
+export type ColorCategoriesConfig = LegacyColorCategories;
 export interface HexLayerStyle {
     '@@type'?: string;
     filled?: boolean;
@@ -62,105 +166,31 @@ export interface VectorLayerStyle {
     tooltipColumns?: string[];
     tooltipAttrs?: string[];
 }
-export interface RasterLayerStyle {
-    opacity?: number;
-}
-export interface TileLayerConfig {
-    tileSize?: number;
-    minZoom?: number;
-    maxZoom?: number;
-    zoomOffset?: number;
-    maxRequests?: number;
-    refinementStrategy?: 'best-available' | 'no-overlap' | string;
-}
-export interface BaseLayerConfig {
-    id: string;
-    name: string;
-    visible?: boolean;
-    tooltipColumns?: string[];
-    dataRef?: string;
-}
-export interface HexLayerConfig extends BaseLayerConfig {
+export interface LegacyHexLayerConfig extends BaseLayer {
     layerType: 'hex';
     data?: Array<Record<string, unknown>>;
     tileUrl?: string;
     isTileLayer?: boolean;
     hexLayer?: HexLayerStyle;
-    tileLayerConfig?: TileLayerConfig;
+    tileLayerConfig?: TileOptions;
     parquetData?: string;
     parquetUrl?: string;
     sql?: string;
-    fillDomainFromUser?: boolean;
 }
-export interface VectorLayerConfig extends BaseLayerConfig {
+export interface LegacyVectorLayerConfig extends BaseLayer {
     layerType: 'vector';
     geojson?: FeatureCollection;
-    tileUrl?: string;
-    sourceLayer?: string;
     vectorLayer?: VectorLayerStyle;
     fillColorConfig?: ColorConfig;
     fillColorRgba?: string;
-    colorAttr?: string;
     lineColorConfig?: ColorConfig;
     lineColorRgba?: string;
-    lineColorAttr?: string;
     lineWidth?: number;
     pointRadius?: number;
     isFilled?: boolean;
     isStroked?: boolean;
     opacity?: number;
-    fillDomainFromUser?: boolean;
 }
-export interface MVTLayerConfig extends BaseLayerConfig {
-    layerType: 'mvt';
-    tileUrl: string;
-    sourceLayer?: string;
-    minzoom?: number;
-    maxzoom?: number;
-    fillColor?: string;
-    fillColorConfig?: ColorConfig;
-    fillOpacity?: number;
-    isFilled?: boolean;
-    lineColor?: string;
-    lineColorConfig?: ColorConfig;
-    lineWidth?: number;
-    isExtruded?: boolean;
-    extrusionOpacity?: number;
-    heightProperty?: string;
-    heightMultiplier?: number;
-    config?: Record<string, unknown>;
-    fillDomainFromUser?: boolean;
-}
-export interface RasterLayerConfig extends BaseLayerConfig {
-    layerType: 'raster';
-    tileUrl?: string;
-    imageUrl?: string;
-    imageBounds?: [number, number, number, number];
-    rasterLayer?: RasterLayerStyle;
-    opacity?: number;
-}
-export interface PMTilesLayerConfig extends BaseLayerConfig {
-    layerType: 'pmtiles';
-    pmtilesUrl: string;
-    pmtilesPath?: string;
-    sourceLayer?: string;
-    excludeSourceLayers?: string[];
-    minzoom?: number;
-    maxzoom?: number;
-    fillColorConfig?: ColorConfig;
-    fillOpacity?: number;
-    isFilled?: boolean;
-    lineColorConfig?: ColorConfig;
-    lineWidth?: number;
-    pointRadiusMinPixels?: number;
-    colorAttribute?: string;
-    renderPoints?: boolean;
-    renderLines?: boolean;
-    renderPolygons?: boolean;
-    vectorLayer?: VectorLayerStyle;
-    fillDomainFromUser?: boolean;
-}
-export type LayerConfig = HexLayerConfig | VectorLayerConfig | MVTLayerConfig | RasterLayerConfig | PMTilesLayerConfig;
 export interface UIConfig {
     tooltip?: boolean;
     legend?: boolean;
@@ -202,28 +232,16 @@ export interface FusedMapsConfig {
     initialViewState: ViewState;
     layers: LayerConfig[];
     hasCustomView?: boolean;
-    hasTileLayers?: boolean;
-    hasMVTLayers?: boolean;
-    hasSQLLayers?: boolean;
     ui?: UIConfig;
     messaging?: MessagingConfig;
     highlightOnClick?: boolean;
-    palettes?: string[];
-    /**
-     * Sidebar / inspector panel.
-     * - undefined: do not mount sidebar at all (no toggle).
-     * - "show": mount and show.
-     * - "hide": mount but start collapsed (toggle can open it).
-     */
     sidebar?: 'show' | 'hide';
-    /** @deprecated use `sidebar` */
-    debug?: boolean;
 }
 export interface LayerState {
     config: LayerConfig;
     visible: boolean;
     order: number;
-    geojson?: import('geojson').FeatureCollection;
+    geojson?: FeatureCollection;
 }
 export interface ILayerStore {
     get(layerId: string): LayerState | undefined;
@@ -243,35 +261,19 @@ export interface ILayerStore {
 export interface FusedMapsInstance {
     map: mapboxgl.Map;
     deckOverlay: unknown | null;
-    /** Access to the layer store for advanced operations */
     store: ILayerStore;
-    /**
-     * AI/tool-calling friendly state snapshot.
-     * Safe to JSON.stringify.
-     */
     getState: () => FusedMapsState;
-    /**
-     * Apply one or more high-level actions (AI/tool-calling friendly).
-     * Returns the post-dispatch state snapshot.
-     */
     dispatch: (action: FusedMapsAction | FusedMapsAction[]) => FusedMapsState;
     setLayerVisibility: (layerId: string, visible: boolean) => void;
     updateLegend: () => void;
-    /** Add a new layer at runtime. Returns null if validation fails. */
     addLayer: (layerConfig: LayerConfig, options?: {
         order?: number;
     }) => LayerState | null;
-    /** Remove a layer by ID */
     removeLayer: (layerId: string) => boolean;
-    /** Update a layer's configuration. Returns null if validation fails. */
     updateLayer: (layerId: string, changes: Partial<LayerConfig>) => LayerState | null | undefined;
-    /** Get a layer by ID */
     getLayer: (layerId: string) => LayerState | undefined;
-    /** Get all layers */
     getLayers: () => LayerState[];
-    /** Move layer up in render order (renders on top) */
     moveLayerUp: (layerId: string) => void;
-    /** Move layer down in render order (renders below) */
     moveLayerDown: (layerId: string) => void;
     destroy: () => void;
 }
@@ -287,9 +289,7 @@ export interface LayerSummary {
     layerType: LayerConfig['layerType'];
     visible: boolean;
     order: number;
-    /** Optional known property keys (best-effort; may be empty for tile layers). */
     propertyKeys?: string[];
-    /** Optional known tooltip columns (from config). */
     tooltipColumns?: string[];
 }
 export interface FusedMapsState {
@@ -434,3 +434,4 @@ declare global {
         function cellToBoundary(h3Index: string): [number, number][];
     }
 }
+export {};

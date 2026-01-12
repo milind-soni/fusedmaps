@@ -17,6 +17,7 @@ import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
 import { createLayerStore, LayerStore } from './state';
+import { normalizeLayerConfig, isNewFormat } from './config';
 
 const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
 
@@ -45,9 +46,14 @@ export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
 export function init(config: FusedMapsConfig): FusedMapsInstance {
   const containerId = config.containerId || 'map';
 
-  // Initialize layer store
+  // Normalize layer configs (convert new format to internal format)
+  const normalizedLayers = config.layers.map((layer) =>
+    isNewFormat(layer) ? normalizeLayerConfig(layer) : layer
+  );
+
+  // Initialize layer store with normalized layers
   const store = createLayerStore();
-  store.init(config.layers);
+  store.init(normalizedLayers);
 
   // Theme (match map_utils.py: <html data-theme="dark|light">)
   try {
@@ -332,7 +338,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         console.warn('[FusedMaps] addLayer:', validation.error);
         return null;
       }
-      const state = store.add(layerConfig, options);
+      // Normalize if using new format
+      const normalizedConfig = isNewFormat(layerConfig)
+        ? normalizeLayerConfig(layerConfig)
+        : layerConfig;
+      const state = store.add(normalizedConfig, options);
       // Incremental render
       try {
         addSingleLayer(map, state.config, state.visible, config);

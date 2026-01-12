@@ -1,4 +1,4 @@
-import type { GeoJSON, Feature, FeatureCollection } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 
 // ============================================================
 // View State
@@ -13,20 +13,53 @@ export interface ViewState {
 }
 
 // ============================================================
-// Color Configuration
+// Color Configuration (Simplified)
 // ============================================================
 
-export interface ColorContinuousConfig {
+/** Continuous color scale based on numeric attribute */
+export interface ContinuousColor {
+  type: 'continuous';
+  attr: string;
+  domain?: [number, number];
+  palette: string;
+  steps?: number;
+  nullColor?: [number, number, number];
+  reverse?: boolean;
+  autoDomain?: boolean;
+}
+
+/** Categorical color based on string/enum attribute */
+export interface CategoricalColor {
+  type: 'categorical';
+  attr: string;
+  categories?: Array<string | { value: string | number; label: string }>;
+  labelAttr?: string;
+  palette?: string;
+  nullColor?: [number, number, number];
+}
+
+/** Color can be: config object, RGB array, or CSS string */
+export type ColorValue =
+  | ContinuousColor
+  | CategoricalColor
+  | [number, number, number]
+  | [number, number, number, number]
+  | string;
+
+// Legacy color format support (internal use)
+export interface LegacyColorContinuous {
   '@@function': 'colorContinuous';
   attr: string;
-  domain: [number, number];
+  domain?: [number, number];
   colors: string;
   steps?: number;
   nullColor?: [number, number, number, number?];
-  reverse?: boolean; // reverse palette direction (low↔high)
+  reverse?: boolean;
+  autoDomain?: boolean;
+  _dynamicDomain?: [number, number];
 }
 
-export interface ColorCategoriesConfig {
+export interface LegacyColorCategories {
   '@@function': 'colorCategories';
   attr: string;
   categories?: Array<string | { value: string | number; label: string }>;
@@ -36,10 +69,132 @@ export interface ColorCategoriesConfig {
   _detectedCategories?: Array<{ value: string | number; label: string }>;
 }
 
-export type ColorConfig = ColorContinuousConfig | ColorCategoriesConfig | [number, number, number, number?] | string;
+// Internal: normalized color config used by renderers
+export type ColorConfig = LegacyColorContinuous | LegacyColorCategories | [number, number, number, number?] | string;
 
 // ============================================================
-// Layer Configurations
+// Style Configuration (Shared across layer types)
+// ============================================================
+
+export interface LayerStyle {
+  fillColor?: ColorValue;
+  lineColor?: ColorValue;
+  opacity?: number;
+  filled?: boolean;
+  stroked?: boolean;
+  extruded?: boolean;
+  elevationAttr?: string;
+  elevationScale?: number;
+  lineWidth?: number;
+  pointRadius?: number;
+}
+
+// ============================================================
+// Tile Options
+// ============================================================
+
+export interface TileOptions {
+  minZoom?: number;
+  maxZoom?: number;
+  zoomOffset?: number;
+  tileSize?: number;
+  maxRequests?: number;
+}
+
+// ============================================================
+// Layer Configurations (Clean, Flat Structure)
+// ============================================================
+
+interface BaseLayer {
+  id: string;
+  name: string;
+  visible?: boolean;
+  tooltip?: string[];
+  dataRef?: string;
+}
+
+export interface HexLayer extends BaseLayer {
+  layerType: 'hex';
+  // Data source (one of these)
+  data?: Array<Record<string, unknown>>;
+  tileUrl?: string;
+  parquetUrl?: string;
+  parquetData?: string;
+  // Style
+  style?: LayerStyle;
+  // Tile options (for tileUrl)
+  tile?: TileOptions;
+  // SQL query (for parquet sources)
+  sql?: string;
+  // Internal flags
+  isTileLayer?: boolean;
+}
+
+export interface VectorLayer extends BaseLayer {
+  layerType: 'vector';
+  // Data source
+  geojson?: FeatureCollection;
+  // Style
+  style?: LayerStyle;
+}
+
+export interface MVTLayer extends BaseLayer {
+  layerType: 'mvt';
+  // Data source
+  tileUrl: string;
+  sourceLayer?: string;
+  // Style
+  style?: LayerStyle;
+  // Tile options
+  tile?: TileOptions;
+}
+
+export interface RasterLayer extends BaseLayer {
+  layerType: 'raster';
+  // Data source (one of these)
+  tileUrl?: string;
+  imageUrl?: string;
+  imageBounds?: [number, number, number, number];
+  // Style
+  opacity?: number;
+}
+
+export interface PMTilesLayer extends BaseLayer {
+  layerType: 'pmtiles';
+  // Data source
+  pmtilesUrl: string;
+  pmtilesPath?: string;
+  sourceLayer?: string;
+  excludeSourceLayers?: string[];
+  // Style
+  style?: LayerStyle;
+  // Tile options
+  tile?: TileOptions;
+  // Render toggles
+  renderPoints?: boolean;
+  renderLines?: boolean;
+  renderPolygons?: boolean;
+}
+
+export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
+
+// ============================================================
+// Type Aliases (backwards compatibility for internal code)
+// ============================================================
+
+// Internal code uses normalized configs - these aliases point to any since
+// the normalizer outputs a mix of new and legacy properties
+export type HexLayerConfig = any;
+export type VectorLayerConfig = any;
+export type MVTLayerConfig = any;
+export type RasterLayerConfig = any;
+export type PMTilesLayerConfig = any;
+export type TileLayerConfig = TileOptions;
+export type ColorContinuousConfig = LegacyColorContinuous;
+export type ColorCategoriesConfig = LegacyColorCategories;
+
+// ============================================================
+// Legacy Layer Types (for internal normalization)
 // ============================================================
 
 export interface HexLayerStyle {
@@ -47,10 +202,6 @@ export interface HexLayerStyle {
   filled?: boolean;
   stroked?: boolean;
   extruded?: boolean;
-  // When extruded=true:
-  // - In Deck.gl tile mode, this maps to H3HexagonLayer getElevation(d[elevationProperty]) * elevationScale
-  // - In Mapbox static mode, this maps to fill-extrusion-height based on feature.properties[elevationProperty]
-  // If omitted, we fall back to the fill-color attribute (getFillColor.attr) when available.
   elevationProperty?: string;
   elevationScale?: number;
   opacity?: number;
@@ -79,127 +230,33 @@ export interface VectorLayerStyle {
   tooltipAttrs?: string[];
 }
 
-export interface RasterLayerStyle {
-  opacity?: number;
-}
-
-export interface TileLayerConfig {
-  tileSize?: number;
-  minZoom?: number;
-  maxZoom?: number;
-  zoomOffset?: number;
-  maxRequests?: number;
-  refinementStrategy?: 'best-available' | 'no-overlap' | string;
-}
-
-// ============================================================
-// Layer Definitions
-// ============================================================
-
-export interface BaseLayerConfig {
-  id: string;
-  name: string;
-  visible?: boolean;
-  tooltipColumns?: string[];
-  // Optional hint used by the sidebar "Layer Config" export to print `data=<python var>`.
-  // The browser can't infer Python variable names automatically.
-  dataRef?: string;
-}
-
-export interface HexLayerConfig extends BaseLayerConfig {
+// Legacy config shapes (accepted but normalized internally)
+export interface LegacyHexLayerConfig extends BaseLayer {
   layerType: 'hex';
   data?: Array<Record<string, unknown>>;
   tileUrl?: string;
   isTileLayer?: boolean;
   hexLayer?: HexLayerStyle;
-  tileLayerConfig?: TileLayerConfig;
-  parquetData?: string; // base64 encoded parquet
-  parquetUrl?: string; // optional URL to Parquet (preferred over base64 for larger payloads)
+  tileLayerConfig?: TileOptions;
+  parquetData?: string;
+  parquetUrl?: string;
   sql?: string;
-  fillDomainFromUser?: boolean;
 }
 
-export interface VectorLayerConfig extends BaseLayerConfig {
+export interface LegacyVectorLayerConfig extends BaseLayer {
   layerType: 'vector';
   geojson?: FeatureCollection;
-  tileUrl?: string;
-  sourceLayer?: string;
   vectorLayer?: VectorLayerStyle;
   fillColorConfig?: ColorConfig;
   fillColorRgba?: string;
-  colorAttr?: string;
   lineColorConfig?: ColorConfig;
   lineColorRgba?: string;
-  lineColorAttr?: string;
   lineWidth?: number;
   pointRadius?: number;
   isFilled?: boolean;
   isStroked?: boolean;
   opacity?: number;
-  fillDomainFromUser?: boolean;
 }
-
-export interface MVTLayerConfig extends BaseLayerConfig {
-  layerType: 'mvt';
-  tileUrl: string;
-  sourceLayer?: string;
-  minzoom?: number;
-  maxzoom?: number;
-  fillColor?: string;
-  fillColorConfig?: ColorConfig;
-  fillOpacity?: number;
-  isFilled?: boolean;
-  lineColor?: string;
-  lineColorConfig?: ColorConfig;
-  lineWidth?: number;
-  isExtruded?: boolean;
-  extrusionOpacity?: number;
-  heightProperty?: string;
-  heightMultiplier?: number;
-  config?: Record<string, unknown>;
-  fillDomainFromUser?: boolean;
-}
-
-export interface RasterLayerConfig extends BaseLayerConfig {
-  layerType: 'raster';
-  // Either a raster XYZ tile URL template OR a static image overlay.
-  tileUrl?: string;
-  imageUrl?: string; // can be http(s) URL or data URL (data:image/png;base64,...)
-  imageBounds?: [number, number, number, number]; // [west, south, east, north]
-  rasterLayer?: RasterLayerStyle;
-  opacity?: number;
-}
-
-export interface PMTilesLayerConfig extends BaseLayerConfig {
-  layerType: 'pmtiles';
-  pmtilesUrl: string; // Signed URL to PMTiles archive
-  pmtilesPath?: string; // Optional original s3:// path (for nicer sidebar export)
-  sourceLayer?: string; // Optional source layer name (auto-detected from metadata if not provided)
-  excludeSourceLayers?: string[]; // Optional source-layer exclusion list (for helper layers)
-  minzoom?: number;
-  maxzoom?: number;
-  // Styling
-  fillColorConfig?: ColorConfig;
-  fillOpacity?: number;
-  isFilled?: boolean;
-  lineColorConfig?: ColorConfig;
-  lineWidth?: number;
-  pointRadiusMinPixels?: number;
-  colorAttribute?: string; // Attribute to use for coloring
-  renderPoints?: boolean;
-  renderLines?: boolean;
-  renderPolygons?: boolean;
-  // Vector layer style (legacy/compatibility)
-  vectorLayer?: VectorLayerStyle;
-  fillDomainFromUser?: boolean;
-}
-
-export type LayerConfig =
-  | HexLayerConfig
-  | VectorLayerConfig
-  | MVTLayerConfig
-  | RasterLayerConfig
-  | PMTilesLayerConfig;
 
 // ============================================================
 // UI Configuration
@@ -256,37 +313,23 @@ export interface FusedMapsConfig {
   initialViewState: ViewState;
   layers: LayerConfig[];
   hasCustomView?: boolean;
-  hasTileLayers?: boolean;
-  hasMVTLayers?: boolean;
-  hasSQLLayers?: boolean;
   ui?: UIConfig;
   messaging?: MessagingConfig;
   highlightOnClick?: boolean;
-  palettes?: string[];
-  /**
-   * Sidebar / inspector panel.
-   * - undefined: do not mount sidebar at all (no toggle).
-   * - "show": mount and show.
-   * - "hide": mount but start collapsed (toggle can open it).
-   */
   sidebar?: 'show' | 'hide';
-  /** @deprecated use `sidebar` */
-  debug?: boolean;
 }
 
 // ============================================================
-// Return Types
+// Runtime State
 // ============================================================
 
-// Forward declare LayerState (actual definition in state/layer-store.ts)
 export interface LayerState {
   config: LayerConfig;
   visible: boolean;
   order: number;
-  geojson?: import('geojson').FeatureCollection;
+  geojson?: FeatureCollection;
 }
 
-// Forward declare LayerStore interface (actual class in state/layer-store.ts)
 export interface ILayerStore {
   get(layerId: string): LayerState | undefined;
   getAll(): LayerState[];
@@ -304,42 +347,18 @@ export interface ILayerStore {
 export interface FusedMapsInstance {
   map: mapboxgl.Map;
   deckOverlay: unknown | null;
-  
-  /** Access to the layer store for advanced operations */
   store: ILayerStore;
-  
-  /**
-   * AI/tool-calling friendly state snapshot.
-   * Safe to JSON.stringify.
-   */
   getState: () => FusedMapsState;
-
-  /**
-   * Apply one or more high-level actions (AI/tool-calling friendly).
-   * Returns the post-dispatch state snapshot.
-   */
   dispatch: (action: FusedMapsAction | FusedMapsAction[]) => FusedMapsState;
-
-  // Legacy API
   setLayerVisibility: (layerId: string, visible: boolean) => void;
   updateLegend: () => void;
-  
-  // New Layer Management API
-  /** Add a new layer at runtime. Returns null if validation fails. */
   addLayer: (layerConfig: LayerConfig, options?: { order?: number }) => LayerState | null;
-  /** Remove a layer by ID */
   removeLayer: (layerId: string) => boolean;
-  /** Update a layer's configuration. Returns null if validation fails. */
   updateLayer: (layerId: string, changes: Partial<LayerConfig>) => LayerState | null | undefined;
-  /** Get a layer by ID */
   getLayer: (layerId: string) => LayerState | undefined;
-  /** Get all layers */
   getLayers: () => LayerState[];
-  /** Move layer up in render order (renders on top) */
   moveLayerUp: (layerId: string) => void;
-  /** Move layer down in render order (renders below) */
   moveLayerDown: (layerId: string) => void;
-  
   destroy: () => void;
 }
 
@@ -360,9 +379,7 @@ export interface LayerSummary {
   layerType: LayerConfig['layerType'];
   visible: boolean;
   order: number;
-  /** Optional known property keys (best-effort; may be empty for tile layers). */
   propertyKeys?: string[];
-  /** Optional known tooltip columns (from config). */
   tooltipColumns?: string[];
 }
 
@@ -404,7 +421,10 @@ export interface LegendEntry {
   lineColor?: string;
 }
 
-// Declare mapboxgl types (will be provided by runtime)
+// ============================================================
+// Global Type Declarations
+// ============================================================
+
 declare global {
   interface Window {
     FusedMaps: typeof import('./index');
@@ -413,7 +433,7 @@ declare global {
     deck: unknown;
     cartocolor: Record<string, Record<number, string[]>>;
   }
-  
+
   namespace mapboxgl {
     class Map {
       constructor(options: unknown);
@@ -460,7 +480,7 @@ declare global {
       dragPan: { enable(): void; disable(): void };
       triggerRepaint?: () => void;
     }
-    
+
     class LngLatBounds {
       extend(coord: [number, number]): void;
       isEmpty(): boolean;
@@ -470,10 +490,9 @@ declare global {
       constructor(options?: unknown);
     }
   }
-  
+
   namespace h3 {
     function isValidCell(h3Index: string): boolean;
     function cellToBoundary(h3Index: string): [number, number][];
   }
 }
-

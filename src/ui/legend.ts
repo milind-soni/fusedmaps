@@ -6,13 +6,16 @@ import type { LayerConfig, HexLayerConfig, VectorLayerConfig, ColorContinuousCon
 import { getPaletteColors, FALLBACK_CATEGORICAL_COLORS, FALLBACK_CONTINUOUS_COLORS } from '../color/palettes';
 import { getUniqueCategories } from '../color/expressions';
 
+type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 /**
  * Setup the legend container
  */
 export function setupLegend(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
-  geojsons: Record<string, GeoJSON.FeatureCollection>
+  geojsons: Record<string, GeoJSON.FeatureCollection>,
+  position: WidgetPosition = 'bottom-right'
 ): void {
   // Create legend container if it doesn't exist
   let legend = document.getElementById('color-legend');
@@ -23,7 +26,19 @@ export function setupLegend(
     legend.style.display = 'none';
     document.body.appendChild(legend);
   }
-  
+
+  // Apply position styles
+  const posStyles: Record<WidgetPosition, { top?: string; bottom?: string; left?: string; right?: string }> = {
+    'top-left': { top: '12px', left: '12px', right: 'auto', bottom: 'auto' },
+    'top-right': { top: '12px', right: '12px', left: 'auto', bottom: 'auto' },
+    'bottom-left': { bottom: '12px', left: '12px', right: 'auto', top: 'auto' },
+    'bottom-right': { bottom: '12px', right: '12px', left: 'auto', top: 'auto' },
+  };
+  const styles = posStyles[position];
+  if (styles) {
+    Object.assign(legend.style, styles);
+  }
+
   updateLegend(layers, visibilityState, geojsons);
 }
 

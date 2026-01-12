@@ -199,6 +199,15 @@ export interface UIConfig {
     basemapSwitcher?: boolean;
     theme?: 'dark' | 'light';
 }
+export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type WidgetSetting = WidgetPosition | false;
+export interface WidgetsConfig {
+    controls?: WidgetSetting;
+    scale?: WidgetSetting;
+    basemap?: WidgetSetting;
+    layers?: WidgetSetting;
+    legend?: WidgetSetting;
+}
 export interface MessagingConfig {
     broadcast?: {
         enabled?: boolean;
@@ -234,6 +243,7 @@ export interface FusedMapsConfig {
     layers: LayerConfig[];
     hasCustomView?: boolean;
     ui?: UIConfig;
+    widgets?: WidgetsConfig;
     messaging?: MessagingConfig;
     highlightOnClick?: boolean;
     sidebar?: 'show' | 'hide';

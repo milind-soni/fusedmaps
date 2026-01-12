@@ -60,6 +60,8 @@ const EYE_CLOSED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="cu
 // Drag icons for reordering
 const DRAG_HANDLE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.5"><path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>';
 
+type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 /**
  * Setup the layer panel
  */
@@ -67,13 +69,14 @@ export function setupLayerPanel(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
   onVisibilityChange: VisibilityCallback,
-  store?: LayerStore
+  store?: LayerStore,
+  position: WidgetPosition = 'top-right'
 ): { destroy: () => void } {
   visibilityCallback = onVisibilityChange;
   const _store = store;
   activeStore = _store || null;
   activeVisibilityState = visibilityState || {};
-  
+
   // Create panel container if it doesn't exist
   let panel = document.getElementById('layer-panel');
   if (!panel) {
@@ -83,6 +86,18 @@ export function setupLayerPanel(
     document.body.appendChild(panel);
   }
   panelEl = panel;
+
+  // Apply position styles
+  const posStyles: Record<WidgetPosition, { top?: string; bottom?: string; left?: string; right?: string }> = {
+    'top-left': { top: '12px', left: '12px', right: 'auto', bottom: 'auto' },
+    'top-right': { top: '12px', right: '12px', left: 'auto', bottom: 'auto' },
+    'bottom-left': { bottom: '12px', left: '12px', right: 'auto', top: 'auto' },
+    'bottom-right': { bottom: '12px', right: '12px', left: 'auto', top: 'auto' },
+  };
+  const styles = posStyles[position];
+  if (styles) {
+    Object.assign(panel.style, styles);
+  }
   
   // One delegated click handler for the whole panel (no window globals, no inline onclick)
   if (!clickHandlerInstalled) {

@@ -98,16 +98,17 @@ function downloadScreenshot(map: mapboxgl.Map) {
   }
 }
 
-function addScaleControl(map: mapboxgl.Map) {
+function addScaleControl(map: mapboxgl.Map, position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom-left') {
   try {
-    map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'metric' }), 'bottom-left');
+    map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'metric' }), position);
   } catch (_) {}
 }
 
 function addZoomHomeControl(
   map: mapboxgl.Map,
   initialView: ViewState,
-  screenshotEnabled: boolean
+  screenshotEnabled: boolean,
+  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom-left'
 ): { setHomeViewState: (view: ViewState) => void } {
   // Keep home target mutable so callers can update it after auto-fit.
   const homeView: ViewState = { ...initialView };
@@ -214,7 +215,7 @@ function addZoomHomeControl(
   }
 
   try {
-    map.addControl(new ZoomHomeControl() as any, 'bottom-left');
+    map.addControl(new ZoomHomeControl() as any, position);
   } catch (_) {}
 
   return { setHomeViewState };
@@ -317,6 +318,7 @@ interface BasemapSwitcherOptions {
   basemaps?: BasemapOption[];
   currentStyle: string;
   onStyleChange?: (basemap: BasemapOption) => void;
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 }
 
 function addBasemapSwitcher(
@@ -474,7 +476,8 @@ function addBasemapSwitcher(
 
   try {
     // Insert at beginning (column-reverse means first child appears at bottom)
-    const ctrlContainer = (map as any).getContainer().querySelector('.mapboxgl-ctrl-bottom-left');
+    const pos = options.position || 'bottom-left';
+    const ctrlContainer = (map as any).getContainer().querySelector(`.mapboxgl-ctrl-${pos}`);
     if (ctrlContainer) {
       ctrlContainer.insertBefore(wrapper, ctrlContainer.firstChild);
     }
@@ -505,32 +508,56 @@ function addBasemapSwitcher(
 // Setup All Widgets
 // ============================================================
 
-export interface WidgetsConfig {
+type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+export interface WidgetsSetupConfig {
   screenshot?: boolean;
   basemapSwitcher?: boolean;
   currentStyle?: string;
   onStyleChange?: (basemap: BasemapOption) => void;
+  // Widget positions (false = disabled)
+  positions?: {
+    controls?: WidgetPosition | false;
+    scale?: WidgetPosition | false;
+    basemap?: WidgetPosition | false;
+  };
 }
 
 export function setupWidgets(
   map: mapboxgl.Map,
   initialView: ViewState,
-  configOrScreenshot: boolean | WidgetsConfig = true
+  configOrScreenshot: boolean | WidgetsSetupConfig = true
 ): WidgetsHandle {
   // Backwards compatibility: accept boolean for screenshotEnabled
-  const config: WidgetsConfig = typeof configOrScreenshot === 'boolean'
+  const config: WidgetsSetupConfig = typeof configOrScreenshot === 'boolean'
     ? { screenshot: configOrScreenshot }
     : configOrScreenshot;
 
-  addScaleControl(map);
-  const zh = addZoomHomeControl(map, initialView, config.screenshot !== false);
+  const pos = config.positions || {};
+  const controlsPos = pos.controls ?? 'bottom-left';
+  const scalePos = pos.scale ?? 'bottom-left';
+  const basemapPos = pos.basemap ?? 'bottom-left';
+
+  // Scale control
+  if (scalePos !== false) {
+    addScaleControl(map, scalePos);
+  }
+
+  // Zoom/Home/Screenshot controls
+  let zh: { setHomeViewState: (view: ViewState) => void } | null = null;
+  if (controlsPos !== false) {
+    zh = addZoomHomeControl(map, initialView, config.screenshot !== false, controlsPos);
+  }
+
   const cleanupOrbit = enableCmdDragOrbit(map);
 
+  // Basemap switcher
   let basemapSwitcherHandle: { destroy: () => void } | null = null;
-  if (config.basemapSwitcher !== false) {
+  if (config.basemapSwitcher !== false && basemapPos !== false) {
     basemapSwitcherHandle = addBasemapSwitcher(map, {
       currentStyle: config.currentStyle || '',
-      onStyleChange: config.onStyleChange
+      onStyleChange: config.onStyleChange,
+      position: basemapPos
     });
   }
 

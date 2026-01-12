@@ -76,11 +76,24 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     screenshotEnabled: config.ui?.screenshot !== false
   });
 
+  // Widget positions from config (defaults: controls/scale/basemap=bottom-left, layers=top-right, legend=bottom-right)
+  const widgetPos = config.widgets || {};
+  const controlsPos = widgetPos.controls ?? 'bottom-left';
+  const scalePos = widgetPos.scale ?? 'bottom-left';
+  const basemapPos = widgetPos.basemap ?? 'bottom-left';
+  const layersPos = widgetPos.layers ?? 'top-right';
+  const legendPos = widgetPos.legend ?? 'bottom-right';
+
   // Widgets (zoom/home + optional screenshot + cmd-drag orbit + basemap switcher)
   const widgets = setupWidgets(map, config.initialViewState, {
     screenshot: config.ui?.screenshot !== false,
-    basemapSwitcher: config.ui?.basemapSwitcher !== false,
-    currentStyle: config.styleUrl || ''
+    basemapSwitcher: config.ui?.basemapSwitcher !== false && basemapPos !== false,
+    currentStyle: config.styleUrl || '',
+    positions: {
+      controls: controlsPos === false ? false : controlsPos,
+      scale: scalePos === false ? false : scalePos,
+      basemap: basemapPos === false ? false : basemapPos,
+    }
   });
 
   // Sidebar panel (inspector)
@@ -116,14 +129,14 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   });
   
   // Setup UI components
-  if (config.ui?.layerPanel !== false) {
+  if (config.ui?.layerPanel !== false && layersPos !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
-    }, store);
+    }, store, layersPos);
   }
-  
-  if (config.ui?.legend !== false) {
-    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs());
+
+  if (config.ui?.legend !== false && legendPos !== false) {
+    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos);
   }
   
   // Add layers when map loads

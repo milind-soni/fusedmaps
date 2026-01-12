@@ -224,6 +224,8 @@ def deckgl_layers(
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
+    # --- Widget positioning ---
+    widgets: typing.Optional[dict] = None,  # Position/enable widgets: {"controls": "bottom-left", "legend": False, ...}
     # --- AI Configuration ---
     ai_udf_url: typing.Optional[str] = None,  # URL to AI UDF that converts prompts to SQL
     ai_schema: typing.Optional[str] = None,  # Schema string to pass to AI UDF (auto-extracted if not provided)
@@ -289,6 +291,17 @@ def deckgl_layers(
         "streets": "mapbox://styles/mapbox/streets-v12"
     }
     style_url = basemap_styles.get(basemap.lower(), basemap_styles["dark"])
+
+    # Default widget positions (can be overridden or disabled with False)
+    default_widgets = {
+        "controls": "bottom-left",   # zoom/home/screenshot
+        "scale": "bottom-left",      # scale bar
+        "basemap": "bottom-left",    # basemap switcher
+        "layers": "top-right",       # layer visibility panel
+        "legend": "bottom-right",    # color legend
+    }
+    # Merge user overrides
+    widget_config = {**default_widgets, **(widgets or {})}
     
     # Process each layer
     processed_layers = []
@@ -448,6 +461,7 @@ def deckgl_layers(
             "tooltip": True,
             "theme": theme,
         },
+        "widgets": widget_config,
         "highlightOnClick": highlight_on_click,
     }
 

@@ -271,6 +271,18 @@ export interface UIConfig {
   theme?: 'dark' | 'light';
 }
 
+// Widget positioning: string = position, false = disabled
+export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type WidgetSetting = WidgetPosition | false;
+
+export interface WidgetsConfig {
+  controls?: WidgetSetting;  // zoom/home/screenshot
+  scale?: WidgetSetting;     // scale bar
+  basemap?: WidgetSetting;   // basemap switcher
+  layers?: WidgetSetting;    // layer visibility panel
+  legend?: WidgetSetting;    // color legend
+}
+
 // ============================================================
 // Messaging Configuration
 // ============================================================
@@ -315,6 +327,7 @@ export interface FusedMapsConfig {
   layers: LayerConfig[];
   hasCustomView?: boolean;
   ui?: UIConfig;
+  widgets?: WidgetsConfig;
   messaging?: MessagingConfig;
   highlightOnClick?: boolean;
   sidebar?: 'show' | 'hide';

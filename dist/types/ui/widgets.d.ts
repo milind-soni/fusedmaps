@@ -14,10 +14,17 @@ export interface BasemapOption {
     thumbnail: string;
 }
 export declare const DEFAULT_BASEMAPS: BasemapOption[];
-export interface WidgetsConfig {
+type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export interface WidgetsSetupConfig {
     screenshot?: boolean;
     basemapSwitcher?: boolean;
     currentStyle?: string;
     onStyleChange?: (basemap: BasemapOption) => void;
+    positions?: {
+        controls?: WidgetPosition | false;
+        scale?: WidgetPosition | false;
+        basemap?: WidgetPosition | false;
+    };
 }
-export declare function setupWidgets(map: mapboxgl.Map, initialView: ViewState, configOrScreenshot?: boolean | WidgetsConfig): WidgetsHandle;
+export declare function setupWidgets(map: mapboxgl.Map, initialView: ViewState, configOrScreenshot?: boolean | WidgetsSetupConfig): WidgetsHandle;
+export {};

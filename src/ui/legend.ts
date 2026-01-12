@@ -169,10 +169,11 @@ function buildLayerLegend(
       : cfg.getFillColor;
 
     // Special case: RGB accessor for tile layers (e.g., soil type with @@=[properties.r,properties.g,properties.b])
-    if ((hexLayer as any).isTileLayer && isRgbAccessor(colorCfg) && tileData) {
+    if ((hexLayer as any).isTileLayer && isRgbAccessor(colorCfg) && tileData && tileData.size > 0) {
       // Get legend attribute from config or default to first tooltip attr
       const legendAttr = cfg.legendAttr ||
-        (Array.isArray(cfg.tooltipAttrs) ? cfg.tooltipAttrs[0] : null) ||
+        (Array.isArray(cfg.tooltipColumns) ? cfg.tooltipColumns[0] : null) ||
+        (Array.isArray((hexLayer as any).tooltipColumns) ? (hexLayer as any).tooltipColumns[0] : null) ||
         'taxsubgrp';
       const maxCats = Number.isFinite(cfg.legendMaxCategories) ? cfg.legendMaxCategories : 40;
       return buildRgbCategoryLegend(layer.name, tileData, legendAttr, maxCats);

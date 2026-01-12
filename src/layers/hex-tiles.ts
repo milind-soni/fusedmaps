@@ -698,6 +698,10 @@ function buildHexTileDeckLayers(
                   }
                 }
               } catch (_) {}
+
+              // Trigger legend update for RGB categorical layers (soil type, etc.)
+              // This allows the legend to build dynamically as tiles load
+              try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;

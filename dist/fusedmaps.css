@@ -687,165 +687,45 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   to { transform: rotate(360deg); }
 }
 
-/* AI Panel Styles */
-.ai-chat-container {
-  height: 200px;
-  overflow-y: auto;
-  background: var(--ui-output-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  padding: 8px;
-  margin-bottom: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-scroll-thumb) var(--ui-scroll-track);
-}
-
-.ai-chat-container::-webkit-scrollbar { width: 6px; }
-.ai-chat-container::-webkit-scrollbar-track { background: var(--ui-scroll-track); border-radius: 6px; }
-.ai-chat-container::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 6px; }
-.ai-chat-container::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
-
-.ai-message {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.ai-message.user {
-  background: rgba(232, 255, 89, 0.12);
-  border: 1px solid rgba(232, 255, 89, 0.25);
-  margin-left: 20px;
-}
-
-.ai-message.assistant {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  margin-right: 20px;
-}
-
-.ai-message-content {
-  color: var(--ui-text-2);
-}
-
-.ai-message-sql {
-  margin-top: 8px;
-  padding: 6px 8px;
-  background: var(--ui-input-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: 4px;
-}
-
-.ai-message-sql code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 11px;
-  color: var(--ui-accent);
-  word-break: break-all;
-}
-
-.ai-sql-preview-container {
-  margin-bottom: 8px;
-}
-
-.ai-sql-preview {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  padding: 10px;
-}
-
-.ai-sql-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--ui-category);
-  margin-bottom: 6px;
-}
-
-.ai-sql-preview code {
-  display: block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 11px;
-  color: var(--ui-accent);
-  background: var(--ui-input-bg);
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid var(--ui-border);
-  word-break: break-all;
-  margin-bottom: 8px;
-}
-
-.ai-sql-actions {
+/* AI Prompt Row (minimal, in SQL tab) */
+.ai-prompt-row {
   display: flex;
-  gap: 8px;
-}
-
-.ai-apply-btn,
-.ai-copy-btn {
-  flex: 1;
-  background: var(--ui-float-bg);
-  border: 1px solid var(--ui-border);
-  color: var(--ui-text);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.ai-apply-btn:hover,
-.ai-copy-btn:hover {
-  border-color: var(--ui-border-2);
-  background: var(--ui-surface);
-}
-
-.ai-apply-btn {
-  background: rgba(232, 255, 89, 0.15);
-  border-color: rgba(232, 255, 89, 0.3);
-  color: var(--ui-accent);
-}
-
-.ai-apply-btn:hover {
-  background: rgba(232, 255, 89, 0.25);
-}
-
-.ai-input-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.ai-input {
-  flex: 1;
-  min-height: 36px;
-  max-height: 80px;
-  resize: vertical;
-  font-size: 12px;
-}
-
-.ai-send-btn {
-  width: 36px;
-  height: 36px;
-  background: var(--ui-float-bg);
-  border: 1px solid var(--ui-border);
-  color: var(--ui-accent);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
+  gap: 6px;
   align-items: center;
-  justify-content: center;
-  transition: background 0.15s, border-color 0.15s;
+  margin-top: 8px;
+}
+
+.ai-prompt-row input {
+  flex: 1;
+  font-size: 11px;
+}
+
+.ai-prompt-btn {
+  padding: 5px 10px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 
-.ai-send-btn:hover {
-  background: var(--ui-surface);
+.ai-prompt-btn:hover {
+  background: var(--ui-float-bg);
   border-color: var(--ui-border-2);
+  color: var(--ui-text);
 }
 
-.ai-send-btn:disabled {
+.ai-prompt-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.ai-prompt-status {
+  font-size: 10px;
+  color: var(--ui-muted-2);
+  flex-shrink: 0;
 }

@@ -12,7 +12,6 @@ import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from
 import { ensureDebugShell, queryDebugElements } from './debug/template';
 import { applyDebugUIToLayer } from './debug/apply';
 import { createSqlPanel, type SqlPanel } from './debug/sql_panel';
-import { createAiPanel, type AiPanel, type AiConfig } from './debug/ai_panel';
 import { clamp, fmt, rgbToHex } from '../utils';
 
 export interface DebugHandle {
@@ -183,30 +182,24 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     sqlSection,
     sqlStatusEl,
     sqlInputEl,
-    aiSection,
-    aiChatEl,
-    aiInputEl,
-    aiSendBtn,
-    aiStatusEl,
-    aiSqlPreviewEl,
+    aiPromptRow,
+    aiPromptInput,
+    aiPromptBtn,
+    aiPromptStatus,
   } = queryDebugElements();
 
-  // --- Tabs (UI | SQL | AI) ---
+  // --- Tabs (UI | SQL) ---
   const tabUiBtn = document.getElementById('dbg-tab-btn-ui') as HTMLButtonElement | null;
   const tabSqlBtn = document.getElementById('dbg-tab-btn-sql') as HTMLButtonElement | null;
-  const tabAiBtn = document.getElementById('dbg-tab-btn-ai') as HTMLButtonElement | null;
   const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
   const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
-  const tabAiPanel = document.getElementById('dbg-tab-panel-ai') as HTMLElement | null;
 
   let sqlPanel: SqlPanel | null = null;
-  let aiPanel: AiPanel | null = null;
 
-  const setActiveTab = (tab: 'ui' | 'sql' | 'ai', persist = true) => {
+  const setActiveTab = (tab: 'ui' | 'sql', persist = true) => {
     try {
       if (tabUiPanel) tabUiPanel.style.display = tab === 'ui' ? 'block' : 'none';
       if (tabSqlPanel) tabSqlPanel.style.display = tab === 'sql' ? 'block' : 'none';
-      if (tabAiPanel) tabAiPanel.style.display = tab === 'ai' ? 'block' : 'none';
       if (tabUiBtn) {
         tabUiBtn.classList.toggle('active', tab === 'ui');
         tabUiBtn.setAttribute('aria-selected', tab === 'ui' ? 'true' : 'false');
@@ -214,10 +207,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       if (tabSqlBtn) {
         tabSqlBtn.classList.toggle('active', tab === 'sql');
         tabSqlBtn.setAttribute('aria-selected', tab === 'sql' ? 'true' : 'false');
-      }
-      if (tabAiBtn) {
-        tabAiBtn.classList.toggle('active', tab === 'ai');
-        tabAiBtn.setAttribute('aria-selected', tab === 'ai' ? 'true' : 'false');
       }
       if (persist) {
         try { localStorage.setItem('fusedmaps:debug:tab', tab); } catch (_) {}
@@ -234,19 +223,17 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const onTabClick = (e: any) => {
     const el = e?.currentTarget as HTMLElement | null;
     const tab = String(el?.getAttribute?.('data-tab') || '').toLowerCase();
-    if (tab === 'ui' || tab === 'sql' || tab === 'ai') setActiveTab(tab as any, true);
+    if (tab === 'ui' || tab === 'sql') setActiveTab(tab as any, true);
   };
 
   try {
     tabUiBtn?.addEventListener('click', onTabClick as any);
     tabSqlBtn?.addEventListener('click', onTabClick as any);
-    tabAiBtn?.addEventListener('click', onTabClick as any);
   } catch (_) {}
 
   try {
     const saved = String(localStorage.getItem('fusedmaps:debug:tab') || '').toLowerCase();
     if (saved === 'sql') setActiveTab('sql', false);
-    else if (saved === 'ai') setActiveTab('ai', false);
     else setActiveTab('ui', false);
   } catch (_) {
     setActiveTab('ui', false);
@@ -457,34 +444,47 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     updateLayerOutput,
   });
 
-  // AI panel (natural language to SQL)
-  aiPanel = createAiPanel({
-    aiSection,
-    aiChatEl,
-    aiInputEl,
-    aiSendBtn,
-    aiStatusEl,
-    aiSqlPreviewEl,
-    getActiveLayerId: () => getActiveLayer()?.id || null,
-    onSqlGenerated: (layerId: string, sql: string) => {
-      // Apply the generated SQL to the layer
-      const layer = editableLayers.find((l) => l.id === layerId);
-      if (!layer) return;
-      try {
-        // Update the layer's SQL
-        layer.sql = sql;
-        // Trigger rebuild via SQL panel's mechanism
-        sqlPanel?.applySql(sql);
-      } catch (_) {}
-    },
-  });
+  // AI prompt (minimal - calls backend UDF)
+  const aiUdfUrl = (config as any).aiUdfUrl as string | undefined;
+  if (aiUdfUrl) {
+    try { aiPromptRow.style.display = 'flex'; } catch (_) {}
+  }
 
-  // Configure AI panel from config.ai
-  try {
-    const aiConfig = (config as any).ai as AiConfig | undefined;
-    if (aiConfig) {
-      aiPanel.setConfig(aiConfig);
+  const executeAiPrompt = async () => {
+    if (!aiUdfUrl) return;
+    const prompt = aiPromptInput.value.trim();
+    if (!prompt) return;
+
+    try {
+      aiPromptBtn.disabled = true;
+      aiPromptInput.disabled = true;
+      aiPromptStatus.textContent = 'thinking...';
+      aiPromptStatus.style.color = 'var(--ui-muted-2)';
+
+      const url = aiUdfUrl + (aiUdfUrl.includes('?') ? '&' : '?') + 'prompt=' + encodeURIComponent(prompt);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      let sql = await response.text();
+      // Clean up response (remove quotes, markdown)
+      sql = sql.trim().replace(/^["']|["']$/g, '').replace(/```sql/gi, '').replace(/```/g, '').trim();
+
+      // Apply the SQL
+      sqlPanel?.applySql(sql);
+      aiPromptStatus.textContent = '';
+      aiPromptInput.value = '';
+    } catch (err: any) {
+      aiPromptStatus.textContent = err?.message || 'error';
+      aiPromptStatus.style.color = '#ff6b6b';
+    } finally {
+      aiPromptBtn.disabled = false;
+      aiPromptInput.disabled = false;
     }
+  };
+
+  try {
+    aiPromptInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') executeAiPrompt(); });
+    aiPromptBtn.addEventListener('click', executeAiPrompt);
   } catch (_) {}
 
   const updateFillFnOptions = () => {
@@ -961,7 +961,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
       try { tabUiBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       try { tabSqlBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
-      try { tabAiBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
       try {
@@ -971,8 +970,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       } catch (_) {}
       try { sqlPanel?.destroy(); } catch (_) {}
       try { sqlPanel = null; } catch (_) {}
-      try { aiPanel?.destroy(); } catch (_) {}
-      try { aiPanel = null; } catch (_) {}
       try { shell?.remove(); } catch (_) {}
     }
   };

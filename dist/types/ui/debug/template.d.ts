@@ -70,11 +70,9 @@ export interface DebugElements {
     sqlSection: HTMLElement;
     sqlStatusEl: HTMLElement;
     sqlInputEl: HTMLTextAreaElement;
-    aiSection: HTMLElement;
-    aiChatEl: HTMLElement;
-    aiInputEl: HTMLTextAreaElement;
-    aiSendBtn: HTMLButtonElement;
-    aiStatusEl: HTMLElement;
-    aiSqlPreviewEl: HTMLElement;
+    aiPromptRow: HTMLElement;
+    aiPromptInput: HTMLInputElement;
+    aiPromptBtn: HTMLButtonElement;
+    aiPromptStatus: HTMLElement;
 }
 export declare function queryDebugElements(): DebugElements;

@@ -16,7 +16,6 @@ export function getDebugShellHtml(): string {
           <div class="debug-tabs" role="tablist" aria-label="Debug tabs">
             <button type="button" class="debug-tab-btn active" id="dbg-tab-btn-ui" data-tab="ui" role="tab" aria-selected="true">UI</button>
             <button type="button" class="debug-tab-btn" id="dbg-tab-btn-sql" data-tab="sql" role="tab" aria-selected="false">SQL</button>
-            <button type="button" class="debug-tab-btn" id="dbg-tab-btn-ai" data-tab="ai" role="tab" aria-selected="false">AI</button>
           </div>
 
           <div class="debug-tab-panel" id="dbg-tab-panel-ui" role="tabpanel" aria-label="UI tab">
@@ -203,18 +202,11 @@ export function getDebugShellHtml(): string {
           <div class="debug-tab-panel" id="dbg-tab-panel-sql" role="tabpanel" aria-label="SQL tab" style="display:none;">
             <div class="debug-section" id="sql-section">
               <div class="debug-section-title">SQL <span id="sql-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
-              <textarea id="dbg-sql" class="debug-output" style="height:80px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
-            </div>
-          </div>
-
-          <div class="debug-tab-panel" id="dbg-tab-panel-ai" role="tabpanel" aria-label="AI tab" style="display:none;">
-            <div class="debug-section" id="ai-section">
-              <div class="debug-section-title">AI SQL Assistant <span id="ai-status" style="float:right;font-weight:normal;color:var(--ui-muted-2);"></span></div>
-              <div id="ai-chat" class="ai-chat-container"></div>
-              <div id="ai-sql-preview" class="ai-sql-preview-container" style="display:none;"></div>
-              <div class="ai-input-row">
-                <textarea id="ai-input" class="debug-input ai-input" placeholder="Ask: &quot;Show hexes where pct > 50&quot;" rows="2"></textarea>
-                <button type="button" id="ai-send" class="ai-send-btn" title="Send">&#10148;</button>
+              <textarea id="dbg-sql" class="debug-output" style="height:120px;font-family:monospace;font-size:11px;resize:vertical;" placeholder="WHERE expression (e.g. data = 111)\n—or—\nFull SQL (SELECT ... FROM data ...)"></textarea>
+              <div id="ai-prompt-row" class="ai-prompt-row" style="display:none;">
+                <input type="text" id="ai-prompt-input" class="debug-input" placeholder="Ask AI: &quot;filter to corn areas over 50%&quot;" />
+                <button type="button" id="ai-prompt-btn" class="ai-prompt-btn" title="Generate SQL">AI</button>
+                <span id="ai-prompt-status" class="ai-prompt-status"></span>
               </div>
             </div>
           </div>
@@ -317,12 +309,10 @@ export interface DebugElements {
   sqlStatusEl: HTMLElement;
   sqlInputEl: HTMLTextAreaElement;
 
-  aiSection: HTMLElement;
-  aiChatEl: HTMLElement;
-  aiInputEl: HTMLTextAreaElement;
-  aiSendBtn: HTMLButtonElement;
-  aiStatusEl: HTMLElement;
-  aiSqlPreviewEl: HTMLElement;
+  aiPromptRow: HTMLElement;
+  aiPromptInput: HTMLInputElement;
+  aiPromptBtn: HTMLButtonElement;
+  aiPromptStatus: HTMLElement;
 }
 
 const elementIds: Record<keyof DebugElements, string> = {
@@ -382,12 +372,10 @@ const elementIds: Record<keyof DebugElements, string> = {
   sqlSection: 'sql-section',
   sqlStatusEl: 'sql-status',
   sqlInputEl: 'dbg-sql',
-  aiSection: 'ai-section',
-  aiChatEl: 'ai-chat',
-  aiInputEl: 'ai-input',
-  aiSendBtn: 'ai-send',
-  aiStatusEl: 'ai-status',
-  aiSqlPreviewEl: 'ai-sql-preview',
+  aiPromptRow: 'ai-prompt-row',
+  aiPromptInput: 'ai-prompt-input',
+  aiPromptBtn: 'ai-prompt-btn',
+  aiPromptStatus: 'ai-prompt-status',
 };
 
 export function queryDebugElements(): DebugElements {

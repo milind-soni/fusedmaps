@@ -58,7 +58,14 @@ export function getDebugShellHtml(): string {
               <select class="debug-select" id="dbg-fill-fn">
                 <option value="colorContinuous">colorContinuous</option>
                 <option value="static">Static Color</option>
+                <option value="expression">Expression</option>
               </select>
+            </div>
+            <div id="fill-expression-info" style="display:none;">
+              <div class="debug-row">
+                <span class="debug-label"></span>
+                <span id="fill-expression-label" style="color:var(--ui-muted-2);font-size:11px;font-style:italic;">RGB from properties</span>
+              </div>
             </div>
             <div id="fill-fn-options">
               <div class="debug-row">
@@ -119,7 +126,14 @@ export function getDebugShellHtml(): string {
               <select class="debug-select" id="dbg-line-fn">
                 <option value="colorContinuous">colorContinuous</option>
                 <option value="static" selected>Static Color</option>
+                <option value="expression">Expression</option>
               </select>
+            </div>
+            <div id="line-expression-info" style="display:none;">
+              <div class="debug-row">
+                <span class="debug-label"></span>
+                <span id="line-expression-label" style="color:var(--ui-muted-2);font-size:11px;font-style:italic;">RGB from properties</span>
+              </div>
             </div>
             <div id="line-fn-options" style="display:none;">
               <div class="debug-row">
@@ -265,6 +279,8 @@ export interface DebugElements {
   fillFnEl: HTMLSelectElement;
   fillFnOptions: HTMLElement;
   fillStaticOptions: HTMLElement;
+  fillExpressionInfo: HTMLElement;
+  fillExpressionLabel: HTMLElement;
   fillAttrEl: HTMLSelectElement;
   fillPaletteEl: HTMLSelectElement;
   fillPalTrigger: HTMLButtonElement;
@@ -284,6 +300,8 @@ export interface DebugElements {
   lineFnEl: HTMLSelectElement;
   lineFnOptions: HTMLElement;
   lineStaticOptions: HTMLElement;
+  lineExpressionInfo: HTMLElement;
+  lineExpressionLabel: HTMLElement;
   lineAttrEl: HTMLSelectElement;
   linePaletteEl: HTMLSelectElement;
   linePalTrigger: HTMLButtonElement;
@@ -332,6 +350,8 @@ const elementIds: Record<keyof DebugElements, string> = {
   fillFnEl: 'dbg-fill-fn',
   fillFnOptions: 'fill-fn-options',
   fillStaticOptions: 'fill-static-options',
+  fillExpressionInfo: 'fill-expression-info',
+  fillExpressionLabel: 'fill-expression-label',
   fillAttrEl: 'dbg-attr',
   fillPaletteEl: 'dbg-palette',
   fillPalTrigger: 'dbg-palette-trigger',
@@ -350,6 +370,8 @@ const elementIds: Record<keyof DebugElements, string> = {
   lineFnEl: 'dbg-line-fn',
   lineFnOptions: 'line-fn-options',
   lineStaticOptions: 'line-static-options',
+  lineExpressionInfo: 'line-expression-info',
+  lineExpressionLabel: 'line-expression-label',
   lineAttrEl: 'dbg-line-attr',
   linePaletteEl: 'dbg-line-palette',
   linePalTrigger: 'dbg-line-palette-trigger',

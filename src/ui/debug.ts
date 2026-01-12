@@ -38,6 +38,25 @@ function ensureColorContinuousCfg(obj: any) {
   return obj;
 }
 
+/**
+ * Check if a color config is a @@= expression (e.g., "@@=[properties.r,properties.g,properties.b]")
+ */
+function isColorExpression(colorCfg: any): boolean {
+  return typeof colorCfg === 'string' && colorCfg.startsWith('@@=');
+}
+
+/**
+ * Get a short description of an expression for display
+ */
+function getExpressionLabel(colorCfg: string): string {
+  if (colorCfg.includes('properties.r') && colorCfg.includes('properties.g') && colorCfg.includes('properties.b')) {
+    return 'RGB from properties';
+  }
+  // Truncate long expressions
+  const expr = colorCfg.slice(3); // Remove @@=
+  return expr.length > 30 ? expr.slice(0, 27) + '...' : expr;
+}
+
 function getAttrCandidates(layer: HexLayerConfig): string[] {
   const out = new Set<string>();
   try {
@@ -142,6 +161,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     fillFnEl,
     fillFnOptions,
     fillStaticOptions,
+    fillExpressionInfo,
+    fillExpressionLabel,
     fillAttrEl,
     fillPaletteEl,
     fillPalTrigger,
@@ -160,6 +181,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     lineFnEl,
     lineFnOptions,
     lineStaticOptions,
+    lineExpressionInfo,
+    lineExpressionLabel,
     lineAttrEl,
     linePaletteEl,
     linePalTrigger,
@@ -502,12 +525,18 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     const fn = fillFnEl.value;
     fillFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
     fillStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
+    fillExpressionInfo.style.display = fn === 'expression' ? 'block' : 'none';
+    // Disable dropdown when expression is selected (read-only)
+    fillFnEl.disabled = fn === 'expression';
   };
 
   const updateLineFnOptions = () => {
     const fn = lineFnEl.value;
     lineFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
     lineStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
+    lineExpressionInfo.style.display = fn === 'expression' ? 'block' : 'none';
+    // Disable dropdown when expression is selected (read-only)
+    lineFnEl.disabled = fn === 'expression';
   };
 
   const readLayerToUI = () => {
@@ -565,8 +594,23 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     // Fill
     if (isHex) {
       const fc: any = hexCfg.getFillColor;
+
+      // Check for expression first (e.g., "@@=[properties.r,properties.g,properties.b]")
+      if (isColorExpression(fc)) {
+        fillFnEl.value = 'expression';
+        fillFnEl.disabled = true;
+        fillExpressionLabel.textContent = getExpressionLabel(fc);
+        // Still populate attr dropdown for reference
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
+      } else {
+        fillFnEl.disabled = false;
+      }
+
       const cc = ensureColorContinuousCfg(fc);
-      if (cc) {
+      if (!isColorExpression(fc) && cc) {
         fillFnEl.value = 'colorContinuous';
         fillAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (cc.attr) fillAttrEl.value = String(cc.attr);
@@ -596,7 +640,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const hex = rgbToHex(nc);
         fillNullEl.value = hex;
         fillNullLabel.textContent = hex;
-      } else if (Array.isArray(fc)) {
+      } else if (!isColorExpression(fc) && Array.isArray(fc)) {
         fillFnEl.value = 'static';
         try { fillReverseEl.checked = false; } catch {}
         const hex = rgbToHex(fc as number[]);
@@ -607,7 +651,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (attrs.length) {
           fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
         }
-      } else {
+      } else if (!isColorExpression(fc)) {
         fillFnEl.value = 'colorContinuous';
         try { fillReverseEl.checked = false; } catch (_) {}
         // Populate attr dropdown from tooltipColumns
@@ -676,8 +720,22 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     // Line
     if (isHex) {
       const lc: any = hexCfg.getLineColor;
+
+      // Check for expression first
+      if (isColorExpression(lc)) {
+        lineFnEl.value = 'expression';
+        lineFnEl.disabled = true;
+        lineExpressionLabel.textContent = getExpressionLabel(lc);
+        const attrs = getAttrCandidates(layer as any);
+        if (attrs.length) {
+          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+        }
+      } else {
+        lineFnEl.disabled = false;
+      }
+
       const lcCC = ensureColorContinuousCfg(lc);
-      if (lcCC) {
+      if (!isColorExpression(lc) && lcCC) {
         lineFnEl.value = 'colorContinuous';
         lineAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
@@ -687,7 +745,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
-      } else if (Array.isArray(lc)) {
+      } else if (!isColorExpression(lc) && Array.isArray(lc)) {
         lineFnEl.value = 'static';
         try { lineReverseEl.checked = false; } catch {}
         const hex = rgbToHex(lc as number[]);
@@ -698,7 +756,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         if (attrs.length) {
           lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
         }
-      } else {
+      } else if (!isColorExpression(lc)) {
         lineFnEl.value = 'static';
         try { lineReverseEl.checked = false; } catch {}
         // Still populate attr dropdown for when user switches to colorContinuous

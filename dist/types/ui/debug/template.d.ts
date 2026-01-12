@@ -30,6 +30,8 @@ export interface DebugElements {
     fillFnEl: HTMLSelectElement;
     fillFnOptions: HTMLElement;
     fillStaticOptions: HTMLElement;
+    fillExpressionInfo: HTMLElement;
+    fillExpressionLabel: HTMLElement;
     fillAttrEl: HTMLSelectElement;
     fillPaletteEl: HTMLSelectElement;
     fillPalTrigger: HTMLButtonElement;
@@ -48,6 +50,8 @@ export interface DebugElements {
     lineFnEl: HTMLSelectElement;
     lineFnOptions: HTMLElement;
     lineStaticOptions: HTMLElement;
+    lineExpressionInfo: HTMLElement;
+    lineExpressionLabel: HTMLElement;
     lineAttrEl: HTMLSelectElement;
     linePaletteEl: HTMLSelectElement;
     linePalTrigger: HTMLButtonElement;

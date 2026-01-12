@@ -19,6 +19,7 @@ import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
 import { createLayerStore, LayerStore } from './state';
 import { normalizeLayerConfig, isNewFormat } from './config';
+import { trackMapboxTileLoading } from './ui/tile-loader';
 
 const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
 
@@ -169,17 +170,28 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos);
   }
   
+  // Track tile loading cleanup function
+  let cleanupTileLoading: (() => void) | null = null;
+
   // Add layers when map loads
   map.on('load', () => {
     const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
     overlayRef.current = result.deckOverlay;
-    
+
+    // Track Mapbox tile loading for MVT/raster layers (spinner)
+    const tileSourceIds = store.getAllConfigs()
+      .filter(l => l.layerType === 'mvt' || l.layerType === 'raster' || l.layerType === 'pmtiles')
+      .map(l => l.id);
+    if (tileSourceIds.length > 0) {
+      cleanupTileLoading = trackMapboxTileLoading(map, tileSourceIds);
+    }
+
     // Sync GeoJSONs from layer system to store
     const geoJSONs = getLayerGeoJSONs();
     Object.entries(geoJSONs).forEach(([id, geojson]) => {
       store.setGeoJSON(id, geojson);
     });
-    
+
     // Update UI
     refreshUI();
 
@@ -524,6 +536,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       try { debugHandle?.destroy?.(); } catch {}
       try { duckHandle?.destroy?.(); } catch {}
       try { geocoderHandle?.destroy?.(); } catch {}
+      try { cleanupTileLoading?.(); } catch {}
 
       map.remove?.();
     }

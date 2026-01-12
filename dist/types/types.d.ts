@@ -196,6 +196,7 @@ export interface UIConfig {
     legend?: boolean;
     layerPanel?: boolean;
     screenshot?: boolean;
+    basemapSwitcher?: boolean;
     theme?: 'dark' | 'light';
 }
 export interface MessagingConfig {

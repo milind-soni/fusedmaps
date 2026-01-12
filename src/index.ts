@@ -383,10 +383,10 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         return null;
       }
       // Normalize if using new format
-      const normalizedConfig = isNewFormat(layerConfig)
+      const normalizedLayerConfig = isNewFormat(layerConfig)
         ? normalizeLayerConfig(layerConfig)
         : layerConfig;
-      const state = store.add(normalizedConfig, options);
+      const state = store.add(normalizedLayerConfig, options);
       // Incremental render
       try {
         addSingleLayer(map, state.config, state.visible, normalizedConfig);

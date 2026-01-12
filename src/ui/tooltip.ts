@@ -178,7 +178,8 @@ function getTooltipColumns(layer: LayerConfig): string[] {
     const p: any = layer as any;
     return p.vectorLayer?.tooltipColumns || p.vectorLayer?.tooltipAttrs || p.tooltipColumns || [];
   }
-  return layer.tooltipColumns || [];
+  const anyLayer: any = layer as any;
+  return anyLayer.tooltipColumns || anyLayer.tooltip || [];
 }
 
 /**

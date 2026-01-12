@@ -21,7 +21,7 @@ export function addVectorLayer(
   map.addSource(layer.id, { type: 'geojson', data: geojson });
   
   // Extract layer properties
-  const vecData = geojson.features.map(f => f.properties || {});
+  const vecData = geojson.features.map((f: any) => f.properties || {});
   
   // Build color expressions
   const fillColorExpr = (layer.fillColorConfig as any)?.['@@function']

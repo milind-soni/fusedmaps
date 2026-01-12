@@ -194,8 +194,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       } catch (_) {}
     }
 
-    // Handle basemap style changes - re-add Mapbox-native layers
-    // (Deck.gl overlay survives style changes, but Mapbox sources/layers don't)
+    // Handle basemap style changes - re-add all layers after style switch
     let isInitialLoad = true;
     map.on('style.load', () => {
       // Skip the initial load (already handled above)
@@ -204,54 +203,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         return;
       }
 
-      // Re-add Mapbox-native layers (PMTiles, MVT, vector GeoJSON, raster)
-      // Deck.gl overlay (hex tiles) survives and doesn't need re-adding
+      // Re-add all layers after basemap change
       try {
-        const layerConfigs = store.getAllConfigs();
-        const visibility = getVisibilityState();
+        const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
+        overlayRef.current = result.deckOverlay;
 
-        layerConfigs.forEach((layerConfig) => {
-          const ltype = (layerConfig as any).layerType;
-
-          // Re-add PMTiles layers
-          if (ltype === 'pmtiles') {
-            try {
-              const { addPMTilesLayer } = require('./layers/pmtiles');
-              addPMTilesLayer(map, layerConfig, visibility);
-            } catch (e) {
-              console.warn('[style.load] Failed to re-add PMTiles layer:', e);
-            }
-          }
-
-          // Re-add MVT layers
-          if (ltype === 'mvt') {
-            try {
-              const { addMVTLayer } = require('./layers/mvt');
-              addMVTLayer(map, layerConfig, visibility);
-            } catch (e) {
-              console.warn('[style.load] Failed to re-add MVT layer:', e);
-            }
-          }
-
-          // Re-add vector GeoJSON layers
-          if (ltype === 'vector' && (layerConfig as any).geojson) {
-            try {
-              const { addVectorLayer } = require('./layers/vector');
-              addVectorLayer(map, layerConfig, visibility);
-            } catch (e) {
-              console.warn('[style.load] Failed to re-add vector layer:', e);
-            }
-          }
-
-          // Re-add raster layers
-          if (ltype === 'raster') {
-            try {
-              const { addRasterLayer } = require('./layers/raster');
-              addRasterLayer(map, layerConfig, visibility);
-            } catch (e) {
-              console.warn('[style.load] Failed to re-add raster layer:', e);
-            }
-          }
+        // Sync GeoJSONs from layer system to store
+        const geoJSONs = getLayerGeoJSONs();
+        Object.entries(geoJSONs).forEach(([id, geojson]) => {
+          store.setGeoJSON(id, geojson);
         });
 
         // Refresh UI

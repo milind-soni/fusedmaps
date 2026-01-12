@@ -690,12 +690,13 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 /* Basemap switcher (Google Maps-ish, minimal) */
 .fm-basemap-switcher {
   position: relative;
-  margin-top: 8px;
+  margin: 0 0 8px 20px;
   display: flex;
   align-items: flex-end;
   gap: 6px;
   z-index: 5;
   user-select: none;
+  order: -1; /* appear below zoom controls in column-reverse layout */
 }
 .fm-basemap-trigger {
   width: 44px;

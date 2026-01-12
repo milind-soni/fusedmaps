@@ -347,6 +347,10 @@ def deckgl_layers(
                 processed["parquetUrl"] = parquet_url
                 if sql is not None:
                     processed["sql"] = sql
+            # Tooltip from layer_def takes precedence
+            tooltip_from_def = layer_def.get("tooltip") or layer_def.get("tooltipColumns")
+            if processed and tooltip_from_def:
+                processed["tooltip"] = list(tooltip_from_def)
             if processed:
                 processed_layers.append(processed)
                 if processed.get("isTileLayer"):
@@ -364,6 +368,10 @@ def deckgl_layers(
                 processed = _process_vector_layer(i, df, config, name, visible)
             if processed and data_ref:
                 processed["dataRef"] = str(data_ref)
+            # Tooltip from layer_def takes precedence
+            tooltip_from_def = layer_def.get("tooltip") or layer_def.get("tooltipColumns")
+            if processed and tooltip_from_def:
+                processed["tooltip"] = list(tooltip_from_def)
             if processed:
                 processed_layers.append(processed)
                 # Auto-center from polygons/points

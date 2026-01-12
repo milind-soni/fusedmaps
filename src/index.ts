@@ -51,6 +51,12 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     isNewFormat(layer) ? normalizeLayerConfig(layer) : layer
   );
 
+  // Create normalized config for internal use
+  const normalizedConfig: FusedMapsConfig = {
+    ...config,
+    layers: normalizedLayers,
+  };
+
   // Initialize layer store with normalized layers
   const store = createLayerStore();
   store.init(normalizedLayers);
@@ -77,8 +83,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   // - sidebar undefined => do not mount (no toggle)
   // - sidebar 'show'|'hide' => mount
   // Back-compat: debug=true => sidebar 'show'
-  const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
-  const debugHandle = sidebarMode ? setupDebugPanel(map, config) : null;
+  const sidebarMode = (normalizedConfig as any).sidebar || ((normalizedConfig as any).debug ? 'show' : null);
+  const debugHandle = sidebarMode ? setupDebugPanel(map, normalizedConfig) : null;
   
   // Deck.gl overlay (for tile layers) - use object ref to avoid stale closures
   const overlayRef = { current: null as unknown };
@@ -118,7 +124,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   
   // Add layers when map loads
   map.on('load', () => {
-    const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+    const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
     overlayRef.current = result.deckOverlay;
     
     // Sync GeoJSONs from layer system to store
@@ -156,7 +162,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // DuckDB-WASM SQL layers (non-tile Parquet-backed hex layers)
     duckHandle = setupDuckDbSql(
       map,
-      config,
+      normalizedConfig,
       getVisibilityState(),
       () => {
         // Sync GeoJSONs after SQL update
@@ -345,10 +351,10 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       const state = store.add(normalizedConfig, options);
       // Incremental render
       try {
-        addSingleLayer(map, state.config, state.visible, config);
+        addSingleLayer(map, state.config, state.visible, normalizedConfig);
       } catch {
         // Fallback to full rebuild if incremental add fails
-        const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+        const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
         overlayRef.current = result.deckOverlay;
       }
       refreshUI();
@@ -366,7 +372,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         try {
           if (layer) removeSingleLayer(map, layer);
         } catch {
-          const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+          const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
           overlayRef.current = result.deckOverlay;
         }
         refreshUI();
@@ -396,9 +402,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
             // Fallback: recreate just this layer
             try {
               removeSingleLayer(map, before);
-              addSingleLayer(map, state.config, state.visible, config);
+              addSingleLayer(map, state.config, state.visible, normalizedConfig);
             } catch {
-              const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+              const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
               overlayRef.current = result.deckOverlay;
             }
           }
@@ -414,13 +420,13 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     moveLayerUp: (layerId: string) => {
       store.moveUp(layerId);
       // Re-render to update z-order (safe fallback for now)
-      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
       overlayRef.current = result.deckOverlay;
     },
 
     moveLayerDown: (layerId: string) => {
       store.moveDown(layerId);
-      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), config);
+      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
       overlayRef.current = result.deckOverlay;
     },
     

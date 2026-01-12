@@ -82,8 +82,8 @@ VALID_TILE_PROPS = {
 # NOTE: Pin to a specific commit for reproducibility.
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
-# - main ref: 5b9e20f (fix RGBA array colors)
-FUSEDMAPS_CDN_REF_DEFAULT = "5b9e20f"
+# - main ref: 6ac94fb (add geocoder/location search widget)
+FUSEDMAPS_CDN_REF_DEFAULT = "6ac94fb"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 

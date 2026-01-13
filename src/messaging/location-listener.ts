@@ -67,6 +67,14 @@ export function enableLocationListener(
     // Handle location/click messages with bounds
     if (type === 'location_change' || type === 'feature_click' || type === 'hex_click') {
       const bounds = (msg as any).bounds;
+      const properties = (msg as any).properties;
+
+      // Highlight the feature by matching properties (for external clicks like scatter plots)
+      if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
+        try {
+          (window as any).__fusedHighlightByProperties(properties);
+        } catch {}
+      }
 
       if (bounds && Array.isArray(bounds) && bounds.length === 4) {
         const [west, south, east, north] = bounds;

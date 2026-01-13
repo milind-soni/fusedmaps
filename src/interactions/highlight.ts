@@ -11,6 +11,8 @@ const HIGHLIGHT_LINE_WIDTH = 3;
 
 let highlightLayerAdded = false;
 let selectedFeature: any = null;
+let currentMap: mapboxgl.Map | null = null;
+let currentLayers: LayerConfig[] = [];
 
 /**
  * Setup click-to-highlight for all layers
@@ -21,6 +23,16 @@ export function setupHighlight(
   visibilityState: Record<string, boolean>,
   deckOverlay: unknown
 ): void {
+  currentMap = map;
+  currentLayers = layers;
+
+  // Expose highlight function globally for location-listener
+  (window as any).__fusedHighlightByProperties = (props: Record<string, any>) => {
+    highlightByProperties(map, layers, props);
+  };
+  (window as any).__fusedHighlightClear = () => {
+    highlightFeature(map, null);
+  };
   map.on('click', (e: any) => {
     const queryLayers = getQueryableLayers(map, layers);
     if (!queryLayers.length) return;
@@ -150,8 +162,64 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
   selectedFeature = feature;
 }
 
+/**
+ * Highlight a feature by matching properties (for external click events)
+ */
+function highlightByProperties(
+  map: mapboxgl.Map,
+  layers: LayerConfig[],
+  props: Record<string, any>
+): void {
+  if (!props || Object.keys(props).length === 0) return;
 
+  // Get all queryable layer IDs
+  const queryLayers = getQueryableLayers(map, layers);
+  if (!queryLayers.length) return;
 
+  // Query all rendered features in current viewport
+  let allFeatures: any[] = [];
+  try {
+    // Cast to any to avoid TS issues with overloaded signature
+    allFeatures = (map as any).queryRenderedFeatures(undefined, { layers: queryLayers }) || [];
+  } catch (err) {
+    return;
+  }
+
+  // Find a feature that matches the incoming properties
+  // Use common ID fields to match
+  const idFields = ['Field Name', 'field_name', 'name', 'id', 'ID', 'fid', 'FID', 'OBJECTID'];
+
+  for (const feature of allFeatures) {
+    const featureProps = feature.properties || {};
+
+    // Check if any ID field matches
+    for (const field of idFields) {
+      if (props[field] !== undefined && featureProps[field] !== undefined) {
+        if (String(props[field]) === String(featureProps[field])) {
+          highlightFeature(map, feature);
+          return;
+        }
+      }
+    }
+
+    // Fallback: check if all incoming props match
+    let allMatch = true;
+    for (const [key, value] of Object.entries(props)) {
+      if (featureProps[key] !== undefined && String(featureProps[key]) !== String(value)) {
+        allMatch = false;
+        break;
+      }
+    }
+    if (allMatch && Object.keys(props).length > 0) {
+      // Verify at least one prop actually matched
+      const hasMatch = Object.keys(props).some(k => featureProps[k] !== undefined);
+      if (hasMatch) {
+        highlightFeature(map, feature);
+        return;
+      }
+    }
+  }
+}
 
 
 

@@ -603,9 +603,9 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   box-shadow: 0 4px 12px var(--ui-shadow);
 }
 
-/* Bottom-left control padding (zoom/home + scale bar) - match map_utils.py */
+/* Bottom-left control padding (zoom/home + scale bar) */
 .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl {
-  margin: 0 0 20px 20px;
+  margin: 0 0 8px 20px;
 }
 
 .legend-layer {
@@ -768,7 +768,7 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 /* Basemap switcher wrapper */
 .fm-basemap-switcher {
   position: relative;
-  margin: 0 0 20px 20px;
+  margin: 0 0 8px 20px;
   z-index: 50;
   pointer-events: auto;
 }

@@ -101,7 +101,7 @@ export function setupLegend(
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = 'color-legend fm-dropdown-widget'; // Start expanded by default
+    legend.className = 'color-legend fm-dropdown-widget collapsed'; // Start collapsed
     legend.style.display = 'none';
     legend.innerHTML = `
       <button id="legend-toggle" class="fm-dropdown-toggle" title="Legend">

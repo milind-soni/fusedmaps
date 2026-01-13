@@ -929,13 +929,13 @@ html[data-theme="light"] .fm-dropdown-close:hover {
   margin: 0 0 8px 20px;
 }
 .mapboxgl-ctrl-bottom-right .fm-basemap-switcher {
-  margin: 0 20px 8px 0;
+  margin: 0 12px 8px 0;
 }
 .mapboxgl-ctrl-top-left .fm-basemap-switcher {
   margin: 8px 0 0 20px;
 }
 .mapboxgl-ctrl-top-right .fm-basemap-switcher {
-  margin: 8px 20px 0 0;
+  margin: 8px 12px 0 0;
 }
 
 /* Trigger button - 28px circle with map icon */

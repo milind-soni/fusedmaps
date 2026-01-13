@@ -82,7 +82,7 @@ export function setupLayerPanel(
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'layer-panel';
-    panel.className = 'fm-dropdown-widget collapsed'; // Start collapsed
+    panel.className = 'fm-dropdown-widget'; // Start expanded
     panel.innerHTML = `
       <button id="layer-panel-toggle" class="fm-dropdown-toggle" title="Layers">
         ${LAYERS_ICON_SVG}

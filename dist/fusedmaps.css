@@ -627,14 +627,52 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   bottom: 12px;
   background: var(--ui-float-bg);
   color: var(--ui-text);
-  padding: 8px;
-  border-radius: 4px;
+  padding: 0;
+  border-radius: 8px;
   font-size: 11px;
   z-index: 10;
   min-width: 140px;
   border: 1px solid var(--ui-border);
   font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
   box-shadow: 0 4px 12px var(--ui-shadow);
+  overflow: hidden;
+}
+
+/* Legend toggle button */
+.legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.legend-toggle:hover {
+  background: var(--ui-surface);
+}
+.legend-toggle svg {
+  opacity: 0.7;
+}
+
+/* Legend content */
+#legend-content {
+  padding: 8px;
+}
+
+/* Collapsed state */
+.color-legend.collapsed {
+  min-width: auto;
+}
+.color-legend.collapsed #legend-content {
+  display: none;
+}
+.color-legend.collapsed .legend-toggle {
+  border-bottom: none;
 }
 
 /* Bottom-left control padding (zoom/home + scale bar) */

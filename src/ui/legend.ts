@@ -8,6 +8,9 @@ import { getUniqueCategories } from '../color/expressions';
 
 type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
+// Legend/palette icon
+const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>';
+
 /**
  * Check if a color config is an RGB accessor (e.g., "@@=[properties.r,properties.g,properties.b]")
  */
@@ -96,9 +99,22 @@ export function setupLegend(
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = 'color-legend';
+    legend.className = 'color-legend collapsed'; // Start collapsed
     legend.style.display = 'none';
+    legend.innerHTML = `
+      <button id="legend-toggle" class="legend-toggle" title="Toggle legend">
+        ${LEGEND_ICON_SVG}
+      </button>
+      <div id="legend-content"></div>
+    `;
     document.body.appendChild(legend);
+
+    // Add toggle click handler
+    const toggleBtn = document.getElementById('legend-toggle');
+    toggleBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      legend?.classList.toggle('collapsed');
+    });
   }
 
   // Apply position styles
@@ -126,6 +142,7 @@ export function updateLegend(
   tileData?: Map<string, any[]>
 ): void {
   const legend = document.getElementById('color-legend');
+  const legendContent = document.getElementById('legend-content');
   if (!legend) return;
 
   const visibleLayers = layers.filter(l => visibilityState[l.id] !== false);
@@ -144,7 +161,12 @@ export function updateLegend(
   });
 
   if (html) {
-    legend.innerHTML = html;
+    // Put content in legend-content div if it exists, otherwise fallback to legend
+    if (legendContent) {
+      legendContent.innerHTML = html;
+    } else {
+      legend.innerHTML = html;
+    }
     legend.style.display = 'block';
   } else {
     legend.style.display = 'none';

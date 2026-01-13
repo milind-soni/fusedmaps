@@ -31,8 +31,8 @@ export function enableLocationListener(
 ): LocationListenerState {
   const channel = config.channel || 'fused-bus';
   const zoomOffset = config.zoomOffset ?? 0;
-  const padding = config.padding ?? 50;
-  const maxZoom = config.maxZoom ?? 18;
+  const padding = config.padding ?? 100;  // More padding = less zoom
+  const maxZoom = config.maxZoom ?? 16;   // Lower max zoom like legacy
 
   const componentId = generateComponentId('location-listener');
   const bus = createBus(channel);

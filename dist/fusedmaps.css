@@ -910,9 +910,22 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 /* Basemap switcher wrapper */
 .fm-basemap-switcher {
   position: relative;
-  margin: 0 0 8px 20px;
+  margin: 0 0 8px 0;
   z-index: 50;
   pointer-events: auto;
+}
+/* Position-specific margins */
+.mapboxgl-ctrl-bottom-left .fm-basemap-switcher {
+  margin: 0 0 8px 20px;
+}
+.mapboxgl-ctrl-bottom-right .fm-basemap-switcher {
+  margin: 0 20px 8px 0;
+}
+.mapboxgl-ctrl-top-left .fm-basemap-switcher {
+  margin: 8px 0 0 20px;
+}
+.mapboxgl-ctrl-top-right .fm-basemap-switcher {
+  margin: 8px 20px 0 0;
 }
 
 /* Trigger button - 28px circle with map icon */
@@ -966,6 +979,25 @@ html[data-theme="light"] .fm-basemap-switcher.is-open .fm-basemap-trigger {
 }
 .fm-basemap-switcher.is-open .fm-basemap-options {
   display: flex;
+}
+/* Position-specific panel alignment */
+.mapboxgl-ctrl-bottom-right .fm-basemap-options {
+  left: auto;
+  right: 0;
+}
+.mapboxgl-ctrl-top-left .fm-basemap-options {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 6px;
+}
+.mapboxgl-ctrl-top-right .fm-basemap-options {
+  left: auto;
+  right: 0;
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 6px;
 }
 .fm-basemap-option {
   width: 52px;

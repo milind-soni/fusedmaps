@@ -5,11 +5,13 @@
 import type { LayerConfig, HexLayerConfig, VectorLayerConfig, ColorContinuousConfig, ColorCategoriesConfig } from '../types';
 import { getPaletteColors, FALLBACK_CATEGORICAL_COLORS, FALLBACK_CONTINUOUS_COLORS } from '../color/palettes';
 import { getUniqueCategories } from '../color/expressions';
+import { getWidgetContainer } from './widget-container';
 
 type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 // Legend icon (horizontal bars representing a legend)
 const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="4" height="3" rx="0.5"/><rect x="9" y="5" width="12" height="3" rx="0.5"/><rect x="3" y="10.5" width="4" height="3" rx="0.5"/><rect x="9" y="10.5" width="9" height="3" rx="0.5"/><rect x="3" y="16" width="4" height="3" rx="0.5"/><rect x="9" y="16" width="6" height="3" rx="0.5"/></svg>';
+const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
 /**
  * Check if a color config is an RGB accessor (e.g., "@@=[properties.r,properties.g,properties.b]")
@@ -94,6 +96,9 @@ export function setupLegend(
   position: WidgetPosition = 'bottom-right',
   tileData?: Map<string, any[]>
 ): void {
+  // Get widget container for proper stacking
+  const widgetContainer = getWidgetContainer(position);
+
   // Create legend container if it doesn't exist
   let legend = document.getElementById('color-legend');
   if (!legend) {
@@ -105,28 +110,28 @@ export function setupLegend(
       <button id="legend-toggle" class="legend-toggle" title="Toggle legend">
         ${LEGEND_ICON_SVG}
       </button>
+      <div class="widget-header" id="legend-header">
+        <span class="widget-header-icon">${LEGEND_ICON_SVG}</span>
+        <span class="widget-header-title">Legend</span>
+        <button class="widget-header-close" id="legend-close" title="Close">${CLOSE_ICON_SVG}</button>
+      </div>
       <div id="legend-content"></div>
     `;
-    document.body.appendChild(legend);
+    widgetContainer.appendChild(legend);
 
-    // Add toggle click handler
+    // Add toggle click handler (for collapsed state button)
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       legend?.classList.toggle('collapsed');
     });
-  }
 
-  // Apply position styles
-  const posStyles: Record<WidgetPosition, { top?: string; bottom?: string; left?: string; right?: string }> = {
-    'top-left': { top: '12px', left: '12px', right: 'auto', bottom: 'auto' },
-    'top-right': { top: '12px', right: '12px', left: 'auto', bottom: 'auto' },
-    'bottom-left': { bottom: '12px', left: '12px', right: 'auto', top: 'auto' },
-    'bottom-right': { bottom: '12px', right: '12px', left: 'auto', top: 'auto' },
-  };
-  const styles = posStyles[position];
-  if (styles) {
-    Object.assign(legend.style, styles);
+    // Add close button handler (for expanded state)
+    const closeBtn = document.getElementById('legend-close');
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      legend?.classList.add('collapsed');
+    });
   }
 
   updateLegend(layers, visibilityState, geojsons, tileData);

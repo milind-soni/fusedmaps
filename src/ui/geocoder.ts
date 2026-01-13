@@ -2,6 +2,8 @@
  * Location search widget using Mapbox Geocoding API
  */
 
+import { getWidgetContainer } from './widget-container';
+
 export interface GeocoderOptions {
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
   placeholder?: string;
@@ -25,23 +27,31 @@ export function setupGeocoder(
     mapboxToken
   } = options;
 
+  // Get widget container for proper stacking (except top-center which stays fixed)
+  const useWidgetContainer = position !== 'top-center';
+
   // Create container
   let container = document.getElementById('location-search');
   if (!container) {
     container = document.createElement('div');
     container.id = 'location-search';
-    document.body.appendChild(container);
-  }
 
-  // Apply position
-  const posStyles: Record<string, { top?: string; bottom?: string; left?: string; right?: string; transform?: string }> = {
-    'top-left': { top: '12px', left: '12px', right: 'auto', bottom: 'auto' },
-    'top-right': { top: '12px', right: '12px', left: 'auto', bottom: 'auto' },
-    'bottom-left': { bottom: '12px', left: '12px', right: 'auto', top: 'auto' },
-    'bottom-right': { bottom: '12px', right: '12px', left: 'auto', top: 'auto' },
-    'top-center': { top: '12px', left: '50%', right: 'auto', bottom: 'auto', transform: 'translateX(-50%)' },
-  };
-  Object.assign(container.style, posStyles[position]);
+    if (useWidgetContainer) {
+      const widgetContainer = getWidgetContainer(position as any);
+      widgetContainer.appendChild(container);
+    } else {
+      document.body.appendChild(container);
+      // Apply position styles for top-center (fixed positioning)
+      Object.assign(container.style, {
+        position: 'fixed',
+        top: '12px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        right: 'auto',
+        bottom: 'auto'
+      });
+    }
+  }
 
   // Create input and results
   container.innerHTML = `

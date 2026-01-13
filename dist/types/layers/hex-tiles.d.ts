@@ -20,4 +20,4 @@ export interface DeckTileOverlayState {
     getTileData: () => Map<string, any[]>;
     destroy: () => void;
 }
-export declare function createHexTileOverlay(map: mapboxgl.Map, layers: LayerConfig[], visibility: Record<string, boolean>): DeckTileOverlayState | null;
+export declare function createHexTileOverlay(map: mapboxgl.Map, layers: LayerConfig[], visibility: Record<string, boolean>, beforeIds?: Record<string, string | undefined>): DeckTileOverlayState | null;

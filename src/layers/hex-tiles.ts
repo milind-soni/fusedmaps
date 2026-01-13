@@ -597,7 +597,8 @@ function buildHexTileDeckLayers(
   layers: LayerConfig[],
   visibility: Record<string, boolean>,
   runtime: TileRuntime,
-  onLoadingDelta: (delta: number) => void
+  onLoadingDelta: (delta: number) => void,
+  beforeIds?: Record<string, string | undefined>
 ): any[] {
   const deck = getDeck();
   if (!deck) return [];
@@ -675,6 +676,9 @@ function buildHexTileDeckLayers(
       // User can explicitly set 'no-overlap' if they want strict zoom-level matching
       const refinementStrategy = (tileCfg as any).refinementStrategy || 'best-available';
 
+      // Get beforeId for proper layer ordering (interleaved with Mapbox layers)
+      const beforeId = beforeIds?.[layer.id];
+
       return new TileLayer({
         id: `${layer.id}-tiles-${idHash}`,
         data: tileUrl,
@@ -687,6 +691,7 @@ function buildHexTileDeckLayers(
         refinementStrategy,
         pickable: true,
         visible,
+        ...(beforeId ? { beforeId } : {}),
         getTileData: async ({ index, signal }: any) => {
           const { x, y, z } = index;
           const url = tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
@@ -857,7 +862,8 @@ function buildHexTileDeckLayers(
 export function createHexTileOverlay(
   map: mapboxgl.Map,
   layers: LayerConfig[],
-  visibility: Record<string, boolean>
+  visibility: Record<string, boolean>,
+  beforeIds?: Record<string, string | undefined>
 ): DeckTileOverlayState | null {
   const deck = getDeck();
   if (!deck?.MapboxOverlay || !deck?.TileLayer) return null;
@@ -867,7 +873,7 @@ export function createHexTileOverlay(
 
   // Use a mutable ref so rebuild() can update visibility without stale closures
   const visibilityRef = { current: visibility };
-  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, loader.setLoading);
+  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, loader.setLoading, beforeIds);
 
   const overlay = new deck.MapboxOverlay({
     interleaved: true,

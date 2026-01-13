@@ -40,6 +40,56 @@ export function clearLayerGeoJSON(layerId: string): void {
 }
 
 /**
+ * Get the first Mapbox layer ID for a given layer config
+ * Used for beforeId calculations in layer ordering
+ */
+function getFirstMapboxLayerId(layer: LayerConfig): string | null {
+  switch (layer.layerType) {
+    case 'vector': {
+      const vec = layer as VectorLayerConfig;
+      // Check which sublayer would be added first (polygons > lines > points)
+      const geojson = vec.geojson;
+      if (geojson?.features?.length) {
+        for (const f of geojson.features) {
+          const t = f.geometry?.type;
+          if (t === 'Polygon' || t === 'MultiPolygon') {
+            return vec.isFilled !== false ? `${layer.id}-fill` : `${layer.id}-outline`;
+          }
+        }
+        for (const f of geojson.features) {
+          const t = f.geometry?.type;
+          if (t === 'LineString' || t === 'MultiLineString') {
+            return `${layer.id}-line`;
+          }
+        }
+        for (const f of geojson.features) {
+          const t = f.geometry?.type;
+          if (t === 'Point' || t === 'MultiPoint') {
+            return `${layer.id}-circle`;
+          }
+        }
+      }
+      return `${layer.id}-fill`;
+    }
+    case 'hex': {
+      const hex = layer as HexLayerConfig;
+      if (!hex.isTileLayer) {
+        return hex.hexLayer?.extruded ? `${layer.id}-extrusion` : `${layer.id}-fill`;
+      }
+      return null; // Tile layers don't have Mapbox layers
+    }
+    case 'mvt':
+      return `${layer.id}-fill`;
+    case 'raster':
+      return `${layer.id}-raster`;
+    case 'pmtiles':
+      return `${layer.id}-fill`; // PMTiles creates prefixed layers
+    default:
+      return null;
+  }
+}
+
+/**
  * Add all layers to the map
  */
 export function addAllLayers(
@@ -50,13 +100,13 @@ export function addAllLayers(
 ): { deckOverlay: unknown } {
   // Clear existing layers
   removeAllLayers(map, layers);
-  
+
   // Process layers in reverse order (top of menu renders on top)
   const renderOrder = [...layers].reverse();
-  
+
   renderOrder.forEach(layer => {
     const visible = visibilityState[layer.id] !== false;
-    
+
     switch (layer.layerType) {
       case 'hex': {
         const hexLayer = layer as HexLayerConfig;
@@ -71,7 +121,7 @@ export function addAllLayers(
         }
         break;
       }
-      
+
       case 'vector': {
         const vectorLayer = layer as VectorLayerConfig;
         if (vectorLayer.geojson) {
@@ -80,31 +130,52 @@ export function addAllLayers(
         }
         break;
       }
-      
+
       case 'mvt': {
         const mvtLayer = layer as MVTLayerConfig;
         addMVTLayer(map, mvtLayer, visible);
         break;
       }
-      
+
       case 'raster': {
         const rasterLayer = layer as RasterLayerConfig;
         addRasterLayer(map, rasterLayer, visible);
         break;
       }
-      
+
       case 'pmtiles': {
         // PMTiles layers are handled separately after all sync layers
         break;
       }
     }
   });
-  
+
+  // Build beforeId map for hex tile layers
+  // For each hex tile layer, find the first Mapbox layer that should render ABOVE it
+  const hexTileBeforeIds: Record<string, string | undefined> = {};
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
+    if (layer.layerType === 'hex' && (layer as any).isTileLayer) {
+      // Find the first non-tile layer at a lower index (visually above this layer)
+      for (let j = i - 1; j >= 0; j--) {
+        const aboveLayer = layers[j];
+        // Skip other tile layers
+        if (aboveLayer.layerType === 'hex' && (aboveLayer as any).isTileLayer) continue;
+        // Get the first Mapbox layer ID for this layer
+        const beforeId = getFirstMapboxLayerId(aboveLayer);
+        if (beforeId) {
+          hexTileBeforeIds[layer.id] = beforeId;
+          break;
+        }
+      }
+    }
+  }
+
   // Set up Deck.gl overlay for hex tile layers (if any)
   const hasHexTileLayers = layers.some(l => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl);
   let deckOverlay: unknown = null;
   if (hasHexTileLayers) {
-    const state = createHexTileOverlay(map, layers, visibilityState);
+    const state = createHexTileOverlay(map, layers, visibilityState, hexTileBeforeIds);
     deckOverlay = state?.overlay || null;
     if (deckOverlay && state) {
       // Attach a small shim so visibility toggles can rebuild the overlay layers.

@@ -115,8 +115,6 @@ export function setupTooltip(
 
     // 2) Deck tile layers - use pickObject directly (like legacy map_utils)
     const overlay = overlayRef.current;
-    // Check for tile layers that need Deck picking
-    const hasTileLayers = layers.some(l => (l as any).isTileLayer);
     if (overlay) {
       let info: any = null;
       const state = (overlay as any).__fused_hex_tiles__;
@@ -124,9 +122,6 @@ export function setupTooltip(
       // Try 1: Use getHoverInfo (populated by onHover callback)
       if (state?.getHoverInfo) {
         info = state.getHoverInfo();
-        if (info?.object && Math.random() < 0.05) {
-          console.log('[tooltip] getHoverInfo result:', info);
-        }
       }
 
       // Try 2: Use pickObject if no hover info
@@ -134,19 +129,9 @@ export function setupTooltip(
         try {
           if (typeof (overlay as any).pickObject === 'function') {
             info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
-            // Debug: log pick results occasionally
-            if (info?.object && Math.random() < 0.05) {
-              console.log('[tooltip] pickObject result:', info);
-            }
-          } else {
-            // Debug: log if pickObject isn't available (only once)
-            if (hasTileLayers && !(overlay as any).__pickObjectWarned) {
-              console.warn('[tooltip] pickObject not available on overlay, type:', typeof overlay);
-              (overlay as any).__pickObjectWarned = true;
-            }
           }
         } catch (err) {
-          console.warn('[tooltip] pickObject error:', err);
+          // Ignore pick errors
         }
       }
 
@@ -158,17 +143,6 @@ export function setupTooltip(
           ? rawLayerId.split('-tiles')[0]
           : rawLayerId.split('-')[0]; // Fallback for other patterns
         const layerDef = layers.find(l => l.id === baseId) || layers.find(l => rawLayerId.startsWith(l.id));
-
-        // Debug: log layer matching
-        if (Math.random() < 0.05) {
-          console.log('[tooltip] layer match:', {
-            rawLayerId,
-            baseId,
-            found: !!layerDef,
-            layerIds: layers.map(l => l.id),
-            visible: layerDef ? visibilityState[layerDef.id] : 'N/A'
-          });
-        }
 
         // Note: Don't check visibilityState here - if pickObject returns results,
         // the Deck layer is visible (Deck handles visibility internally).
@@ -194,17 +168,6 @@ export function setupTooltip(
     // Build tooltip content
     const tooltipCols = getTooltipColumns(best.layerDef);
     const lines = buildTooltipLines(best.props, tooltipCols, best.layerDef);
-
-    // Debug: log tooltip building
-    if (Math.random() < 0.05) {
-      console.log('[tooltip] building:', {
-        type: best.type,
-        layerName: best.layerDef.name,
-        tooltipCols,
-        props: best.props,
-        linesCount: lines.length
-      });
-    }
 
     if (lines.length) {
       tt!.innerHTML = `<strong class="tt-title">${best.layerDef.name}</strong>` + lines.join('');

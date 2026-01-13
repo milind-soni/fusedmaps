@@ -113,28 +113,18 @@ export function setupTooltip(
       }
     }
 
-    // 2) Deck tile layers - use hover info from MapboxOverlay's onHover callback
+    // 2) Deck tile layers - use pickObject directly (like legacy map_utils)
     const overlay = overlayRef.current;
     if (overlay) {
-      const state = (overlay as any).__fused_hex_tiles__;
       let info: any = null;
 
-      // Try getHoverInfo first (populated by onHover callback)
-      if (state?.getHoverInfo) {
-        info = state.getHoverInfo();
-      }
-
-      // Fallback to pickObject if no hover info
-      if (!info?.object) {
-        try {
-          if (typeof (overlay as any).pickObject === 'function') {
-            info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 6 });
-          } else if (state?.pickObject) {
-            info = state.pickObject({ x: e.point.x, y: e.point.y, radius: 6 });
-          }
-        } catch (err) {
-          // Ignore pick errors
+      // Use pickObject directly on the overlay (MapboxOverlay exposes this method)
+      try {
+        if (typeof (overlay as any).pickObject === 'function') {
+          info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
         }
+      } catch (err) {
+        // Ignore pick errors
       }
 
       if (info?.object) {
@@ -144,7 +134,7 @@ export function setupTooltip(
         const baseId = rawLayerId.includes('-tiles')
           ? rawLayerId.split('-tiles')[0]
           : rawLayerId.split('-')[0]; // Fallback for other patterns
-        const layerDef = layers.find(l => l.id === baseId);
+        const layerDef = layers.find(l => l.id === baseId) || layers.find(l => rawLayerId.startsWith(l.id));
         if (layerDef && visibilityState[layerDef.id] !== false) {
           const idx = layerOrderIndex(layerDef.id);
           if (idx < bestIdx) {
@@ -165,7 +155,7 @@ export function setupTooltip(
 
     // Build tooltip content
     const tooltipCols = getTooltipColumns(best.layerDef);
-    const lines = buildTooltipLines(best.props, tooltipCols);
+    const lines = buildTooltipLines(best.props, tooltipCols, best.layerDef);
     
     if (lines.length) {
       tt!.innerHTML = `<strong class="tt-title">${best.layerDef.name}</strong>` + lines.join('');
@@ -208,7 +198,7 @@ function getTooltipColumns(layer: LayerConfig): string[] {
 /**
  * Build tooltip HTML lines
  */
-function buildTooltipLines(props: Record<string, unknown>, cols: string[]): string[] {
+function buildTooltipLines(props: Record<string, unknown>, cols: string[], layerDef?: LayerConfig): string[] {
   const lines: string[] = [];
 
   // Match map_utils.py behavior: show hex first if present (even when cols are provided)
@@ -230,12 +220,28 @@ function buildTooltipLines(props: Record<string, unknown>, cols: string[]): stri
     return lines;
   }
 
+  // For hex tile layers with no cols specified, show the color attribute (like legacy)
+  if (layerDef?.layerType === 'hex') {
+    const hexLayer = layerDef as HexLayerConfig;
+    const colorAttr = (hexLayer.hexLayer as any)?.getFillColor?.attr || 'metric';
+    if ((props as any)[colorAttr] != null) {
+      const val = (props as any)[colorAttr];
+      const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+      lines.push(`<span class="tt-row"><span class="tt-key">${colorAttr}</span><span class="tt-val">${formatted}</span></span>`);
+      return lines;
+    }
+  }
+
   // Default fallback: if we didn't add anything yet, show first 5 properties
   if (lines.length === 0) {
     Object.keys(props)
+      .filter(k => k !== 'hex' && k !== 'properties')
       .slice(0, 5)
       .forEach((k) => {
-        lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${(props as any)[k]}</span></span>`);
+        const val = (props as any)[k];
+        if (val == null) return;
+        const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+        lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${formatted}</span></span>`);
       });
   }
 

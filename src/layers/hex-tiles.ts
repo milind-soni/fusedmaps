@@ -885,9 +885,9 @@ export function createHexTileOverlay(
     useDevicePixels: true,
     layers: build(),
     onHover: (info: any) => {
+      // Store hover info for unified tooltip access (tooltip.ts reads this)
       hoverInfoRef.current = info?.object ? info : null;
     },
-    getTooltip: null, // We handle tooltips manually
   });
 
   // Attach to map

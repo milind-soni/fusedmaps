@@ -158,6 +158,18 @@ export function setupTooltip(
           ? rawLayerId.split('-tiles')[0]
           : rawLayerId.split('-')[0]; // Fallback for other patterns
         const layerDef = layers.find(l => l.id === baseId) || layers.find(l => rawLayerId.startsWith(l.id));
+
+        // Debug: log layer matching
+        if (Math.random() < 0.05) {
+          console.log('[tooltip] layer match:', {
+            rawLayerId,
+            baseId,
+            found: !!layerDef,
+            layerIds: layers.map(l => l.id),
+            visible: layerDef ? visibilityState[layerDef.id] : 'N/A'
+          });
+        }
+
         if (layerDef && visibilityState[layerDef.id] !== false) {
           const idx = layerOrderIndex(layerDef.id);
           if (idx < bestIdx) {
@@ -179,7 +191,18 @@ export function setupTooltip(
     // Build tooltip content
     const tooltipCols = getTooltipColumns(best.layerDef);
     const lines = buildTooltipLines(best.props, tooltipCols, best.layerDef);
-    
+
+    // Debug: log tooltip building
+    if (Math.random() < 0.05) {
+      console.log('[tooltip] building:', {
+        type: best.type,
+        layerName: best.layerDef.name,
+        tooltipCols,
+        props: best.props,
+        linesCount: lines.length
+      });
+    }
+
     if (lines.length) {
       tt!.innerHTML = `<strong class="tt-title">${best.layerDef.name}</strong>` + lines.join('');
       tt!.style.left = `${e.point.x + 10}px`;

@@ -115,6 +115,8 @@ export function setupTooltip(
 
     // 2) Deck tile layers - use pickObject directly (like legacy map_utils)
     const overlay = overlayRef.current;
+    // Check for tile layers that need Deck picking
+    const hasTileLayers = layers.some(l => (l as any).isTileLayer);
     if (overlay) {
       let info: any = null;
 
@@ -122,9 +124,16 @@ export function setupTooltip(
       try {
         if (typeof (overlay as any).pickObject === 'function') {
           info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
+          // Debug: log pick results occasionally
+          if (info?.object && Math.random() < 0.1) {
+            console.log('[tooltip] pickObject result:', info);
+          }
+        } else {
+          // Debug: log if pickObject isn't available
+          console.warn('[tooltip] pickObject not available on overlay');
         }
       } catch (err) {
-        // Ignore pick errors
+        console.warn('[tooltip] pickObject error:', err);
       }
 
       if (info?.object) {

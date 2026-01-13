@@ -2,7 +2,7 @@
  * Location search widget using Mapbox Geocoding API
  */
 export interface GeocoderOptions {
-    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
     placeholder?: string;
     mapboxToken: string;
 }

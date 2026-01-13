@@ -3,7 +3,7 @@
  */
 
 export interface GeocoderOptions {
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
   placeholder?: string;
   mapboxToken: string;
 }
@@ -34,11 +34,12 @@ export function setupGeocoder(
   }
 
   // Apply position
-  const posStyles: Record<string, { top?: string; bottom?: string; left?: string; right?: string }> = {
+  const posStyles: Record<string, { top?: string; bottom?: string; left?: string; right?: string; transform?: string }> = {
     'top-left': { top: '12px', left: '12px', right: 'auto', bottom: 'auto' },
     'top-right': { top: '12px', right: '12px', left: 'auto', bottom: 'auto' },
     'bottom-left': { bottom: '12px', left: '12px', right: 'auto', top: 'auto' },
     'bottom-right': { bottom: '12px', right: '12px', left: 'auto', top: 'auto' },
+    'top-center': { top: '12px', left: '50%', right: 'auto', bottom: 'auto', transform: 'translateX(-50%)' },
   };
   Object.assign(container.style, posStyles[position]);
 

@@ -137,6 +137,18 @@ def udf(cache_age_max=0):
         ]
     }
 
+    # Widget configuration
+    # Positions: "top-left", "top-right", "bottom-left", "bottom-right"
+    # Set to False to disable a widget
+    widgets = {
+        "controls": "bottom-left",   # zoom/home/screenshot buttons
+        "scale": "bottom-left",      # scale bar
+        "basemap": "bottom-left",    # basemap switcher (dark/light/satellite)
+        "layers": "top-right",       # layer visibility toggle panel
+        "legend": "bottom-right",    # color legend
+        "geocoder": False,           # location search (set to position to enable)
+    }
+
     # Return mixed hex + vector layers
     # on_click and location_listener are enabled by default
     html = map_utils.deckgl_layers(
@@ -193,6 +205,7 @@ def udf(cache_age_max=0):
         basemap="satellite",
         theme="light",
         initialViewState=initialViewState,
+        widgets=widgets,
         # on_click enabled by default (broadcasts to "fused-bus")
         # location_listener enabled by default
         location_listener={"channel": "fused-bus", "zoom_offset": 0, "padding": 40, "max_zoom": 16},

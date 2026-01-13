@@ -113,20 +113,28 @@ export function setupTooltip(
       }
     }
 
-    // 2) Deck tile layers
+    // 2) Deck tile layers - use hover info from MapboxOverlay's onHover callback
     const overlay = overlayRef.current;
     if (overlay) {
       const state = (overlay as any).__fused_hex_tiles__;
-      // Try multiple ways to access pickObject
       let info: any = null;
-      try {
-        if (state?.pickObject) {
-          info = state.pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
-        } else if ((overlay as any).pickObject) {
-          info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
+
+      // Try getHoverInfo first (populated by onHover callback)
+      if (state?.getHoverInfo) {
+        info = state.getHoverInfo();
+      }
+
+      // Fallback to pickObject if no hover info
+      if (!info?.object) {
+        try {
+          if (typeof (overlay as any).pickObject === 'function') {
+            info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 6 });
+          } else if (state?.pickObject) {
+            info = state.pickObject({ x: e.point.x, y: e.point.y, radius: 6 });
+          }
+        } catch (err) {
+          // Ignore pick errors
         }
-      } catch (err) {
-        // Ignore pick errors
       }
 
       if (info?.object) {

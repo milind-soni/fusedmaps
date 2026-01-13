@@ -17,6 +17,7 @@ export interface DeckTileOverlayState {
         y: number;
         radius?: number;
     }) => any;
+    getHoverInfo: () => any;
     getTileData: () => Map<string, any[]>;
     destroy: () => void;
 }

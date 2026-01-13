@@ -19,6 +19,7 @@ export interface DeckTileOverlayState {
   overlay: any; // deck.MapboxOverlay instance
   rebuild: (visibility?: Record<string, boolean>) => void;
   pickObject: (opts: { x: number; y: number; radius?: number }) => any;
+  getHoverInfo: () => any; // Get last hovered object info
   getTileData: () => Map<string, any[]>; // Access cached tile data for legend building
   destroy: () => void;
 }
@@ -690,6 +691,7 @@ function buildHexTileDeckLayers(
         maxCacheSize: 200, // Keep more tiles in memory to reduce re-fetching during pan/zoom
         refinementStrategy,
         pickable: true,
+        autoHighlight: true,
         visible,
         ...(beforeId ? { beforeId } : {}),
         getTileData: async ({ index, signal }: any) => {
@@ -875,10 +877,17 @@ export function createHexTileOverlay(
   const visibilityRef = { current: visibility };
   const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, loader.setLoading, beforeIds);
 
+  // Store last hovered info for tooltip access
+  const hoverInfoRef = { current: null as any };
+
   const overlay = new deck.MapboxOverlay({
     interleaved: true,
     useDevicePixels: true,
-    layers: build()
+    layers: build(),
+    onHover: (info: any) => {
+      hoverInfoRef.current = info?.object ? info : null;
+    },
+    getTooltip: null, // We handle tooltips manually
   });
 
   // Attach to map
@@ -970,7 +979,10 @@ export function createHexTileOverlay(
   // Expose tile cache for legend building (e.g., RGB-based categorical legends)
   const getTileData = () => runtime.cache;
 
-  return { overlay, rebuild, pickObject, getTileData, destroy };
+  // Expose hover info for tooltip access
+  const getHoverInfo = () => hoverInfoRef.current;
+
+  return { overlay, rebuild, pickObject, getHoverInfo, getTileData, destroy };
 }
 
 

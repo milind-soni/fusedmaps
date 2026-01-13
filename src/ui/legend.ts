@@ -121,13 +121,6 @@ export function setupLegend(
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const willOpen = legend?.classList.contains('collapsed');
-      if (willOpen) {
-        // Close other dropdowns
-        document.querySelectorAll('.fm-dropdown-widget:not(#color-legend)').forEach(el => {
-          el.classList.add('collapsed');
-        });
-      }
       legend?.classList.toggle('collapsed');
     });
 

@@ -101,13 +101,6 @@ export function setupLayerPanel(
     const toggleBtn = document.getElementById('layer-panel-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const willOpen = panel?.classList.contains('collapsed');
-      if (willOpen) {
-        // Close other dropdowns
-        document.querySelectorAll('.fm-dropdown-widget:not(#layer-panel)').forEach(el => {
-          el.classList.add('collapsed');
-        });
-      }
       panel?.classList.toggle('collapsed');
     });
 

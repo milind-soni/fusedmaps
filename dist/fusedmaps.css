@@ -742,6 +742,9 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 
 .color-legend .fm-dropdown-panel {
   min-width: 160px;
+  /* Align to left edge of toggle so it doesn't overlap with layers panel */
+  right: auto;
+  left: 0;
 }
 
 /* Legend content */

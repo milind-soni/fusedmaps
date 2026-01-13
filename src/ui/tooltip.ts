@@ -98,12 +98,13 @@ export function setupTooltip(
     let bestIdx = Number.POSITIVE_INFINITY;
 
     // 1) Mapbox layers
+    // Note: Don't check visibilityState - queryRenderedFeatures only returns features from visible layers.
+    // The passed visibilityState can be stale since it's captured at setup time.
     if (queryIds.length) {
       const features = map.queryRenderedFeatures(e.point, { layers: queryIds });
       for (const f of features || []) {
         const match = queryable.find(x => x.layerId === (f as any).layer?.id);
         if (!match) continue;
-        if (visibilityState[match.layerDef.id] === false) continue;
         const idx = layerOrderIndex(match.layerDef.id);
         if (idx < bestIdx) {
           bestIdx = idx;

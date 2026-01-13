@@ -42,11 +42,11 @@ function handlePanelClick(e: MouseEvent): void {
     const isEye = !!target.closest?.('.layer-eye');
 
     // Clicking on the item body toggles; clicking on the eye also toggles.
-    // (We don't need stopPropagation because this is a single delegated handler.)
     if (isEye || target.closest?.('.layer-item')) {
       const current = getCurrentVisible(layerId);
       visibilityCallback?.(layerId, !current);
       e.preventDefault();
+      e.stopPropagation(); // Prevent dropdown from closing
     }
   } catch (_) {}
 }
@@ -101,6 +101,13 @@ export function setupLayerPanel(
     const toggleBtn = document.getElementById('layer-panel-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      const willOpen = panel?.classList.contains('collapsed');
+      if (willOpen) {
+        // Close other dropdowns
+        document.querySelectorAll('.fm-dropdown-widget:not(#layer-panel)').forEach(el => {
+          el.classList.add('collapsed');
+        });
+      }
       panel?.classList.toggle('collapsed');
     });
 
@@ -111,9 +118,10 @@ export function setupLayerPanel(
       panel?.classList.add('collapsed');
     });
 
-    // Close when clicking outside
+    // Close when clicking outside (but not when clicking on layer items)
     document.addEventListener('click', (e) => {
-      if (!panel?.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (!panel?.contains(target)) {
         panel?.classList.add('collapsed');
       }
     });

@@ -314,6 +314,9 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
 // Basemap Switcher Control
 // ============================================================
 
+// Map icon for basemap switcher
+const MAP_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>';
+
 interface BasemapSwitcherOptions {
   basemaps?: BasemapOption[];
   currentStyle: string;
@@ -340,30 +343,13 @@ function addBasemapSwitcher(
   const wrapper = document.createElement('div');
   wrapper.className = 'fm-basemap-switcher';
 
-  // Collapsed view (shows active basemap thumbnail)
+  // Trigger button with map icon
   const trigger = document.createElement('button');
   trigger.type = 'button';
   trigger.className = 'fm-basemap-trigger';
   trigger.title = 'Change basemap';
   trigger.setAttribute('aria-label', 'Change basemap');
-
-  const triggerThumb = document.createElement('div');
-  triggerThumb.className = 'fm-basemap-trigger-thumb';
-  const triggerLabel = document.createElement('div');
-  triggerLabel.className = 'fm-basemap-trigger-label';
-  const triggerCaret = document.createElement('div');
-  triggerCaret.className = 'fm-basemap-trigger-caret';
-  triggerCaret.textContent = '▸';
-  trigger.appendChild(triggerThumb);
-  trigger.appendChild(triggerLabel);
-  trigger.appendChild(triggerCaret);
-
-  const updateTrigger = () => {
-    const active = basemaps.find(b => b.id === activeId) || basemaps[0];
-    try { triggerThumb.style.background = active.thumbnail; } catch (_) {}
-    try { triggerLabel.textContent = active.label; } catch (_) {}
-  };
-  updateTrigger();
+  trigger.innerHTML = MAP_ICON_SVG;
 
   // Expandable horizontal panel (Google Maps-like)
   const panel = document.createElement('div');
@@ -398,7 +384,6 @@ function addBasemapSwitcher(
       });
 
       activeId = basemap.id;
-      updateTrigger();
 
       // Collapse panel
       isExpanded = false;
@@ -498,7 +483,6 @@ function addBasemapSwitcher(
           try { b.classList.toggle('is-active', bid === id); } catch (_) {}
         });
         activeId = id;
-        updateTrigger();
       }
     }
   };

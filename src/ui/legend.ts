@@ -67,10 +67,7 @@ function buildRgbCategoryLegend(
 
     return `
       <div class="legend-layer">
-        <div class="legend-title">
-          <span class="legend-dot" style="background:rgb(${cats[0].rgb[0]},${cats[0].rgb[1]},${cats[0].rgb[2]});"></span>
-          ${layerName}
-        </div>
+        <div class="legend-title">${layerName}</div>
         <div class="legend-categories">
           ${cats.map(c => `
             <div class="legend-cat-item">
@@ -124,6 +121,13 @@ export function setupLegend(
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      const willOpen = legend?.classList.contains('collapsed');
+      if (willOpen) {
+        // Close other dropdowns
+        document.querySelectorAll('.fm-dropdown-widget:not(#color-legend)').forEach(el => {
+          el.classList.add('collapsed');
+        });
+      }
       legend?.classList.toggle('collapsed');
     });
 
@@ -310,10 +314,7 @@ function buildCategoricalLegend(
   
   return `
     <div class="legend-layer">
-      <div class="legend-title">
-        <span class="legend-dot" style="background:${colors[0]};"></span>
-        ${layerName}
-      </div>
+      <div class="legend-title">${layerName}</div>
       <div class="legend-categories">
         ${catPairs.map((cat: any, i: number) => `
           <div class="legend-cat-item">
@@ -352,14 +353,9 @@ function buildContinuousLegend(
     `${c} ${i / (colors!.length - 1) * 100}%`
   ).join(', ')})`;
   
-  const dotColor = colors[Math.floor(colors.length / 2)];
-  
   return `
     <div class="legend-layer">
-      <div class="legend-title">
-        <span class="legend-dot" style="background:${dotColor};"></span>
-        ${layerName}
-      </div>
+      <div class="legend-title">${layerName}</div>
       <div class="legend-gradient" style="background:${gradient};"></div>
       <div class="legend-labels">
         <span>${d0.toFixed(1)}</span>

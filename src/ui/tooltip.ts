@@ -180,17 +180,20 @@ export function setupTooltip(
  * Get tooltip columns for a layer
  */
 function getTooltipColumns(layer: LayerConfig): string[] {
+  const anyLayer = layer as any;
+
   if (layer.layerType === 'hex') {
     const hexLayer = layer as HexLayerConfig;
-    return hexLayer.hexLayer?.tooltipColumns || hexLayer.hexLayer?.tooltipAttrs || hexLayer.tooltipColumns || [];
+    return hexLayer.hexLayer?.tooltipColumns || hexLayer.hexLayer?.tooltipAttrs ||
+           hexLayer.tooltipColumns || anyLayer.tooltip || [];
   } else if (layer.layerType === 'vector') {
     const vecLayer = layer as VectorLayerConfig;
-    return vecLayer.vectorLayer?.tooltipColumns || vecLayer.vectorLayer?.tooltipAttrs || vecLayer.tooltipColumns || [];
+    return vecLayer.vectorLayer?.tooltipColumns || vecLayer.vectorLayer?.tooltipAttrs ||
+           vecLayer.tooltipColumns || anyLayer.tooltip || [];
   } else if (layer.layerType === 'pmtiles') {
-    const p: any = layer as any;
-    return p.vectorLayer?.tooltipColumns || p.vectorLayer?.tooltipAttrs || p.tooltipColumns || [];
+    return anyLayer.vectorLayer?.tooltipColumns || anyLayer.vectorLayer?.tooltipAttrs ||
+           anyLayer.tooltipColumns || anyLayer.tooltip || [];
   }
-  const anyLayer: any = layer as any;
   return anyLayer.tooltipColumns || anyLayer.tooltip || [];
 }
 

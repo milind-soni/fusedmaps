@@ -18,6 +18,8 @@ export function setupTooltip(
   visibilityState: Record<string, boolean>,
   deckOverlay?: unknown
 ): void {
+  // Store reference to check if overlay is available
+  const overlayRef = { current: deckOverlay };
   // Create tooltip element if it doesn't exist
   let tt = document.getElementById('tooltip');
   if (!tt) {
@@ -112,26 +114,36 @@ export function setupTooltip(
     }
 
     // 2) Deck tile layers
-    if (deckOverlay) {
-      const state = (deckOverlay as any).__fused_hex_tiles__;
-      const picker = state?.pickObject || (deckOverlay as any)?.pickObject;
+    const overlay = overlayRef.current;
+    if (overlay) {
+      const state = (overlay as any).__fused_hex_tiles__;
+      // Try multiple ways to access pickObject
+      let info: any = null;
       try {
-        const info = picker?.({ x: e.point.x, y: e.point.y, radius: 4 });
-        if (info?.object) {
-          // Tile layer id looks like "<layerId>-tiles-..."; normalize
-          const rawLayerId = String(info.layer?.id || '');
-          const baseId = rawLayerId.includes('-tiles') ? rawLayerId.split('-tiles')[0] : rawLayerId;
-          const layerDef = layers.find(l => l.id === baseId);
-          if (layerDef && visibilityState[layerDef.id] !== false) {
-            const idx = layerOrderIndex(layerDef.id);
-            if (idx < bestIdx) {
-              bestIdx = idx;
-              best = { type: 'deck', layerDef, props: info.object.properties || info.object || {} };
-            }
-          }
+        if (state?.pickObject) {
+          info = state.pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
+        } else if ((overlay as any).pickObject) {
+          info = (overlay as any).pickObject({ x: e.point.x, y: e.point.y, radius: 4 });
         }
       } catch (err) {
-        // ignore
+        // Ignore pick errors
+      }
+
+      if (info?.object) {
+        // Tile layer id looks like "<layerId>-tiles-..."; normalize
+        const rawLayerId = String(info.layer?.id || '');
+        // Handle sublayer ids: "slope-tiles-abc123-h3" -> "slope"
+        const baseId = rawLayerId.includes('-tiles')
+          ? rawLayerId.split('-tiles')[0]
+          : rawLayerId.split('-')[0]; // Fallback for other patterns
+        const layerDef = layers.find(l => l.id === baseId);
+        if (layerDef && visibilityState[layerDef.id] !== false) {
+          const idx = layerOrderIndex(layerDef.id);
+          if (idx < bestIdx) {
+            bestIdx = idx;
+            best = { type: 'deck', layerDef, props: info.object.properties || info.object || {} };
+          }
+        }
       }
     }
 

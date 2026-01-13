@@ -6,8 +6,10 @@ def udf(cache_age_max=0):
     farm_boundaries = fused.run("field_analysis_summary_2", cache_max_age=0)
     print("farms", len(farm_boundaries))
 
-    # Load map utilities
-    map_utils = fused.load("https://github.com/fusedio/udfs/tree/a4d07b7/community/milind/map_utils/")
+    # Load map utility
+    map_utils = fused.load("https://github.com/fusedio/udfs/tree/7882b03/community/milind/map_utils/")
+
+
 
     initialViewState = {
         "longitude": -84.06,
@@ -130,23 +132,20 @@ def udf(cache_age_max=0):
             "opacity": 0,
             "lineWidth": 3
         },
-        "tooltip": [
-            "Area Hectares", "Crop Name Harvested", "Farmability Score",
-            "Field Name", "Field Openness Score", "Median Vehicle Speed MPH",
-            "Terrain Category", "Terrain Smoothness Score", "Total Wet Mass", "Total Yield"
-        ]
+        "tooltip": ["Area Hectares", "Crop Name Harvested", "Farmability Score", "Field Name", "Field Openness Score", "Median Vehicle Speed MPH", "Terrain Category", "Terrain Smoothness Score", "Total Wet Mass", "Total Yield"]
+
     }
 
-    # Widget configuration
+    # Widget configurat
     # Positions: "top-left", "top-right", "bottom-left", "bottom-right"
-    # Set to False to disable a widget
+    # Set to False to disable 
     widgets = {
         "controls": "bottom-left",   # zoom/home/screenshot buttons
         "scale": "bottom-left",      # scale bar
-        "basemap": "bottom-left",    # basemap switcher (dark/light/satellite)
+        "basemap": "bottom-right",    # basemap switcher (dark/light/satellite)
         "layers": "top-right",       # layer visibility toggle panel
-        "legend": "bottom-right",    # color legend
-        "geocoder": "top-center",           # location search (set to position to enable)
+        "legend": "top-right",    # color legend
+        "geocoder": "top-left",           # location search (set to position to enable)
     }
 
     # Return mixed hex + vector layers
@@ -169,7 +168,7 @@ def udf(cache_age_max=0):
                 "visible": False,
                 "name": "Slope"
             },
-            # Tiled elevation
+            # Tiled ele
             {
                 "type": "hex",
                 "tile_url": "https://udf.ai/fsh_5M663NGjouRG3DepAdZ9t2/run/tiles/{z}/{x}/{y}?dtype_out_vector=parquet",

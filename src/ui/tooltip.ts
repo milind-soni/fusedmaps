@@ -170,7 +170,10 @@ export function setupTooltip(
           });
         }
 
-        if (layerDef && visibilityState[layerDef.id] !== false) {
+        // Note: Don't check visibilityState here - if pickObject returns results,
+        // the Deck layer is visible (Deck handles visibility internally).
+        // The passed visibilityState can be stale since it's captured at setup time.
+        if (layerDef) {
           const idx = layerOrderIndex(layerDef.id);
           if (idx < bestIdx) {
             bestIdx = idx;

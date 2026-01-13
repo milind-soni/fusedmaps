@@ -347,10 +347,15 @@ function createTileRuntime(): TileRuntime {
   };
 }
 
-// --- AutoDomain (Parquet stats-only) ---
+// --- AutoDomain (percentile-based like legacy for better contrast) ---
 const AUTO_DOMAIN_MIN_ZOOM = 10;
 const AUTO_DOMAIN_ZOOM_TOLERANCE = 1;
 const AUTO_DOMAIN_REBUILD_REL_TOL = 0.05;
+
+// Percentile-based domain (matches legacy behavior - clips outliers for better contrast)
+const AUTO_DOMAIN_PCT_LOW = 0.02;   // 2nd percentile
+const AUTO_DOMAIN_PCT_HIGH = 0.98;  // 98th percentile
+const AUTO_DOMAIN_MAX_SAMPLES = 5000;
 
 function tileToBounds(x: number, y: number, z: number) {
   const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z);
@@ -490,11 +495,68 @@ function calculateDomainFromTiles(
   map: mapboxgl.Map,
   runtime: TileRuntime,
   layer: HexLayerConfig,
-  _attr: string,
+  attr: string,
   expectedZ: number
 ): [number, number] | null {
-  // Stats-only (Parquet). If stats aren't there, we intentionally don't update.
-  return calculateDomainFromTileStats(map, runtime, layer, expectedZ);
+  if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
+  if (!attr) return null;
+
+  const b = map.getBounds();
+  const viewportBounds = {
+    west: b.getWest(),
+    east: b.getEast(),
+    south: b.getSouth(),
+    north: b.getNorth()
+  };
+
+  // Collect values from cached tiles in viewport
+  const values: number[] = [];
+
+  for (const [cacheKey, rows] of runtime.cache.entries()) {
+    // Parse tile key (format: "url|z/x/y")
+    const parts = cacheKey.split('|');
+    if (parts.length < 2) continue;
+    const [z, x, y] = parts[1].split('/').map(Number);
+    if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
+
+    const tb = tileToBounds(x, y, z);
+    if (!boundsIntersect(tb, viewportBounds)) continue;
+
+    // Sample values from this tile
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
+      const props = row?.properties || row;
+      if (!props) continue;
+      const raw = props[attr];
+      if (raw == null) continue;
+      const v = typeof raw === 'number' ? raw : parseFloat(String(raw));
+      if (Number.isFinite(v)) {
+        values.push(v);
+      }
+    }
+    if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
+  }
+
+  // Need enough samples for meaningful percentiles
+  if (values.length < 30) {
+    // Fallback to Parquet stats if not enough samples
+    return calculateDomainFromTileStats(map, runtime, layer, expectedZ);
+  }
+
+  // Sort and calculate percentiles (clips outliers like legacy)
+  values.sort((a, b) => a - b);
+  const lowIdx = Math.floor(values.length * AUTO_DOMAIN_PCT_LOW);
+  const highIdx = Math.min(values.length - 1, Math.ceil(values.length * AUTO_DOMAIN_PCT_HIGH) - 1);
+
+  const minVal = values[Math.max(0, lowIdx)];
+  const maxVal = values[Math.max(0, highIdx)];
+
+  if (!Number.isFinite(minVal) || !Number.isFinite(maxVal)) return null;
+  if (minVal >= maxVal) return [minVal - 1, maxVal + 1];
+
+  return [minVal, maxVal];
 }
 
 function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number]): boolean {

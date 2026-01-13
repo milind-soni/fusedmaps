@@ -8,8 +8,8 @@ import { getUniqueCategories } from '../color/expressions';
 
 type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
-// Legend/palette icon
-const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>';
+// Legend icon (horizontal bars representing a legend)
+const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="4" height="3" rx="0.5"/><rect x="9" y="5" width="12" height="3" rx="0.5"/><rect x="3" y="10.5" width="4" height="3" rx="0.5"/><rect x="9" y="10.5" width="9" height="3" rx="0.5"/><rect x="3" y="16" width="4" height="3" rx="0.5"/><rect x="9" y="16" width="6" height="3" rx="0.5"/></svg>';
 
 /**
  * Check if a color config is an RGB accessor (e.g., "@@=[properties.r,properties.g,properties.b]")
@@ -99,7 +99,7 @@ export function setupLegend(
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = 'color-legend collapsed'; // Start collapsed
+    legend.className = 'color-legend'; // Start expanded by default
     legend.style.display = 'none';
     legend.innerHTML = `
       <button id="legend-toggle" class="legend-toggle" title="Toggle legend">

@@ -109,6 +109,7 @@ export function setupLegend(
       </button>
       <div class="fm-dropdown-panel" id="legend-dropdown">
         <div class="fm-dropdown-header">
+          <span class="fm-dropdown-header-icon">${LEGEND_ICON_SVG}</span>
           <span class="fm-dropdown-title">Legend</span>
           <button class="fm-dropdown-close" id="legend-close" title="Close">${CLOSE_ICON_SVG}</button>
         </div>
@@ -121,6 +122,13 @@ export function setupLegend(
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      const willOpen = legend?.classList.contains('collapsed');
+      if (willOpen) {
+        // Close other dropdowns (only one open at a time)
+        document.querySelectorAll('.fm-dropdown-widget:not(#color-legend)').forEach(el => {
+          el.classList.add('collapsed');
+        });
+      }
       legend?.classList.toggle('collapsed');
     });
 

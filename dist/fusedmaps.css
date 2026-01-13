@@ -550,6 +550,16 @@ html[data-theme="light"] .fm-dropdown-widget:not(.collapsed) .fm-dropdown-toggle
   padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border);
 }
+.fm-dropdown-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-muted);
+}
+.fm-dropdown-header-icon svg {
+  width: 16px;
+  height: 16px;
+}
 .fm-dropdown-title {
   flex: 1;
   font-size: 13px;
@@ -771,7 +781,7 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 
 .legend-layer .legend-title {
   margin-bottom: 6px;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 12px;
   color: var(--ui-text);
 }

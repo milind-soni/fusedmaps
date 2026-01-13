@@ -89,6 +89,7 @@ export function setupLayerPanel(
       </button>
       <div class="fm-dropdown-panel" id="layer-panel-dropdown">
         <div class="fm-dropdown-header">
+          <span class="fm-dropdown-header-icon">${LAYERS_ICON_SVG}</span>
           <span class="fm-dropdown-title">Layers</span>
           <button class="fm-dropdown-close" id="layer-panel-close" title="Close">${CLOSE_ICON_SVG}</button>
         </div>
@@ -101,6 +102,13 @@ export function setupLayerPanel(
     const toggleBtn = document.getElementById('layer-panel-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      const willOpen = panel?.classList.contains('collapsed');
+      if (willOpen) {
+        // Close other dropdowns (only one open at a time)
+        document.querySelectorAll('.fm-dropdown-widget:not(#layer-panel)').forEach(el => {
+          el.classList.add('collapsed');
+        });
+      }
       panel?.classList.toggle('collapsed');
     });
 

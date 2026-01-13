@@ -64,7 +64,7 @@ function buildRgbCategoryLegend(
       <div class="legend-layer">
         <div class="legend-title">
           <span class="legend-dot" style="background:rgb(${cats[0].rgb[0]},${cats[0].rgb[1]},${cats[0].rgb[2]});"></span>
-          ${layerName}: ${attr}
+          ${layerName}
         </div>
         <div class="legend-categories">
           ${cats.map(c => `
@@ -180,9 +180,18 @@ function buildLayerLegend(
     }
   } else if (layer.layerType === 'vector') {
     const vecLayer = layer as VectorLayerConfig;
-    colorCfg = vecLayer.fillColorConfig;
 
-    // Show simple line legend for stroke-only vector layers
+    // Check if fill is transparent/disabled - if so, prefer line color config
+    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? 1;
+    const isFillTransparent = fillOpacity === 0 || (vecLayer as any).vectorLayer?.filled === false;
+
+    if (isFillTransparent && vecLayer.lineColorConfig?.['@@function']) {
+      colorCfg = vecLayer.lineColorConfig;
+    } else {
+      colorCfg = vecLayer.fillColorConfig;
+    }
+
+    // Show simple line legend for stroke-only vector layers (no color function)
     if (!colorCfg?.['@@function'] && vecLayer.lineColorRgba && !vecLayer.isFilled) {
       return `
         <div class="legend-layer">
@@ -264,13 +273,11 @@ function buildCategoricalLegend(
     colors = FALLBACK_CATEGORICAL_COLORS;
   }
   
-  const titleAttr = colorCfg.labelAttr || colorCfg.attr;
-  
   return `
     <div class="legend-layer">
       <div class="legend-title">
         <span class="legend-dot" style="background:${colors[0]};"></span>
-        ${layerName}: ${titleAttr}
+        ${layerName}
       </div>
       <div class="legend-categories">
         ${catPairs.map((cat: any, i: number) => `
@@ -316,7 +323,7 @@ function buildContinuousLegend(
     <div class="legend-layer">
       <div class="legend-title">
         <span class="legend-dot" style="background:${dotColor};"></span>
-        ${layerName}: ${colorCfg.attr}
+        ${layerName}
       </div>
       <div class="legend-gradient" style="background:${gradient};"></div>
       <div class="legend-labels">

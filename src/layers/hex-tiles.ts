@@ -887,6 +887,10 @@ export function createHexTileOverlay(
     onHover: (info: any) => {
       // Store hover info for unified tooltip access (tooltip.ts reads this)
       hoverInfoRef.current = info?.object ? info : null;
+      // Debug: log hover events occasionally
+      if (info?.object && Math.random() < 0.05) {
+        console.log('[hex-tiles] onHover:', info.layer?.id, info.object);
+      }
     },
   });
 

@@ -208,6 +208,18 @@ function getTooltipColumns(layer: LayerConfig): string[] {
 }
 
 /**
+ * Format a number for tooltip display
+ * - Integers show without decimals (e.g., 2023)
+ * - Floats show with 2 decimal places (e.g., 3.14)
+ */
+function formatNumber(val: number): string {
+  if (Number.isInteger(val)) {
+    return String(val);
+  }
+  return val.toFixed(2);
+}
+
+/**
  * Build tooltip HTML lines
  */
 function buildTooltipLines(props: Record<string, unknown>, cols: string[], layerDef?: LayerConfig): string[] {
@@ -226,7 +238,7 @@ function buildTooltipLines(props: Record<string, unknown>, cols: string[], layer
       if (k === 'hex') return;
       const val = (props as any)[k];
       if (val == null) return;
-      const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+      const formatted = typeof val === 'number' ? formatNumber(val) : String(val);
       lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${formatted}</span></span>`);
     });
     return lines;
@@ -238,7 +250,7 @@ function buildTooltipLines(props: Record<string, unknown>, cols: string[], layer
     const colorAttr = (hexLayer.hexLayer as any)?.getFillColor?.attr || 'metric';
     if ((props as any)[colorAttr] != null) {
       const val = (props as any)[colorAttr];
-      const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+      const formatted = typeof val === 'number' ? formatNumber(val) : String(val);
       lines.push(`<span class="tt-row"><span class="tt-key">${colorAttr}</span><span class="tt-val">${formatted}</span></span>`);
       return lines;
     }
@@ -252,7 +264,7 @@ function buildTooltipLines(props: Record<string, unknown>, cols: string[], layer
       .forEach((k) => {
         const val = (props as any)[k];
         if (val == null) return;
-        const formatted = typeof val === 'number' ? Number(val).toFixed(2) : String(val);
+        const formatted = typeof val === 'number' ? formatNumber(val) : String(val);
         lines.push(`<span class="tt-row"><span class="tt-key">${k}</span><span class="tt-val">${formatted}</span></span>`);
       });
   }

@@ -66,8 +66,9 @@ export function enableLocationListener(
 
     // Handle location/click messages with bounds
     if (type === 'location_change' || type === 'feature_click' || type === 'hex_click') {
-      const bounds = (msg as any).bounds;
-      const properties = (msg as any).properties;
+      // Support both top-level bounds and nested location.bounds (from selector.py)
+      const bounds = (msg as any).bounds || (msg as any).location?.bounds;
+      const properties = (msg as any).properties || (msg as any).location;
 
       // Highlight the feature by matching properties (for external clicks like scatter plots)
       if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {

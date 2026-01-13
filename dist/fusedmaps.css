@@ -487,16 +487,15 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   height: 28px;
   padding: 0;
   background: var(--ui-float-bg);
-  border: 1px solid var(--ui-border-2);
-  border-radius: 6px;
+  border: none;
+  border-radius: 50%;
   color: var(--ui-text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .fm-dropdown-toggle:hover {
   background: var(--ui-surface);
-  border-color: var(--ui-border-2);
 }
 .fm-dropdown-toggle svg {
   width: 16px;
@@ -505,7 +504,6 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 }
 .fm-dropdown-widget:not(.collapsed) .fm-dropdown-toggle {
   background: var(--ui-surface);
-  border-color: var(--ui-elements);
 }
 
 /* Dropdown Panel (expandable content) */

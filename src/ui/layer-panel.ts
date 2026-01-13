@@ -82,32 +82,40 @@ export function setupLayerPanel(
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'layer-panel';
-    panel.className = 'collapsed'; // Start collapsed
+    panel.className = 'fm-dropdown-widget collapsed'; // Start collapsed
     panel.innerHTML = `
-      <button id="layer-panel-toggle" class="layer-panel-toggle" title="Toggle layers">
+      <button id="layer-panel-toggle" class="fm-dropdown-toggle" title="Layers">
         ${LAYERS_ICON_SVG}
       </button>
-      <div class="widget-header" id="layer-panel-header">
-        <span class="widget-header-icon">${LAYERS_ICON_SVG}</span>
-        <span class="widget-header-title">Layers</span>
-        <button class="widget-header-close" id="layer-panel-close" title="Close">${CLOSE_ICON_SVG}</button>
+      <div class="fm-dropdown-panel" id="layer-panel-dropdown">
+        <div class="fm-dropdown-header">
+          <span class="fm-dropdown-title">Layers</span>
+          <button class="fm-dropdown-close" id="layer-panel-close" title="Close">${CLOSE_ICON_SVG}</button>
+        </div>
+        <div id="layer-list"></div>
       </div>
-      <div id="layer-list"></div>
     `;
     widgetContainer.appendChild(panel);
 
-    // Add toggle click handler (for collapsed state button)
+    // Add toggle click handler
     const toggleBtn = document.getElementById('layer-panel-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       panel?.classList.toggle('collapsed');
     });
 
-    // Add close button handler (for expanded state)
+    // Add close button handler
     const closeBtn = document.getElementById('layer-panel-close');
     closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       panel?.classList.add('collapsed');
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!panel?.contains(e.target as Node)) {
+        panel?.classList.add('collapsed');
+      }
     });
   }
   panelEl = panel;

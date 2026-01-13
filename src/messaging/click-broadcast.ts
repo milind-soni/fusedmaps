@@ -203,9 +203,65 @@ export function enableClickBroadcast(
   }
 
   /**
+   * Broadcast deselect/clear message when clicking empty area
+   */
+  function broadcastDeselect(lngLat?: { lng: number; lat: number }): void {
+    const message: BusMessage = {
+      type: 'feature_deselect',
+      fromComponent: componentId,
+      properties: null,
+      timestamp: Date.now()
+    };
+
+    if (includeCoords && lngLat) {
+      message.lngLat = lngLat;
+    }
+
+    bus.send(message);
+  }
+
+  /**
+   * Check if click hit any feature (Mapbox or Deck)
+   */
+  function didClickFeature(event: any): boolean {
+    // Check Mapbox layers
+    const clickableLayers = getClickableMapboxLayers();
+    if (clickableLayers.length) {
+      try {
+        const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers }) || [];
+        if (features.length) return true;
+      } catch {}
+    }
+
+    // Check Deck.gl layers
+    if (deckOverlay?.pickObject) {
+      try {
+        const pickInfo = deckOverlay.pickObject({
+          x: event.point.x,
+          y: event.point.y,
+          radius: 1
+        });
+        if (pickInfo?.object) return true;
+      } catch {}
+    }
+
+    return false;
+  }
+
+  /**
    * Combined click handler
    */
   function handleClick(event: any): void {
+    // Check if we clicked on any feature
+    if (!didClickFeature(event)) {
+      // Empty click - send deselect message
+      broadcastDeselect({
+        lng: event.lngLat.lng,
+        lat: event.lngLat.lat
+      });
+      return;
+    }
+
     // First try Mapbox layers
     handleMapboxClick(event);
 

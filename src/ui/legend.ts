@@ -104,33 +104,41 @@ export function setupLegend(
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = 'color-legend'; // Start expanded by default
+    legend.className = 'color-legend fm-dropdown-widget'; // Start expanded by default
     legend.style.display = 'none';
     legend.innerHTML = `
-      <button id="legend-toggle" class="legend-toggle" title="Toggle legend">
+      <button id="legend-toggle" class="fm-dropdown-toggle" title="Legend">
         ${LEGEND_ICON_SVG}
       </button>
-      <div class="widget-header" id="legend-header">
-        <span class="widget-header-icon">${LEGEND_ICON_SVG}</span>
-        <span class="widget-header-title">Legend</span>
-        <button class="widget-header-close" id="legend-close" title="Close">${CLOSE_ICON_SVG}</button>
+      <div class="fm-dropdown-panel" id="legend-dropdown">
+        <div class="fm-dropdown-header">
+          <span class="fm-dropdown-title">Legend</span>
+          <button class="fm-dropdown-close" id="legend-close" title="Close">${CLOSE_ICON_SVG}</button>
+        </div>
+        <div id="legend-content"></div>
       </div>
-      <div id="legend-content"></div>
     `;
     widgetContainer.appendChild(legend);
 
-    // Add toggle click handler (for collapsed state button)
+    // Add toggle click handler
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       legend?.classList.toggle('collapsed');
     });
 
-    // Add close button handler (for expanded state)
+    // Add close button handler
     const closeBtn = document.getElementById('legend-close');
     closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       legend?.classList.add('collapsed');
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!legend?.contains(e.target as Node)) {
+        legend?.classList.add('collapsed');
+      }
     });
   }
 

@@ -431,11 +431,11 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   word-break: break-word;
 }
 
-/* Widget Containers for proper stacking */
+/* Widget Containers - horizontal icon bar */
 .fm-widget-container {
   position: fixed;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
   z-index: 100;
   pointer-events: none;
@@ -451,17 +451,20 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 .fm-widget-top-right {
   top: 12px;
   right: 12px;
-  align-items: flex-end;
+  align-items: flex-start;
+  flex-direction: row-reverse; /* Icons appear left-to-right as added */
 }
 .fm-widget-bottom-left {
   bottom: 12px;
   left: 12px;
-  align-items: flex-start;
+  align-items: flex-end;
+  flex-direction: column;
 }
 .fm-widget-bottom-right {
   bottom: 12px;
   right: 12px;
   align-items: flex-end;
+  flex-direction: column;
 }
 .fm-widget-top-center {
   top: 12px;
@@ -470,36 +473,91 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   align-items: center;
 }
 
-/* Widget Header (icon + title + close button) */
-.widget-header {
+/* Dropdown Widget (icon + expandable panel below) */
+.fm-dropdown-widget {
+  position: relative;
+}
+
+/* Dropdown Toggle Button (always visible) */
+.fm-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--ui-float-bg);
+  border: 1px solid var(--ui-border-2);
+  border-radius: 8px;
+  color: var(--ui-text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.fm-dropdown-toggle:hover {
+  background: var(--ui-surface);
+  border-color: var(--ui-border-2);
+}
+.fm-dropdown-toggle svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+}
+.fm-dropdown-widget:not(.collapsed) .fm-dropdown-toggle {
+  background: var(--ui-surface);
+  border-color: var(--ui-elements);
+}
+
+/* Dropdown Panel (expandable content) */
+.fm-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  background: var(--ui-float-bg);
+  border: 1px solid var(--ui-border-2);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 110;
+}
+
+/* Panel positioning for different corners */
+.fm-widget-top-left .fm-dropdown-panel {
+  left: 0;
+  right: auto;
+}
+.fm-widget-bottom-left .fm-dropdown-panel,
+.fm-widget-bottom-right .fm-dropdown-panel {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+/* Hide panel when collapsed */
+.fm-dropdown-widget.collapsed .fm-dropdown-panel {
+  display: none;
+}
+
+/* Dropdown Header */
+.fm-dropdown-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border);
 }
-.widget-header-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ui-muted);
-}
-.widget-header-icon svg {
-  width: 16px;
-  height: 16px;
-}
-.widget-header-title {
+.fm-dropdown-title {
   flex: 1;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ui-text);
 }
-.widget-header-close {
+.fm-dropdown-close {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   background: transparent;
   border: none;
@@ -508,9 +566,13 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.widget-header-close:hover {
+.fm-dropdown-close:hover {
   background: var(--ui-surface);
   color: var(--ui-text);
+}
+.fm-dropdown-close svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Location Search / Geocoder */
@@ -589,71 +651,18 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 
 /* Layer Toggle Panel */
 #layer-panel {
-  background: var(--ui-float-bg);
-  border: 1px solid var(--ui-border-2);
-  border-radius: 8px;
-  padding: 0;
   font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
   color: var(--ui-text);
-  min-width: 180px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
 }
 
-/* Layer panel toggle button - circular (only visible when collapsed) */
-.layer-panel-toggle {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: var(--ui-text);
-  cursor: pointer;
-  transition: background 0.15s;
-  margin: 6px auto;
-}
-.layer-panel-toggle:hover {
-  background: var(--ui-surface);
-}
-.layer-panel-toggle svg {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
-}
-
-/* Expanded state - show header, hide toggle */
-#layer-panel #layer-panel-header {
-  display: flex;
-}
-#layer-panel .layer-panel-toggle {
-  display: none;
-}
-
-/* Collapsed state */
-#layer-panel.collapsed {
-  min-width: auto;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-}
-#layer-panel.collapsed #layer-list {
-  display: none;
-}
-#layer-panel.collapsed #layer-panel-header {
-  display: none;
-}
-#layer-panel.collapsed .layer-panel-toggle {
-  display: flex;
-  margin: 6px;
+#layer-panel .fm-dropdown-panel {
+  min-width: 200px;
 }
 
 /* Layer list container */
 #layer-list {
-  /* No border-top since header provides separation */
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 /* Layer items - with gradient gutter on left edge */
@@ -719,72 +728,18 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 
 /* Legend */
 .color-legend {
-  background: var(--ui-float-bg);
-  color: var(--ui-text);
-  padding: 0;
-  border-radius: 8px;
-  font-size: 11px;
-  min-width: 140px;
-  border: 1px solid var(--ui-border);
   font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
-  box-shadow: 0 4px 12px var(--ui-shadow);
-  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 11px;
 }
 
-/* Legend toggle button - circular (only visible when collapsed) */
-.legend-toggle {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: var(--ui-text);
-  cursor: pointer;
-  transition: background 0.15s;
-  margin: 6px auto;
-}
-.legend-toggle:hover {
-  background: var(--ui-surface);
-}
-.legend-toggle svg {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
+.color-legend .fm-dropdown-panel {
+  min-width: 160px;
 }
 
 /* Legend content */
 #legend-content {
-  padding: 8px;
-}
-
-/* Expanded state - show header, hide toggle */
-.color-legend #legend-header {
-  display: flex;
-}
-.color-legend .legend-toggle {
-  display: none;
-}
-
-/* Collapsed state */
-.color-legend.collapsed {
-  min-width: auto;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-}
-.color-legend.collapsed #legend-content {
-  display: none;
-}
-.color-legend.collapsed #legend-header {
-  display: none;
-}
-.color-legend.collapsed .legend-toggle {
-  display: flex;
-  margin: 6px;
+  padding: 10px 12px;
 }
 
 /* Bottom-left control padding (zoom/home + scale bar) */

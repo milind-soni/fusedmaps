@@ -14,7 +14,7 @@ const containerIds: Record<WidgetPosition, string> = {
 
 /**
  * Get or create a widget container for a given position.
- * Widgets appended to the same position container will stack vertically.
+ * Widgets appended to the same position container will be arranged horizontally.
  */
 export function getWidgetContainer(position: WidgetPosition): HTMLElement {
   const id = containerIds[position];

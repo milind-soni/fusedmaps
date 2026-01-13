@@ -591,15 +591,16 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   position: fixed;
   right: 12px;
   bottom: 12px;
-  background: rgba(15, 15, 15, 0.9);
-  color: #fff;
+  background: var(--ui-float-bg);
+  color: var(--ui-text);
   padding: 8px;
   border-radius: 4px;
   font-size: 11px;
   z-index: 10;
   min-width: 140px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ui-border);
   font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
+  box-shadow: 0 4px 12px var(--ui-shadow);
 }
 
 /* Bottom-left control padding (zoom/home + scale bar) - match map_utils.py */
@@ -610,7 +611,7 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 .legend-layer {
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .legend-layer:last-child {
@@ -643,14 +644,14 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   height: 10px;
   border-radius: 2px;
   margin-bottom: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--ui-border);
 }
 
 .legend-layer .legend-labels {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: #ccc;
+  color: var(--ui-muted);
 }
 
 .legend-layer .legend-categories {
@@ -668,17 +669,17 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
 }
 
 .legend-layer .legend-categories::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--ui-scroll-track);
   border-radius: 2px;
 }
 
 .legend-layer .legend-categories::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--ui-scroll-thumb);
   border-radius: 2px;
 }
 
 .legend-layer .legend-categories::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--ui-muted-2);
 }
 
 .legend-layer .legend-cat-item {
@@ -693,12 +694,12 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--ui-border);
   flex-shrink: 0;
 }
 
 .legend-layer .legend-cat-label {
-  color: #ddd;
+  color: var(--ui-text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

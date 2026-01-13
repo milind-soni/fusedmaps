@@ -160,14 +160,15 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     }
   }
 
+  // Setup legend first so it appears to the right of layers (row-reverse order)
+  if (config.ui?.legend !== false && legendPos !== false) {
+    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos);
+  }
+
   if (config.ui?.layerPanel !== false && layersPos !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
     }, store, layersPos);
-  }
-
-  if (config.ui?.legend !== false && legendPos !== false) {
-    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos);
   }
   
   // Track tile loading cleanup function

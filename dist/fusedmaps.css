@@ -525,6 +525,40 @@ html[data-theme="light"] .debug-dual-range input[type="range"]::-moz-range-thumb
   overflow: hidden;
 }
 
+/* Layer panel toggle button */
+.layer-panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.layer-panel-toggle:hover {
+  background: var(--ui-surface);
+}
+.layer-panel-toggle svg {
+  opacity: 0.7;
+}
+
+/* Collapsed state */
+#layer-panel.collapsed {
+  min-width: auto;
+  border-radius: 8px;
+}
+#layer-panel.collapsed #layer-list {
+  display: none;
+}
+#layer-panel.collapsed .layer-panel-toggle {
+  border-bottom: none;
+  padding: 8px 10px;
+}
+
 /* Layer items - with gradient gutter on left edge */
 .layer-item {
   display: flex;

@@ -146,7 +146,7 @@ def udf(cache_age_max=0):
         "basemap": "bottom-left",    # basemap switcher (dark/light/satellite)
         "layers": "top-right",       # layer visibility toggle panel
         "legend": "bottom-right",    # color legend
-        "geocoder": False,           # location search (set to position to enable)
+        "geocoder": "top-center",           # location search (set to position to enable)
     }
 
     # Return mixed hex + vector layers

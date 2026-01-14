@@ -932,7 +932,7 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 }
 /* Position-specific margins */
 .mapboxgl-ctrl-bottom-left .fm-basemap-switcher {
-  margin: 0 0 8px 10px;
+  margin: 0 0 8px 20px;
 }
 .mapboxgl-ctrl-bottom-right .fm-basemap-switcher {
   margin: 0 10px 8px 0;

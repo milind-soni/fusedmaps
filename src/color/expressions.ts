@@ -129,39 +129,52 @@ function buildCategoricalExpr(
  */
 function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
   if (!cfg.domain?.length) return null;
-  
+
   const [d0, d1] = cfg.domain;
   const isReversed = d0 > d1;
   const domain = isReversed ? [d1, d0] : [d0, d1];
   const wantsReverse = !!(cfg as any).reverse;
-  
+
   const steps = cfg.steps || 7;
   const paletteName = cfg.colors || 'TealGrn';
-  
+
+  // Null color - default to gray
+  const nullColor = cfg.nullColor
+    ? `rgb(${cfg.nullColor.slice(0, 3).join(',')})`
+    : 'rgb(184,184,184)';
+
   let colors = getPaletteColors(paletteName, steps);
   if (!colors || !colors.length) {
-    // Fallback gradient
+    // Fallback gradient with null handling
     return [
-      'interpolate', ['linear'], ['get', cfg.attr],
-      domain[0], 'rgb(237,248,251)',
-      domain[1], 'rgb(0,109,44)'
+      'case',
+      ['==', ['get', cfg.attr], null], nullColor,
+      ['interpolate', ['linear'], ['get', cfg.attr],
+        domain[0], 'rgb(237,248,251)',
+        domain[1], 'rgb(0,109,44)'
+      ]
     ];
   }
-  
+
   // `reverse` flips palette direction (low↔high). If the domain itself is reversed,
   // we already normalize it, so we invert the meaning of `reverse`.
   const shouldReverse = isReversed ? !wantsReverse : wantsReverse;
   if (shouldReverse) colors = [...colors].reverse();
-  
+
   // Build interpolate expression
-  const expr: unknown[] = ['interpolate', ['linear'], ['get', cfg.attr]];
+  const interpolateExpr: unknown[] = ['interpolate', ['linear'], ['get', cfg.attr]];
   colors.forEach((c, i) => {
     const value = domain[0] + (domain[1] - domain[0]) * i / (colors!.length - 1);
-    expr.push(value);
-    expr.push(c);
+    interpolateExpr.push(value);
+    interpolateExpr.push(c);
   });
-  
-  return expr;
+
+  // Wrap with case expression to handle null values
+  return [
+    'case',
+    ['==', ['get', cfg.attr], null], nullColor,
+    interpolateExpr
+  ];
 }
 
 /**

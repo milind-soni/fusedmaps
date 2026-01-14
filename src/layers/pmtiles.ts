@@ -181,18 +181,30 @@ export function buildPMTilesColorExpression(
     if (reverse && colors.length > 1) {
       colors = [...colors].reverse();
     }
-    
+
+    // Null color - default to gray
+    const nullColor = colorConfig.nullColor
+      ? (Array.isArray(colorConfig.nullColor)
+          ? `rgb(${colorConfig.nullColor.slice(0, 3).join(',')})`
+          : colorConfig.nullColor)
+      : 'rgb(184,184,184)';
+
     // Build interpolate expression with all color stops
-    const expr: any[] = ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', attr]], 0]];
-    
+    const interpolateExpr: any[] = ['interpolate', ['linear'], ['to-number', ['get', attr]]];
+
     const numColors = colors.length;
     for (let i = 0; i < numColors; i++) {
       const t = i / (numColors - 1);
       const value = domain[0] + t * (domain[1] - domain[0]);
-      expr.push(value, colors[i]);
+      interpolateExpr.push(value, colors[i]);
     }
-    
-    return expr;
+
+    // Wrap with case expression to handle null values (don't coalesce null to 0)
+    return [
+      'case',
+      ['==', ['get', attr], null], nullColor,
+      interpolateExpr
+    ];
   }
   
   if (fn === 'colorCategories') {

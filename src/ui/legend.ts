@@ -91,7 +91,8 @@ export function setupLegend(
   visibilityState: Record<string, boolean>,
   geojsons: Record<string, GeoJSON.FeatureCollection>,
   position: WidgetPosition = 'bottom-right',
-  tileData?: Map<string, any[]>
+  tileData?: Map<string, any[]>,
+  expanded: boolean = false
 ): void {
   // Get widget container for proper stacking
   const widgetContainer = getWidgetContainer(position);
@@ -101,7 +102,7 @@ export function setupLegend(
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = 'color-legend fm-dropdown-widget collapsed'; // Start collapsed
+    legend.className = expanded ? 'color-legend fm-dropdown-widget' : 'color-legend fm-dropdown-widget collapsed'; // Start expanded or collapsed based on config
     legend.style.display = 'none';
     legend.innerHTML = `
       <button id="legend-toggle" class="fm-dropdown-toggle" title="Legend">

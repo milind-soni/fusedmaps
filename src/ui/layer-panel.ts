@@ -67,7 +67,8 @@ export function setupLayerPanel(
   visibilityState: Record<string, boolean>,
   onVisibilityChange: VisibilityCallback,
   store?: LayerStore,
-  position: WidgetPosition = 'top-right'
+  position: WidgetPosition = 'top-right',
+  expanded: boolean = false
 ): { destroy: () => void } {
   visibilityCallback = onVisibilityChange;
   const _store = store;
@@ -82,7 +83,7 @@ export function setupLayerPanel(
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'layer-panel';
-    panel.className = 'fm-dropdown-widget collapsed'; // Start collapsed
+    panel.className = expanded ? 'fm-dropdown-widget' : 'fm-dropdown-widget collapsed'; // Start expanded or collapsed based on config
     panel.innerHTML = `
       <button id="layer-panel-toggle" class="fm-dropdown-toggle" title="Layers">
         ${LAYERS_ICON_SVG}

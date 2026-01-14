@@ -306,7 +306,26 @@ def deckgl_layers(
         "geocoder": False,           # location search (disabled by default)
     }
     # Merge user overrides
-    widget_config = {**default_widgets, **(widgets or {})}
+    merged_widgets = {**default_widgets, **(widgets or {})}
+
+    # Normalize widget config: support both string and dict formats
+    # Input: "top-right" or {"position": "top-right", "expanded": True} or False
+    # Output: {"position": "top-right", "expanded": False} or False
+    widget_config = {}
+    for widget_name, widget_value in merged_widgets.items():
+        if widget_value is False:
+            widget_config[widget_name] = False
+        elif isinstance(widget_value, str):
+            # Simple string format - default to collapsed
+            widget_config[widget_name] = {"position": widget_value, "expanded": False}
+        elif isinstance(widget_value, dict):
+            # Dict format - extract position and expanded (default to False)
+            widget_config[widget_name] = {
+                "position": widget_value.get("position", "bottom-left"),
+                "expanded": widget_value.get("expanded", False)
+            }
+        else:
+            widget_config[widget_name] = False
     
     # Process each layer
     processed_layers = []

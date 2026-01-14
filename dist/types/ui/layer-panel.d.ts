@@ -11,7 +11,7 @@ type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /**
  * Setup the layer panel
  */
-export declare function setupLayerPanel(layers: LayerConfig[], visibilityState: Record<string, boolean>, onVisibilityChange: VisibilityCallback, store?: LayerStore, position?: WidgetPosition): {
+export declare function setupLayerPanel(layers: LayerConfig[], visibilityState: Record<string, boolean>, onVisibilityChange: VisibilityCallback, store?: LayerStore, position?: WidgetPosition, expanded?: boolean): {
     destroy: () => void;
 };
 /**

@@ -79,13 +79,36 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   });
 
   // Widget positions from config (defaults: controls/scale/basemap=bottom-left, layers=top-right, legend=bottom-right, geocoder=false)
-  const widgetPos = config.widgets || {};
-  const controlsPos = widgetPos.controls ?? 'bottom-left';
-  const scalePos = widgetPos.scale ?? 'bottom-left';
-  const basemapPos = widgetPos.basemap ?? 'bottom-left';
-  const layersPos = widgetPos.layers ?? 'top-right';
-  const legendPos = widgetPos.legend ?? 'bottom-right';
-  const geocoderPos = widgetPos.geocoder ?? false;  // Disabled by default
+  // Each widget can be: string (position), false (disabled), or {position: string, expanded: boolean}
+  const widgetCfg = config.widgets || {};
+
+  // Helper to extract position and expanded from widget config
+  const parseWidgetConfig = (cfg: any, defaultPos: string | false): { position: string | false; expanded: boolean } => {
+    if (cfg === false) return { position: false, expanded: false };
+    if (typeof cfg === 'string') return { position: cfg, expanded: false };
+    if (cfg && typeof cfg === 'object') {
+      return {
+        position: cfg.position ?? defaultPos,
+        expanded: cfg.expanded === true
+      };
+    }
+    return { position: defaultPos, expanded: false };
+  };
+
+  const controlsCfg = parseWidgetConfig(widgetCfg.controls, 'bottom-left');
+  const scaleCfg = parseWidgetConfig(widgetCfg.scale, 'bottom-left');
+  const basemapCfg = parseWidgetConfig(widgetCfg.basemap, 'bottom-left');
+  const layersCfg = parseWidgetConfig(widgetCfg.layers, 'top-right');
+  const legendCfg = parseWidgetConfig(widgetCfg.legend, 'bottom-right');
+  const geocoderCfg = parseWidgetConfig(widgetCfg.geocoder, false);  // Disabled by default
+
+  // Extract positions for backwards compatibility
+  const controlsPos = controlsCfg.position;
+  const scalePos = scaleCfg.position;
+  const basemapPos = basemapCfg.position;
+  const layersPos = layersCfg.position;
+  const legendPos = legendCfg.position;
+  const geocoderPos = geocoderCfg.position;
 
   // Widgets (zoom/home + optional screenshot + cmd-drag orbit + basemap switcher)
   const widgets = setupWidgets(map, config.initialViewState, {
@@ -162,13 +185,13 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   // Setup legend first so it appears to the right of layers (row-reverse order)
   if (config.ui?.legend !== false && legendPos !== false) {
-    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos);
+    setupLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), legendPos as any, undefined, legendCfg.expanded);
   }
 
   if (config.ui?.layerPanel !== false && layersPos !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
-    }, store, layersPos);
+    }, store, layersPos as any, layersCfg.expanded);
   }
   
   // Track tile loading cleanup function

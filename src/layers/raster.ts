@@ -24,6 +24,42 @@ function boundsToCoordinates(b: [number, number, number, number]) {
 }
 
 /**
+ * Fetch an image with retry logic and convert to data URL
+ * This avoids network issues by giving us full control over the fetch
+ */
+async function fetchImageAsDataUrl(
+  url: string,
+  maxRetries: number = 3,
+  baseDelay: number = 500
+): Promise<string> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read blob'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      lastError = err as Error;
+      // Exponential backoff: 500ms, 1000ms, 2000ms
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, attempt)));
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed to fetch image');
+}
+
+/**
  * Add a raster layer to the map
  */
 export function addRasterLayer(
@@ -43,51 +79,36 @@ export function addRasterLayer(
   }
 
   if (hasImage) {
-    // Add image source directly - Mapbox handles loading internally
-    // We use a sourcedata event listener to ensure the image is loaded before showing
     const coords = boundsToCoordinates(layer.imageBounds as any);
     const sourceId = layer.id;
     const layerIdRaster = `${layer.id}-raster`;
 
-    // Add the source
-    map.addSource(sourceId, {
-      type: 'image',
-      url: layer.imageUrl as string,
-      coordinates: coords as any
-    } as any);
+    // Fetch image with retry, convert to data URL, then add to map
+    // This avoids network issues since Mapbox receives a data URL (no network request needed)
+    fetchImageAsDataUrl(layer.imageUrl as string)
+      .then((dataUrl) => {
+        // Check if source already exists (in case of race conditions)
+        if (map.getSource(sourceId)) return;
 
-    // Add the layer (initially hidden to prevent flicker)
-    map.addLayer({
-      id: layerIdRaster,
-      type: 'raster',
-      source: sourceId,
-      paint: { 'raster-opacity': clamp01(opacity) },
-      layout: { visibility: 'none' }
-    });
+        // Add the source with data URL
+        map.addSource(sourceId, {
+          type: 'image',
+          url: dataUrl,
+          coordinates: coords as any
+        } as any);
 
-    // Listen for source data to know when image is loaded
-    const onSourceData = (e: any) => {
-      if (e.sourceId === sourceId && e.isSourceLoaded) {
-        map.off('sourcedata', onSourceData);
-        // Now show the layer if it should be visible
-        if (visible) {
-          try {
-            map.setLayoutProperty(layerIdRaster, 'visibility', 'visible');
-          } catch (_) {}
-        }
-      }
-    };
-    map.on('sourcedata', onSourceData);
-
-    // Fallback: show after timeout if sourcedata doesn't fire
-    setTimeout(() => {
-      map.off('sourcedata', onSourceData);
-      if (visible && map.getLayer(layerIdRaster)) {
-        try {
-          map.setLayoutProperty(layerIdRaster, 'visibility', 'visible');
-        } catch (_) {}
-      }
-    }, 3000);
+        // Add the layer
+        map.addLayer({
+          id: layerIdRaster,
+          type: 'raster',
+          source: sourceId,
+          paint: { 'raster-opacity': clamp01(opacity) },
+          layout: { visibility: visible ? 'visible' : 'none' }
+        });
+      })
+      .catch((err) => {
+        console.warn(`[FusedMaps] Failed to load raster image after retries: ${layer.imageUrl}`, err);
+      });
   } else {
     map.addSource(layer.id, {
       type: 'raster',

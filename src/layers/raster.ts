@@ -43,27 +43,48 @@ export function addRasterLayer(
   }
 
   if (hasImage) {
-    const coords = boundsToCoordinates(layer.imageBounds as any);
-    map.addSource(layer.id, {
-      type: 'image',
-      url: layer.imageUrl as string,
-      coordinates: coords as any
-    } as any);
+    // Preload image to ensure it's ready before adding to map
+    // This prevents race conditions where the layer renders before image loads
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // Only add source/layer if they don't already exist (in case of retries)
+      if (map.getSource(layer.id)) return;
+
+      const coords = boundsToCoordinates(layer.imageBounds as any);
+      map.addSource(layer.id, {
+        type: 'image',
+        url: layer.imageUrl as string,
+        coordinates: coords as any
+      } as any);
+
+      map.addLayer({
+        id: `${layer.id}-raster`,
+        type: 'raster',
+        source: layer.id,
+        paint: { 'raster-opacity': clamp01(opacity) },
+        layout: { visibility: visible ? 'visible' : 'none' }
+      });
+    };
+    img.onerror = () => {
+      console.warn(`[FusedMaps] Failed to load raster image: ${layer.imageUrl}`);
+    };
+    img.src = layer.imageUrl as string;
   } else {
     map.addSource(layer.id, {
       type: 'raster',
       tiles: [layer.tileUrl as string],
       tileSize: 256
     });
-  }
 
-  map.addLayer({
-    id: `${layer.id}-raster`,
-    type: 'raster',
-    source: layer.id,
-    paint: { 'raster-opacity': clamp01(opacity) },
-    layout: { visibility: visible ? 'visible' : 'none' }
-  });
+    map.addLayer({
+      id: `${layer.id}-raster`,
+      type: 'raster',
+      source: layer.id,
+      paint: { 'raster-opacity': clamp01(opacity) },
+      layout: { visibility: visible ? 'visible' : 'none' }
+    });
+  }
 }
 
 /**

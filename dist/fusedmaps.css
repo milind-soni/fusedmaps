@@ -930,19 +930,19 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 .mapboxgl-ctrl-top-right .fm-basemap-switcher {
   margin-left: auto;
 }
-/* Position-specific margins - aligned with Mapbox controls */
+/* Position-specific margins */
 .mapboxgl-ctrl-bottom-left .fm-basemap-switcher {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px 10px;
 }
 .mapboxgl-ctrl-bottom-right .fm-basemap-switcher {
-  margin: 0 0 8px 0;
+  margin: 0 10px 8px 0;
   margin-left: auto;
 }
 .mapboxgl-ctrl-top-left .fm-basemap-switcher {
-  margin: 8px 0 0 0;
+  margin: 8px 0 0 10px;
 }
 .mapboxgl-ctrl-top-right .fm-basemap-switcher {
-  margin: 8px 0 0 0;
+  margin: 8px 10px 0 0;
   margin-left: auto;
 }
 

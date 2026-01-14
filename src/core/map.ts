@@ -21,7 +21,7 @@ export function initMap(options: MapInitOptions): mapboxgl.Map {
   // Set access token
   (window.mapboxgl as any).accessToken = mapboxToken;
   
-  // Create map
+  // Create map with compact attribution by default
   const map = new window.mapboxgl.Map({
     container: containerId,
     style: styleUrl,
@@ -32,9 +32,14 @@ export function initMap(options: MapInitOptions): mapboxgl.Map {
     projection: 'mercator',
     // Match map_utils.py: enable pitch behavior; Cmd+drag orbit is implemented separately.
     pitchWithRotate: true,
+    // Disable default attribution, we'll add compact one
+    attributionControl: false,
     // Needed for reliable canvas capture (screenshot button). May increase GPU memory usage.
     ...(screenshotEnabled ? { preserveDrawingBuffer: true } : {})
   });
+
+  // Add compact attribution control
+  map.addControl(new window.mapboxgl.AttributionControl({ compact: true }));
 
   // Suppress benign Mapbox GL image loading errors (sprite/icon race conditions during style changes)
   map.on('error', (e: any) => {

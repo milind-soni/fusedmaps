@@ -246,11 +246,14 @@ function buildLayerLegend(
   }
 
   // Only show legend for layers with explicit color functions
-  const fnType = colorCfg?.['@@function'];
+  // Support both old format (@@function) and new format (type)
+  const fnType = colorCfg?.['@@function'] ||
+    (colorCfg?.type === 'continuous' ? 'colorContinuous' :
+     colorCfg?.type === 'categorical' ? 'colorCategories' : null);
   if (!fnType || !colorCfg?.attr) return '';
   if (fnType !== 'colorContinuous' && fnType !== 'colorCategories') return '';
   
-  const paletteName = colorCfg.colors || (fnType === 'colorCategories' ? 'Bold' : 'TealGrn');
+  const paletteName = colorCfg.colors || colorCfg.palette || (fnType === 'colorCategories' ? 'Bold' : 'TealGrn');
   
   // Handle categorical legend
   if (fnType === 'colorCategories') {

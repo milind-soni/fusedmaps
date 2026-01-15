@@ -139,6 +139,14 @@ function normalizeHexLayer(layer: HexLayer): any {
   };
 }
 
+/**
+ * Check if a value is a color function config (continuous or categorical)
+ */
+function isColorFunctionConfig(c: unknown): c is Record<string, unknown> {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return false;
+  return '@@function' in c || 'type' in c;
+}
+
 function normalizeVectorLayer(layer: VectorLayer): any {
   const style = layer.style || {};
 
@@ -162,9 +170,9 @@ function normalizeVectorLayer(layer: VectorLayer): any {
       lineWidthMinPixels: style.lineWidth ?? 1,
       pointRadiusMinPixels: style.pointRadius ?? 6,
     },
-    fillColorConfig: typeof fillColor === 'object' && '@@function' in fillColor ? fillColor : undefined,
+    fillColorConfig: isColorFunctionConfig(fillColor) ? fillColor : undefined,
     fillColorRgba: typeof fillColor === 'string' ? fillColor : undefined,
-    lineColorConfig: typeof lineColor === 'object' && '@@function' in lineColor ? lineColor : undefined,
+    lineColorConfig: isColorFunctionConfig(lineColor) ? lineColor : undefined,
     lineColorRgba: typeof lineColor === 'string' ? lineColor : undefined,
     lineWidth: style.lineWidth ?? 1,
     pointRadius: style.pointRadius ?? 6,
@@ -192,11 +200,11 @@ function normalizeMVTLayer(layer: MVTLayer): any {
     tooltipColumns: layer.tooltip,
     minzoom: tile.minZoom,
     maxzoom: tile.maxZoom,
-    fillColorConfig: typeof fillColor === 'object' && '@@function' in fillColor ? fillColor : undefined,
+    fillColorConfig: isColorFunctionConfig(fillColor) ? fillColor : undefined,
     fillColor: typeof fillColor === 'string' ? fillColor : undefined,
     fillOpacity: style.opacity ?? 0.8,
     isFilled: style.filled ?? true,
-    lineColorConfig: typeof lineColor === 'object' && '@@function' in lineColor ? lineColor : undefined,
+    lineColorConfig: isColorFunctionConfig(lineColor) ? lineColor : undefined,
     lineColor: typeof lineColor === 'string' ? lineColor : undefined,
     lineWidth: style.lineWidth ?? 1,
     isExtruded: style.extruded ?? false,
@@ -242,8 +250,8 @@ function normalizePMTilesLayer(layer: PMTilesLayer): any {
     tooltipColumns: layer.tooltip,
     minzoom: tile.minZoom,
     maxzoom: tile.maxZoom,
-    fillColorConfig: typeof fillColor === 'object' && '@@function' in fillColor ? fillColor : undefined,
-    lineColorConfig: typeof lineColor === 'object' && '@@function' in lineColor ? lineColor : undefined,
+    fillColorConfig: isColorFunctionConfig(fillColor) ? fillColor : undefined,
+    lineColorConfig: isColorFunctionConfig(lineColor) ? lineColor : undefined,
     fillOpacity: style.opacity ?? 0.8,
     lineWidth: style.lineWidth ?? 1,
     pointRadiusMinPixels: style.pointRadius ?? 4,

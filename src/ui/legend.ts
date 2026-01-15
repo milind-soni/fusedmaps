@@ -224,16 +224,22 @@ function buildLayerLegend(
 
     // Check if fill is transparent/disabled - if so, prefer line color config
     const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? 1;
-    const isFillTransparent = fillOpacity === 0 || (vecLayer as any).vectorLayer?.filled === false;
+    const isFillTransparent = fillOpacity < 0.1 || (vecLayer as any).vectorLayer?.filled === false;
 
-    if (isFillTransparent && vecLayer.lineColorConfig?.['@@function']) {
+    // Helper to check if a color config has a color function (old or new format)
+    const hasColorFn = (cfg: any) => cfg?.['@@function'] || cfg?.type === 'continuous' || cfg?.type === 'categorical';
+
+    if (isFillTransparent && hasColorFn(vecLayer.lineColorConfig)) {
       colorCfg = vecLayer.lineColorConfig;
-    } else {
+    } else if (hasColorFn(vecLayer.fillColorConfig)) {
       colorCfg = vecLayer.fillColorConfig;
+    } else if (hasColorFn(vecLayer.lineColorConfig)) {
+      // Fallback to lineColor if fillColor has no color function
+      colorCfg = vecLayer.lineColorConfig;
     }
 
     // Show simple line legend for stroke-only vector layers (no color function)
-    if (!colorCfg?.['@@function'] && vecLayer.lineColorRgba && !vecLayer.isFilled) {
+    if (!hasColorFn(colorCfg) && vecLayer.lineColorRgba && !vecLayer.isFilled) {
       return `
         <div class="legend-layer">
           <div class="legend-title">

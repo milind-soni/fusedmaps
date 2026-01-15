@@ -273,16 +273,39 @@ function getLayerStripGradient(layer: LayerConfig): string {
     }
   } else if (layer.layerType === 'vector') {
     const vecLayer = layer as VectorLayerConfig;
-    if (vecLayer.lineColorRgba && !vecLayer.isFilled) {
+    // Check if fill is transparent - prefer line color in that case
+    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? (vecLayer as any).opacity ?? 1;
+    const isFillTransparent = fillOpacity < 0.1 || !vecLayer.isFilled;
+
+    // Determine which color config to use (same logic as legend.ts)
+    let colorCfg: any = null;
+    if (isFillTransparent && vecLayer.lineColorConfig) {
+      colorCfg = vecLayer.lineColorConfig;
+    } else if (vecLayer.fillColorConfig) {
+      colorCfg = vecLayer.fillColorConfig;
+    } else if (vecLayer.lineColorConfig) {
+      colorCfg = vecLayer.lineColorConfig;
+    }
+
+    // Handle color config (continuous or categorical)
+    if (colorCfg && typeof colorCfg === 'object') {
+      const fn = colorCfg['@@function'];
+      if (fn === 'colorContinuous' || fn === 'colorCategories') {
+        const paletteName = colorCfg.colors || (fn === 'colorCategories' ? 'Bold' : 'TealGrn');
+        let cols = getPaletteColors(paletteName, colorCfg.steps || 7);
+        if (cols?.length) {
+          const dom = colorCfg.domain;
+          const domainReversed = Array.isArray(dom) && dom.length >= 2 && dom[0] > dom[dom.length - 1];
+          const wantsReverse = !!colorCfg.reverse;
+          const shouldReverse = domainReversed ? !wantsReverse : wantsReverse;
+          if (shouldReverse) cols = [...cols].reverse();
+          stripBg = toGradient(cols) || stripBg;
+        }
+      }
+    } else if (isFillTransparent && vecLayer.lineColorRgba) {
       stripBg = vecLayer.lineColorRgba;
     } else if (vecLayer.fillColorRgba) {
       stripBg = vecLayer.fillColorRgba;
-    } else if (vecLayer.fillColorConfig && typeof vecLayer.fillColorConfig === 'object') {
-      const paletteName = (vecLayer.fillColorConfig as any).colors;
-      if (paletteName) {
-        const cols = getPaletteColors(paletteName, 7);
-        if (cols?.length) stripBg = toGradient(cols) || stripBg;
-      }
     }
   } else if (layer.layerType === 'pmtiles') {
     const pmLayer = layer as PMTilesLayerConfig;

@@ -688,10 +688,8 @@ function buildHexTileDeckLayers(
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
-        maxCacheSize: 500, // Keep many tiles in memory to persist when zooming out
-        maxCacheByteSize: 100 * 1024 * 1024, // 100MB cache
+        maxCacheSize: 200, // Keep more tiles in memory to reduce re-fetching during pan/zoom
         refinementStrategy,
-        extent: null, // Don't cull tiles outside viewport
         pickable: true,
         autoHighlight: true,
         visible,

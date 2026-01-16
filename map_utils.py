@@ -916,6 +916,11 @@ def _process_vector_layer(idx: int, df, config: dict, name: str, visible: bool) 
     if tooltip:
         result["tooltip"] = tooltip
 
+    # Pass through source options (tolerance, buffer, maxzoom) for geojson-vt control
+    source = config.get("source")
+    if source:
+        result["source"] = source
+
     return result
 
 def _process_mvt_layer(idx: int, tile_url: str, source_layer: str, config: dict, name: str, visible: bool) -> dict:

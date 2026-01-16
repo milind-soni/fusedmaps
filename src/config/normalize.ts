@@ -159,6 +159,7 @@ function normalizeVectorLayer(layer: VectorLayer): any {
     layerType: 'vector',
     visible: layer.visible,
     geojson: layer.geojson,
+    geojsonSource: layer.source,
     dataRef: layer.dataRef,
     tooltipColumns: layer.tooltip,
     vectorLayer: {

@@ -98,6 +98,11 @@ export interface HexLayer extends BaseLayer {
 export interface VectorLayer extends BaseLayer {
     layerType: 'vector';
     geojson?: FeatureCollection;
+    source?: {
+        tolerance?: number;
+        buffer?: number;
+        maxzoom?: number;
+    };
     style?: LayerStyle;
 }
 export interface MVTLayer extends BaseLayer {

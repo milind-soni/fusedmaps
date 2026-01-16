@@ -18,7 +18,16 @@ export function addVectorLayer(
   if (!geojson?.features?.length) return;
   
   // Add source
-  map.addSource(layer.id, { type: 'geojson', data: geojson });
+  const src: any = { type: 'geojson', data: geojson };
+  // Optional: control geojson-vt tiling/simplification.
+  // For very small polygons (e.g., H3 res11), default tolerance can simplify them away at low zoom.
+  const opts = (layer as any).geojsonSource;
+  if (opts && typeof opts === 'object') {
+    if (typeof opts.tolerance === 'number') src.tolerance = opts.tolerance;
+    if (typeof opts.buffer === 'number') src.buffer = opts.buffer;
+    if (typeof opts.maxzoom === 'number') src.maxzoom = opts.maxzoom;
+  }
+  map.addSource(layer.id, src);
   
   // Extract layer properties
   const vecData = geojson.features.map((f: any) => f.properties || {});

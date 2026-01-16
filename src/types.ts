@@ -134,6 +134,13 @@ export interface VectorLayer extends BaseLayer {
   layerType: 'vector';
   // Data source
   geojson?: FeatureCollection;
+  // GeoJSON source options (controls Mapbox geojson-vt tiling/simplification)
+  // Useful for tiny polygons (e.g., H3 res11) that can get simplified away at low zoom.
+  source?: {
+    tolerance?: number; // default Mapbox is ~0.375; set 0 to disable simplification
+    buffer?: number;    // default Mapbox is 128
+    maxzoom?: number;   // default Mapbox is 18
+  };
   // Style
   style?: LayerStyle;
 }

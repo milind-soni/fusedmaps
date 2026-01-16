@@ -132,7 +132,15 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
 
   const [d0, d1] = cfg.domain;
   const isReversed = d0 > d1;
-  const domain = isReversed ? [d1, d0] : [d0, d1];
+  let domain = isReversed ? [d1, d0] : [d0, d1];
+
+  // Handle edge case where domain min equals max (single value or all same values)
+  // Expand domain slightly so interpolation works
+  if (domain[0] === domain[1]) {
+    const val = domain[0];
+    const epsilon = Math.abs(val) > 0 ? Math.abs(val) * 0.1 : 1;
+    domain = [val - epsilon, val + epsilon];
+  }
   const wantsReverse = !!(cfg as any).reverse;
 
   const steps = cfg.steps || 7;

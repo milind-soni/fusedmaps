@@ -355,7 +355,7 @@ export async function addPMTilesLayers(
         if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
 
         if (renderPoints) {
-          // Circle layer
+          // Circle layer - only render actual Point geometries (not polygon centroids)
           const circleLayerId = `${layer.id}-${slSlug}-circles`;
           if (!map.getLayer(circleLayerId)) {
             map.addLayer({
@@ -363,6 +363,7 @@ export async function addPMTilesLayers(
               type: 'circle',
               source: sourceId,
               'source-layer': sl,
+              filter: ['==', ['geometry-type'], 'Point'],
               ...layerZoomProps,
               paint: {
                 'circle-radius': [

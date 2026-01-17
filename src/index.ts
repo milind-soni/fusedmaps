@@ -21,6 +21,22 @@ import { createLayerStore, LayerStore } from './state';
 import { normalizeLayerConfig, isNewFormat } from './config';
 import { trackMapboxTileLoading } from './ui/tile-loader';
 
+// AI agent integration imports
+import { validate as validateConfig, formatErrors } from './config/validate';
+import type { ValidationResult, ValidationError } from './config/validate';
+import { applyDefaults, type SimpleMapConfig } from './config/defaults';
+import { normalizeInputs } from './config/normalize-inputs';
+import {
+  getAllPalettes,
+  getPaletteColors,
+  getPaletteInfo,
+  suggestPalette,
+  getPalettesByCategory,
+  PALETTE_CATEGORIES
+} from './schema/palettes';
+import { getToolDefinition, getSimpleToolDefinition, getMcpToolDefinition } from './schema/index';
+import { examples, getExample, listExamples } from './schema/examples';
+
 const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
 
 function validateLayerConfig(config: any): { valid: boolean; error?: string } {
@@ -41,6 +57,163 @@ export * from './types';
 // Re-export state (selectively to avoid conflicts with types.ts)
 export { createLayerStore, LayerStore } from './state';
 export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
+
+// Re-export validation types
+export type { ValidationResult, ValidationError };
+
+// Re-export SimpleMapConfig type
+export type { SimpleMapConfig };
+
+// ============================================================
+// AI Agent Integration API
+// ============================================================
+
+/**
+ * Result from createMap() with success/error info for AI agents
+ */
+export interface CreateMapResult {
+  /** Whether the map was created successfully */
+  success: boolean;
+  /** The FusedMaps instance (if successful) */
+  instance: FusedMapsInstance | null;
+  /** Current map state */
+  state: FusedMapsState | null;
+  /** Validation errors (if any) */
+  errors: ValidationError[];
+  /** Non-fatal warnings */
+  warnings: string[];
+}
+
+/**
+ * Create a map with a simplified config format.
+ * This is the recommended entry point for AI agents.
+ *
+ * @example
+ * ```typescript
+ * const result = FusedMaps.createMap({
+ *   center: [-122.4, 37.8],
+ *   zoom: 10,
+ *   layers: [{
+ *     layerType: 'hex',
+ *     data: [{ h3: '8928308280fffff', value: 100 }],
+ *     style: { fillColor: { type: 'continuous', attr: 'value', palette: 'Viridis' } }
+ *   }]
+ * });
+ *
+ * if (result.success) {
+ *   console.log('Map created!', result.state);
+ * } else {
+ *   console.error('Errors:', result.errors);
+ * }
+ * ```
+ */
+export function createMap(config: SimpleMapConfig): CreateMapResult {
+  // Step 1: Normalize forgiving inputs (fix common AI mistakes)
+  const normalized = normalizeInputs(config);
+
+  // Step 2: Validate the config
+  const validation = validateConfig(normalized);
+
+  if (!validation.valid) {
+    return {
+      success: false,
+      instance: null,
+      state: null,
+      errors: validation.errors,
+      warnings: validation.warnings
+    };
+  }
+
+  // Step 3: Apply smart defaults
+  const fullConfig = applyDefaults(normalized);
+
+  // Step 4: Create the map
+  try {
+    const instance = init(fullConfig);
+
+    return {
+      success: true,
+      instance,
+      state: instance.getState(),
+      errors: [],
+      warnings: validation.warnings
+    };
+  } catch (error) {
+    return {
+      success: false,
+      instance: null,
+      state: null,
+      errors: [{
+        path: '',
+        message: `Failed to create map: ${(error as Error).message}`,
+        suggestion: 'Check that mapboxToken is valid and container element exists'
+      }],
+      warnings: validation.warnings
+    };
+  }
+}
+
+/**
+ * Validate a map config without creating a map.
+ * Useful for AI agents to check configs before rendering.
+ *
+ * @example
+ * ```typescript
+ * const result = FusedMaps.validate(config);
+ * if (!result.valid) {
+ *   console.log('Errors:', result.errors);
+ *   // AI agent can use error messages to fix the config
+ * }
+ * ```
+ */
+export function validate(config: unknown): ValidationResult {
+  const normalized = normalizeInputs(config);
+  return validateConfig(normalized);
+}
+
+/**
+ * Format validation errors as a human-readable string.
+ */
+export { formatErrors };
+
+/**
+ * Get all available color palettes
+ */
+export function getPalettes() {
+  return {
+    all: getAllPalettes(),
+    byCategory: PALETTE_CATEGORIES,
+    sequential: getPalettesByCategory('sequential'),
+    diverging: getPalettesByCategory('diverging'),
+    qualitative: getPalettesByCategory('qualitative')
+  };
+}
+
+/**
+ * Get colors for a specific palette
+ */
+export { getPaletteColors, getPaletteInfo, suggestPalette };
+
+/**
+ * Get tool definitions for AI frameworks
+ */
+export const schema = {
+  /** OpenAI/Claude function calling format */
+  getToolDefinition,
+  /** Simplified tool definition for agents that struggle with complex schemas */
+  getSimpleToolDefinition,
+  /** MCP (Model Context Protocol) format */
+  getMcpToolDefinition
+};
+
+/**
+ * Canonical examples for AI training
+ */
+export { examples, getExample, listExamples };
+
+// ============================================================
+// Core API
+// ============================================================
 
 /**
  * Initialize a FusedMaps instance
@@ -637,7 +810,37 @@ function autoFitBounds(map: mapboxgl.Map, layers: LayerConfig[], store: LayerSto
 
 // Expose on window for UMD usage
 if (typeof window !== 'undefined') {
-  (window as any).FusedMaps = { init };
+  (window as any).FusedMaps = {
+    // Core API
+    init,
+    // AI Agent API
+    createMap,
+    validate,
+    formatErrors,
+    getPalettes,
+    getPaletteColors,
+    getPaletteInfo,
+    suggestPalette,
+    // Schema/tool definitions
+    schema,
+    // Examples
+    examples,
+    getExample,
+    listExamples
+  };
 }
 
-export default { init };
+export default {
+  init,
+  createMap,
+  validate,
+  formatErrors,
+  getPalettes,
+  getPaletteColors,
+  getPaletteInfo,
+  suggestPalette,
+  schema,
+  examples,
+  getExample,
+  listExamples
+};

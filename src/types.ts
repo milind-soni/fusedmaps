@@ -444,6 +444,107 @@ export interface LegendEntry {
 }
 
 // ============================================================
+// AI Agent Integration Types
+// ============================================================
+
+/**
+ * Simplified config format for AI agents.
+ * Uses flat structure with sensible defaults.
+ */
+export interface SimpleMapConfig {
+  /** Map center [longitude, latitude]. Omit to auto-fit to data bounds. */
+  center?: [number, number];
+  /** Zoom level 0-22. Default: 10 */
+  zoom?: number;
+  /** Map pitch (tilt) in degrees. Default: 0 */
+  pitch?: number;
+  /** Map bearing (rotation) in degrees. Default: 0 */
+  bearing?: number;
+  /** Base map style */
+  basemap?: 'dark' | 'light' | 'streets' | 'satellite' | 'none';
+  /** Data layers to display */
+  layers: Array<Partial<LayerConfig> & { layerType: LayerConfig['layerType'] }>;
+  /** Mapbox access token (uses default if not provided) */
+  mapboxToken?: string;
+  /** UI component settings */
+  ui?: {
+    legend?: boolean;
+    layerPanel?: boolean;
+    tooltip?: boolean;
+    controls?: boolean;
+    scale?: boolean;
+  };
+}
+
+/**
+ * Validation error with path and actionable suggestion
+ */
+export interface ValidationError {
+  /** JSON path to the error location */
+  path: string;
+  /** Human-readable error message */
+  message: string;
+  /** Suggestion for how to fix the error */
+  suggestion?: string;
+  /** The value that was received */
+  received?: unknown;
+  /** What was expected */
+  expected?: string;
+}
+
+/**
+ * Result from validate()
+ */
+export interface ValidationResult {
+  /** Whether the config is valid */
+  valid: boolean;
+  /** Validation errors (empty if valid) */
+  errors: ValidationError[];
+  /** Non-fatal warnings */
+  warnings: string[];
+}
+
+/**
+ * Result from createMap()
+ */
+export interface CreateMapResult {
+  /** Whether the map was created successfully */
+  success: boolean;
+  /** FusedMaps instance (null if failed) */
+  instance: FusedMapsInstance | null;
+  /** Current map state (null if failed) */
+  state: FusedMapsState | null;
+  /** Validation errors */
+  errors: ValidationError[];
+  /** Non-fatal warnings */
+  warnings: string[];
+}
+
+/**
+ * Palette information for AI agents
+ */
+export interface PaletteInfo {
+  /** Palette category */
+  category: 'sequential' | 'diverging' | 'qualitative';
+  /** Human-readable description */
+  description: string;
+  /** Recommended use cases */
+  goodFor: string;
+}
+
+/**
+ * Tool definition for AI frameworks (OpenAI, Claude, etc.)
+ */
+export interface ToolDefinition {
+  /** Tool name */
+  name: string;
+  /** Tool description */
+  description: string;
+  /** JSON Schema for parameters */
+  parameters: Record<string, unknown>;
+}
+
+// ============================================================
 // Global Type Declarations
 // ============================================================
 

@@ -327,11 +327,6 @@ export async function addPMTilesLayers(
       const effectiveLineWidth = isStroked ? baseLineWidth : 0;
       const effectiveFillOpacity = isFilled ? opacity : 0;
 
-      // Render toggles (default true). Helpful when PMTiles contains "helper" point layers.
-      const renderPoints = (layer as any).renderPoints !== false && (layer.vectorLayer as any)?.renderPoints !== false;
-      const renderLines = (layer as any).renderLines !== false && (layer.vectorLayer as any)?.renderLines !== false;
-      const renderPolygons = (layer as any).renderPolygons !== false && (layer.vectorLayer as any)?.renderPolygons !== false;
-      
       // Determine colors
       const fillColorExpr = buildPMTilesColorExpression(
         layer.fillColorConfig || vectorStyle.getFillColor,
@@ -354,72 +349,67 @@ export async function addPMTilesLayers(
         if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
         if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
 
-        if (renderPoints) {
-          // Circle layer - only render actual Point geometries (not polygon centroids)
-          const circleLayerId = `${layer.id}-${slSlug}-circles`;
-          if (!map.getLayer(circleLayerId)) {
-            map.addLayer({
-              id: circleLayerId,
-              type: 'circle',
-              source: sourceId,
-              'source-layer': sl,
-              filter: ['==', ['geometry-type'], 'Point'],
-              ...layerZoomProps,
-              paint: {
-                'circle-radius': [
-                  'interpolate', ['exponential', 2], ['zoom'],
-                  0, pointRadius * 0.5,
-                  10, pointRadius,
-                  15, pointRadius * 4,
-                  20, pointRadius * 20,
-                ],
-                'circle-color': fillColorExpr,
-                'circle-opacity': effectiveFillOpacity,
-                'circle-stroke-color': lineColorExpr,
-                'circle-stroke-width': effectiveLineWidth,
-              },
-              layout: { visibility: visible ? 'visible' : 'none' },
-            });
-          }
+        // Circle layer - only renders Point geometries
+        const circleLayerId = `${layer.id}-${slSlug}-circles`;
+        if (!map.getLayer(circleLayerId)) {
+          map.addLayer({
+            id: circleLayerId,
+            type: 'circle',
+            source: sourceId,
+            'source-layer': sl,
+            filter: ['==', ['geometry-type'], 'Point'],
+            ...layerZoomProps,
+            paint: {
+              'circle-radius': [
+                'interpolate', ['exponential', 2], ['zoom'],
+                0, pointRadius * 0.5,
+                10, pointRadius,
+                15, pointRadius * 4,
+                20, pointRadius * 20,
+              ],
+              'circle-color': fillColorExpr,
+              'circle-opacity': effectiveFillOpacity,
+              'circle-stroke-color': lineColorExpr,
+              'circle-stroke-width': effectiveLineWidth,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
         }
 
-        if (renderPolygons) {
-          // Fill layer
-          const fillLayerId = `${layer.id}-${slSlug}-fill`;
-          if (!map.getLayer(fillLayerId)) {
-            map.addLayer({
-              id: fillLayerId,
-              type: 'fill',
-              source: sourceId,
-              'source-layer': sl,
-              ...layerZoomProps,
-              paint: {
-                'fill-color': fillColorExpr,
-                'fill-opacity': effectiveFillOpacity,
-              },
-              layout: { visibility: visible ? 'visible' : 'none' },
-            });
-          }
+        // Fill layer - only renders Polygon geometries
+        const fillLayerId = `${layer.id}-${slSlug}-fill`;
+        if (!map.getLayer(fillLayerId)) {
+          map.addLayer({
+            id: fillLayerId,
+            type: 'fill',
+            source: sourceId,
+            'source-layer': sl,
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            ...layerZoomProps,
+            paint: {
+              'fill-color': fillColorExpr,
+              'fill-opacity': effectiveFillOpacity,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
         }
 
-        if (renderLines) {
-          // Line layer
-          const lineLayerId = `${layer.id}-${slSlug}-line`;
-          if (!map.getLayer(lineLayerId)) {
-            map.addLayer({
-              id: lineLayerId,
-              type: 'line',
-              source: sourceId,
-              'source-layer': sl,
-              ...layerZoomProps,
-              paint: {
-                'line-color': lineColorExpr,
-                'line-width': effectiveLineWidth,
-                'line-opacity': opacity,
-              },
-              layout: { visibility: visible ? 'visible' : 'none' },
-            });
-          }
+        // Line layer - renders LineString and Polygon outlines
+        const lineLayerId = `${layer.id}-${slSlug}-line`;
+        if (!map.getLayer(lineLayerId)) {
+          map.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            'source-layer': sl,
+            ...layerZoomProps,
+            paint: {
+              'line-color': lineColorExpr,
+              'line-width': effectiveLineWidth,
+              'line-opacity': opacity,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          });
         }
       }
       

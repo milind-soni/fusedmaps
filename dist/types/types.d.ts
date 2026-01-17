@@ -127,9 +127,6 @@ export interface PMTilesLayer extends BaseLayer {
     excludeSourceLayers?: string[];
     style?: LayerStyle;
     tile?: TileOptions;
-    renderPoints?: boolean;
-    renderLines?: boolean;
-    renderPolygons?: boolean;
 }
 export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
 export type HexLayerConfig = any;

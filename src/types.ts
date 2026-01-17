@@ -177,10 +177,6 @@ export interface PMTilesLayer extends BaseLayer {
   style?: LayerStyle;
   // Tile options
   tile?: TileOptions;
-  // Render toggles
-  renderPoints?: boolean;
-  renderLines?: boolean;
-  renderPolygons?: boolean;
 }
 
 export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;

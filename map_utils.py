@@ -82,8 +82,8 @@ VALID_TILE_PROPS = {
 # NOTE: Pin to a specific commit for reproducibility.
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
-# - main ref: 2d5a3ef (feat: geojson source options for simplification control)
-FUSEDMAPS_CDN_REF_DEFAULT = "2d5a3ef"
+# - 4891a00: fix geometry filter for PMTiles circle layer
+FUSEDMAPS_CDN_REF_DEFAULT = "4891a00"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 
@@ -1050,11 +1050,6 @@ def _process_pmtiles_layer(
         exclude_source_layers = [exclude_source_layers]
     exclude_source_layers = [str(x) for x in exclude_source_layers if str(x).strip()]
 
-    # Extract render toggles
-    render_points = config.get("renderPoints") or config.get("render_points")
-    render_lines = config.get("renderLines") or config.get("render_lines")
-    render_polygons = config.get("renderPolygons") or config.get("render_polygons")
-
     # Build tile options
     if minzoom is not None:
         tile_opts["minZoom"] = int(minzoom)
@@ -1083,12 +1078,6 @@ def _process_pmtiles_layer(
         result["tile"] = tile_opts
     if tooltip:
         result["tooltip"] = tooltip
-    if render_points is not None:
-        result["renderPoints"] = render_points
-    if render_lines is not None:
-        result["renderLines"] = render_lines
-    if render_polygons is not None:
-        result["renderPolygons"] = render_polygons
 
     return result
 

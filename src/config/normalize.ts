@@ -258,9 +258,6 @@ function normalizePMTilesLayer(layer: PMTilesLayer): any {
     pointRadiusMinPixels: style.pointRadius ?? 4,
     isFilled: style.filled ?? true,
     isStroked: style.stroked ?? true,
-    renderPoints: layer.renderPoints,
-    renderLines: layer.renderLines,
-    renderPolygons: layer.renderPolygons,
     colorAttribute: (style.fillColor as ContinuousColor)?.attr,
   };
 }

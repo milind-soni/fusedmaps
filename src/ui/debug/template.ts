@@ -28,7 +28,7 @@ export function getDebugShellHtml(): string {
           </div>
 
           <div class="debug-section" id="dbg-hex-section">
-            <div class="debug-section-title">Hex Layer</div>
+            <div class="debug-section-title">Style</div>
             <div class="debug-toggles">
               <label class="debug-checkbox"><input type="checkbox" id="dbg-filled" checked /> Filled</label>
               <label class="debug-checkbox"><input type="checkbox" id="dbg-stroked" checked /> Stroked</label>

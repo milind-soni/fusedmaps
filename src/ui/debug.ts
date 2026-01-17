@@ -548,7 +548,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     const hexCfg: any = isHex ? ((layer as any).hexLayer || {}) : {};
 
     // Toggle section visibility
-    try { if (hexSection) hexSection.style.display = isHex ? 'block' : 'none'; } catch (_) {}
+    try { if (hexSection) hexSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (fillColorSection) fillColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (lineColorSection) lineColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
     try { if (viewStateSection) viewStateSection.style.display = 'block'; } catch (_) {}
@@ -567,6 +567,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
     // Extrusion controls (hex only)
     try {
+      // Hide extruded checkbox for non-hex layers
+      const extrudedLabel = extrudedEl?.parentElement;
+      if (extrudedLabel) extrudedLabel.style.display = isHex ? '' : 'none';
       if (extrusionControls) extrusionControls.style.display = (isHex && extrudedEl.checked) ? 'block' : 'none';
       if (isHex && elevAttrEl) {
         const attrs = getAttrCandidates(layer as any);

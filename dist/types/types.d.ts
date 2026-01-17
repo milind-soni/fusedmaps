@@ -201,8 +201,11 @@ export interface UIConfig {
     basemapSwitcher?: boolean;
     theme?: 'dark' | 'light';
 }
-export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-export type WidgetSetting = WidgetPosition | false;
+export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
+export type WidgetSetting = WidgetPosition | false | {
+    position: WidgetPosition;
+    expanded?: boolean;
+};
 export interface WidgetsConfig {
     controls?: WidgetSetting;
     scale?: WidgetSetting;
@@ -211,6 +214,7 @@ export interface WidgetsConfig {
     legend?: WidgetSetting;
     geocoder?: WidgetSetting;
 }
+export declare function isLeftPosition(pos: WidgetPosition | string | false): boolean;
 export interface MessagingConfig {
     broadcast?: {
         enabled?: boolean;

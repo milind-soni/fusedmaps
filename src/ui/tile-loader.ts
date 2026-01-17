@@ -58,29 +58,40 @@ export function trackMapboxTileLoading(map: mapboxgl.Map, sourceIds: string[]): 
 
   const sourceSet = new Set(sourceIds);
   const loadingSources = new Set<string>();
+  let unknownSeq = 0;
 
   const onSourceDataLoading = (e: any) => {
     const sourceId = e?.sourceId;
     if (!sourceId || !sourceSet.has(sourceId)) return;
-    if (e?.tile && !loadingSources.has(`${sourceId}-${e.tile.tileID?.key}`)) {
-      const key = `${sourceId}-${e.tile.tileID?.key || Math.random()}`;
-      loadingSources.add(key);
-      setTileLoading(1);
-    }
+    if (!e?.tile) return;
+    const tileKey = e?.tile?.tileID?.key;
+    const key =
+      tileKey != null && tileKey !== ''
+        ? `${sourceId}-${tileKey}`
+        : `${sourceId}-unknown-${++unknownSeq}`;
+    if (loadingSources.has(key)) return;
+    loadingSources.add(key);
+    setTileLoading(1);
   };
 
   const onSourceData = (e: any) => {
     const sourceId = e?.sourceId;
     if (!sourceId || !sourceSet.has(sourceId)) return;
-    if (e?.tile) {
-      const key = `${sourceId}-${e.tile.tileID?.key || ''}`;
-      // Find and remove any matching key
-      for (const k of loadingSources) {
-        if (k.startsWith(`${sourceId}-`)) {
-          loadingSources.delete(k);
-          setTileLoading(-1);
-          break;
-        }
+    if (!e?.tile) return;
+    const tileKey = e?.tile?.tileID?.key;
+    if (tileKey != null && tileKey !== '') {
+      const key = `${sourceId}-${tileKey}`;
+      if (loadingSources.delete(key)) {
+        setTileLoading(-1);
+      }
+      return;
+    }
+    // Fallback: if we don't have a stable tile key, decrement one pending entry for this source.
+    for (const k of loadingSources) {
+      if (k.startsWith(`${sourceId}-unknown-`)) {
+        loadingSources.delete(k);
+        setTileLoading(-1);
+        break;
       }
     }
   };

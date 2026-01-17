@@ -1,6 +1,6 @@
 /**
  * Layer management - add, remove, toggle visibility
- * 
+ *
  * This module handles the actual Mapbox GL layer operations.
  * State is managed by LayerStore in state/layer-store.ts.
  */
@@ -13,6 +13,7 @@ import { createHexTileOverlay } from './hex-tiles';
 import { addPMTilesLayers, updatePMTilesVisibility, removePMTilesLayers, buildPMTilesColorExpression } from './pmtiles';
 import { buildColorExpr } from '../color/expressions';
 import { toRgba } from '../color/palettes';
+import { getFirstMapboxLayerId, getRemovableLayerIds } from '../utils';
 
 // Store computed GeoJSONs for legend/tooltip access (legacy, now synced to LayerStore)
 const layerGeoJSONs: Record<string, GeoJSON.FeatureCollection> = {};
@@ -39,55 +40,7 @@ export function clearLayerGeoJSON(layerId: string): void {
   delete layerGeoJSONs[layerId];
 }
 
-/**
- * Get the first Mapbox layer ID for a given layer config
- * Used for beforeId calculations in layer ordering
- */
-function getFirstMapboxLayerId(layer: LayerConfig): string | null {
-  switch (layer.layerType) {
-    case 'vector': {
-      const vec = layer as VectorLayerConfig;
-      // Check which sublayer would be added first (polygons > lines > points)
-      const geojson = vec.geojson;
-      if (geojson?.features?.length) {
-        for (const f of geojson.features) {
-          const t = f.geometry?.type;
-          if (t === 'Polygon' || t === 'MultiPolygon') {
-            return vec.isFilled !== false ? `${layer.id}-fill` : `${layer.id}-outline`;
-          }
-        }
-        for (const f of geojson.features) {
-          const t = f.geometry?.type;
-          if (t === 'LineString' || t === 'MultiLineString') {
-            return `${layer.id}-line`;
-          }
-        }
-        for (const f of geojson.features) {
-          const t = f.geometry?.type;
-          if (t === 'Point' || t === 'MultiPoint') {
-            return `${layer.id}-circle`;
-          }
-        }
-      }
-      return `${layer.id}-fill`;
-    }
-    case 'hex': {
-      const hex = layer as HexLayerConfig;
-      if (!hex.isTileLayer) {
-        return hex.hexLayer?.extruded ? `${layer.id}-extrusion` : `${layer.id}-fill`;
-      }
-      return null; // Tile layers don't have Mapbox layers
-    }
-    case 'mvt':
-      return `${layer.id}-fill`;
-    case 'raster':
-      return `${layer.id}-raster`;
-    case 'pmtiles':
-      return `${layer.id}-fill`; // PMTiles creates prefixed layers
-    default:
-      return null;
-  }
-}
+// Note: getFirstMapboxLayerId is now imported from ../utils
 
 /**
  * Add all layers to the map
@@ -256,21 +209,16 @@ export function removeSingleLayer(map: mapboxgl.Map, layer: LayerConfig): void {
     clearLayerGeoJSON(layer.id);
     return;
   }
-  
-  const layerIds = [
-    `${layer.id}-fill`,
-    `${layer.id}-extrusion`,
-    `${layer.id}-outline`,
-    `${layer.id}-circle`,
-    `${layer.id}-line`,
-    `${layer.id}-raster`,
-    `${layer.id}-circles`,
-  ];
-  
+
+  // Use centralized utility for layer IDs
+  const layerIds = getRemovableLayerIds(layer);
+
   layerIds.forEach(id => {
     try {
       if (map.getLayer(id)) map.removeLayer(id);
-    } catch (e) {}
+    } catch (e) {
+      // Layer doesn't exist, skip
+    }
   });
   
   try {
@@ -282,25 +230,23 @@ export function removeSingleLayer(map: mapboxgl.Map, layer: LayerConfig): void {
 }
 
 function setPaintSafe(map: mapboxgl.Map, layerId: string, prop: string, value: any) {
-  try {
-    if (map.getLayer(layerId)) map.setPaintProperty(layerId, prop as any, value as any);
-  } catch (_) {}
+  if (map.getLayer(layerId)) {
+    map.setPaintProperty(layerId, prop as any, value as any);
+  }
 }
 
 function setLayoutSafe(map: mapboxgl.Map, layerId: string, prop: string, value: any) {
-  try {
-    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, prop as any, value as any);
-  } catch (_) {}
+  if (map.getLayer(layerId)) {
+    map.setLayoutProperty(layerId, prop as any, value as any);
+  }
 }
 
 function setGeoJSONSourceData(map: mapboxgl.Map, sourceId: string, geojson: any): boolean {
-  try {
-    const src: any = map.getSource(sourceId) as any;
-    if (src && typeof src.setData === 'function') {
-      src.setData(geojson);
-      return true;
-    }
-  } catch (_) {}
+  const src: any = map.getSource(sourceId) as any;
+  if (src && typeof src.setData === 'function') {
+    src.setData(geojson);
+    return true;
+  }
   return false;
 }
 

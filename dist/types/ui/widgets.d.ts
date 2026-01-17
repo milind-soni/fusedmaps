@@ -2,7 +2,7 @@
  * Map widgets: scale, zoom/home, screenshot, basemap switcher, and Cmd+drag orbit.
  * Ported from map_utils.py for UI parity.
  */
-import type { ViewState } from '../types';
+import type { ViewState, WidgetPosition } from '../types';
 export interface WidgetsHandle {
     destroy: () => void;
     setHomeViewState?: (view: ViewState) => void;
@@ -14,7 +14,6 @@ export interface BasemapOption {
     thumbnail: string;
 }
 export declare const DEFAULT_BASEMAPS: BasemapOption[];
-type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 export interface WidgetsSetupConfig {
     screenshot?: boolean;
     basemapSwitcher?: boolean;
@@ -27,4 +26,3 @@ export interface WidgetsSetupConfig {
     };
 }
 export declare function setupWidgets(map: mapboxgl.Map, initialView: ViewState, configOrScreenshot?: boolean | WidgetsSetupConfig): WidgetsHandle;
-export {};

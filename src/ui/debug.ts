@@ -1035,7 +1035,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   readLayerToUI();
   updateFromMapStop();
   updateDebugTogglePosition(shell!, panel, toggle);
-  window.addEventListener('resize', () => updateDebugTogglePosition(shell!, panel, toggle));
+  const onWindowResize = () => updateDebugTogglePosition(shell!, panel, toggle);
+  window.addEventListener('resize', onWindowResize);
 
   return {
     destroy: () => {
@@ -1043,6 +1044,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       try { toggle.removeEventListener('click', onToggle); } catch (_) {}
       try { tabUiBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
       try { tabSqlBtn?.removeEventListener('click', onTabClick as any); } catch (_) {}
+      try { window.removeEventListener('resize', onWindowResize); } catch (_) {}
       // view state buttons removed
       try { resizeHandle.removeEventListener('pointerdown', onResizeDown as any); } catch (_) {}
       try {

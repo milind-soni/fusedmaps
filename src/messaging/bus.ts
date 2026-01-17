@@ -118,7 +118,7 @@ export function createBus(channel: string): {
  * Generate a unique component ID
  */
 export function generateComponentId(prefix: string = 'component'): string {
-  return `${prefix}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 

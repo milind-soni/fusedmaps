@@ -123,12 +123,13 @@ export function enableSync(
   });
   
   // Handle visibility change
-  document.addEventListener('visibilitychange', () => {
+  const onVisibilityChange = () => {
     if (document.hidden) {
       isSyncing = false;
       userInteracting = false;
     }
-  });
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
   
   // Return cleanup function
   return () => {
@@ -137,6 +138,7 @@ export function enableSync(
     map.off('rotatestart', startInteraction);
     map.off('pitchstart', startInteraction);
     map.off('moveend', finishInteraction);
+    try { document.removeEventListener('visibilitychange', onVisibilityChange); } catch (_) {}
     bus.destroy();
   };
 }

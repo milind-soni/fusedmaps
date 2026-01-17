@@ -3,6 +3,7 @@
  */
 
 import type { LayerConfig, HexLayerConfig, VectorLayerConfig } from '../types';
+import { getQueryableLayerIds } from '../utils';
 
 interface QueryableLayer {
   layerId: string;
@@ -27,43 +28,17 @@ export function setupTooltip(
     tt.id = 'tooltip';
     document.body.appendChild(tt);
   }
-  
-  // Build list of queryable layers
+
+  // Build list of queryable layers using centralized utility
   const allQueryableLayers: QueryableLayer[] = [];
-  
+
   layers.forEach(layer => {
     // Skip tile layers for Mapbox querying (handled by Deck.gl pick)
+    // PMTiles layers are discovered dynamically at hover time via prefix
     if ((layer as any).isTileLayer) return;
-    
-    const layerIds: string[] = [];
-    
-    if (layer.layerType === 'hex') {
-      const hexLayer = layer as HexLayerConfig;
-      const cfg = hexLayer.hexLayer || {};
-      if (cfg.extruded) {
-        layerIds.push(`${layer.id}-extrusion`);
-      } else {
-        layerIds.push(`${layer.id}-fill`);
-      }
-      layerIds.push(`${layer.id}-outline`);
-    } else if (layer.layerType === 'vector') {
-      layerIds.push(
-        `${layer.id}-fill`,
-        `${layer.id}-outline`,
-        `${layer.id}-circle`,
-        `${layer.id}-line`
-      );
-    } else if (layer.layerType === 'mvt') {
-      layerIds.push(
-        `${layer.id}-fill`,
-        `${layer.id}-line`,
-        `${layer.id}-extrusion`
-      );
-    } else if (layer.layerType === 'pmtiles') {
-      // PMTiles layers are generated dynamically (multiple Mapbox layers per source-layer),
-      // so we discover their ids at hover time via the `${layer.id}-` prefix.
-    }
-    
+    if (layer.layerType === 'pmtiles') return;
+
+    const layerIds = getQueryableLayerIds(layer);
     layerIds.forEach(layerId => {
       allQueryableLayers.push({ layerId, layerDef: layer });
     });

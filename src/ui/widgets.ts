@@ -3,7 +3,7 @@
  * Ported from map_utils.py for UI parity.
  */
 
-import type { ViewState } from '../types';
+import type { ViewState, WidgetPosition } from '../types';
 
 export interface WidgetsHandle {
   destroy: () => void;
@@ -61,21 +61,17 @@ function downloadScreenshot(map: mapboxgl.Map) {
     if (typeof canvas.toBlob === 'function') {
       canvas.toBlob(
         (blob) => {
-          try {
-            if (!blob) throw new Error('toBlob returned null');
-            const url = URL.createObjectURL(blob);
-            a.href = url;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('Screenshot failed:', e);
-            alert(
-              'Screenshot blocked (likely due to CORS/tainted canvas from raster tiles). Try using only CORS-enabled layers/tiles.'
-            );
+          if (!blob) {
+            console.error('Screenshot failed: toBlob returned null');
+            alert('Screenshot blocked (likely due to CORS/tainted canvas from raster tiles).');
+            return;
           }
+          const url = URL.createObjectURL(blob);
+          a.href = url;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
         'image/png'
       );
@@ -90,38 +86,35 @@ function downloadScreenshot(map: mapboxgl.Map) {
     a.remove();
   } catch (e) {
     // Likely CORS/tainted canvas due to raster tiles
-    // eslint-disable-next-line no-console
     console.error('Screenshot failed:', e);
-    alert(
-      'Screenshot blocked (likely due to CORS/tainted canvas from raster tiles). Try using only CORS-enabled layers/tiles.'
-    );
+    alert('Screenshot blocked (likely due to CORS/tainted canvas from raster tiles).');
   }
 }
 
-function addScaleControl(map: mapboxgl.Map, position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom-left') {
-  try {
-    map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'metric' }), position);
-  } catch (_) {}
+function addScaleControl(map: mapboxgl.Map, position: WidgetPosition = 'bottom-left') {
+  // top-center not supported by Mapbox, fallback to top-left
+  const mapboxPos = position === 'top-center' ? 'top-left' : position;
+  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'metric' }), mapboxPos);
 }
 
 function addZoomHomeControl(
   map: mapboxgl.Map,
   initialView: ViewState,
   screenshotEnabled: boolean,
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom-left'
+  position: WidgetPosition = 'bottom-left'
 ): { setHomeViewState: (view: ViewState) => void } {
+  // top-center not supported by Mapbox, fallback to top-left
+  const mapboxPos = position === 'top-center' ? 'top-left' : position;
   // Keep home target mutable so callers can update it after auto-fit.
   const homeView: ViewState = { ...initialView };
 
   const setHomeViewState = (v: ViewState) => {
-    try {
-      if (!v) return;
-      if (typeof v.longitude === 'number' && Number.isFinite(v.longitude)) homeView.longitude = v.longitude;
-      if (typeof v.latitude === 'number' && Number.isFinite(v.latitude)) homeView.latitude = v.latitude;
-      if (typeof v.zoom === 'number' && Number.isFinite(v.zoom)) homeView.zoom = v.zoom;
-      if (typeof v.pitch === 'number' && Number.isFinite(v.pitch)) homeView.pitch = v.pitch;
-      if (typeof v.bearing === 'number' && Number.isFinite(v.bearing)) homeView.bearing = v.bearing;
-    } catch (_) {}
+    if (!v) return;
+    if (typeof v.longitude === 'number' && Number.isFinite(v.longitude)) homeView.longitude = v.longitude;
+    if (typeof v.latitude === 'number' && Number.isFinite(v.latitude)) homeView.latitude = v.latitude;
+    if (typeof v.zoom === 'number' && Number.isFinite(v.zoom)) homeView.zoom = v.zoom;
+    if (typeof v.pitch === 'number' && Number.isFinite(v.pitch)) homeView.pitch = v.pitch;
+    if (typeof v.bearing === 'number' && Number.isFinite(v.bearing)) homeView.bearing = v.bearing;
   };
 
   class ZoomHomeControl {
@@ -148,9 +141,7 @@ function addZoomHomeControl(
         b.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          try {
-            onClick();
-          } catch (_) {}
+          onClick();
         });
         return b;
       };
@@ -167,9 +158,7 @@ function addZoomHomeControl(
         b.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          try {
-            onClick();
-          } catch (_) {}
+          onClick();
         });
         return b;
       };
@@ -206,18 +195,13 @@ function addZoomHomeControl(
     }
 
     onRemove() {
-      try {
-        this._container?.parentNode?.removeChild(this._container);
-      } catch (_) {}
+      this._container?.parentNode?.removeChild(this._container);
       this._map = undefined;
       this._container = undefined;
     }
   }
 
-  try {
-    map.addControl(new ZoomHomeControl() as any, position);
-  } catch (_) {}
-
+  map.addControl(new ZoomHomeControl() as any, mapboxPos);
   return { setHomeViewState };
 }
 
@@ -240,12 +224,8 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
   const stop = () => {
     if (!active) return;
     active = false;
-    try {
-      map.dragPan.enable();
-    } catch (_) {}
-    try {
-      canvas.style.cursor = '';
-    } catch (_) {}
+    map.dragPan.enable();
+    canvas.style.cursor = '';
     window.removeEventListener('pointermove', onMove as any, { passive: false } as any);
     window.removeEventListener('pointerup', onUp as any, { passive: false } as any);
     window.removeEventListener('pointercancel', onUp as any, { passive: false } as any);
@@ -263,9 +243,7 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
 
   const onUp = (e: PointerEvent) => {
     stop();
-    try {
-      e.preventDefault();
-    } catch (_) {}
+    e.preventDefault();
   };
 
   const onDown = (e: PointerEvent) => {
@@ -284,12 +262,8 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
     startY = e.clientY;
     startBearing = map.getBearing();
     startPitch = map.getPitch();
-    try {
-      map.dragPan.disable();
-    } catch (_) {}
-    try {
-      canvas.style.cursor = 'grabbing';
-    } catch (_) {}
+    map.dragPan.disable();
+    canvas.style.cursor = 'grabbing';
 
     window.addEventListener('pointermove', onMove as any, { passive: false });
     window.addEventListener('pointerup', onUp as any, { passive: false });
@@ -301,12 +275,8 @@ function enableCmdDragOrbit(map: mapboxgl.Map): () => void {
   canvas.addEventListener('pointerdown', onDown as any, { passive: false, capture: true });
 
   return () => {
-    try {
-      stop();
-    } catch (_) {}
-    try {
-      canvas.removeEventListener('pointerdown', onDown as any, { capture: true } as any);
-    } catch (_) {}
+    stop();
+    canvas.removeEventListener('pointerdown', onDown as any, { capture: true } as any);
   };
 }
 
@@ -321,7 +291,7 @@ interface BasemapSwitcherOptions {
   basemaps?: BasemapOption[];
   currentStyle: string;
   onStyleChange?: (basemap: BasemapOption) => void;
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  position?: WidgetPosition;
 }
 
 function addBasemapSwitcher(
@@ -380,39 +350,31 @@ function addBasemapSwitcher(
 
       // Update active states
       buttons.forEach((b, id) => {
-        try { b.classList.toggle('is-active', id === basemap.id); } catch (_) {}
+        b.classList.toggle('is-active', id === basemap.id);
       });
 
       activeId = basemap.id;
 
       // Collapse panel
       isExpanded = false;
-      try { wrapper.classList.remove('is-open'); } catch (_) {}
+      wrapper.classList.remove('is-open');
 
       // Switch map style
-      try {
-        (map as any).setStyle(basemap.style);
-      } catch (err) {
-        console.error('[BasemapSwitcher] Failed to set style:', err);
-      }
+      (map as any).setStyle(basemap.style);
 
       // Callback
-      if (options.onStyleChange) {
-        try {
-          options.onStyleChange(basemap);
-        } catch (_) {}
-      }
+      options.onStyleChange?.(basemap);
     });
 
     btn.addEventListener('mouseenter', () => {
       if (basemap.id !== activeId) {
-        try { btn.classList.add('is-hover'); } catch (_) {}
+        btn.classList.add('is-hover');
       }
     });
 
     btn.addEventListener('mouseleave', () => {
       if (basemap.id !== activeId) {
-        try { btn.classList.remove('is-hover'); } catch (_) {}
+        btn.classList.remove('is-hover');
       }
     });
 
@@ -422,12 +384,12 @@ function addBasemapSwitcher(
 
   const close = () => {
     isExpanded = false;
-    try { wrapper.classList.remove('is-open'); } catch (_) {}
+    wrapper.classList.remove('is-open');
   };
 
   const open = () => {
     isExpanded = true;
-    try { wrapper.classList.add('is-open'); } catch (_) {}
+    wrapper.classList.add('is-open');
   };
 
   // Toggle on trigger click
@@ -459,28 +421,24 @@ function addBasemapSwitcher(
   wrapper.appendChild(trigger);
   wrapper.appendChild(panel);
 
-  try {
-    // Insert at beginning (column-reverse means first child appears at bottom)
-    const pos = options.position || 'bottom-left';
-    const ctrlContainer = (map as any).getContainer().querySelector(`.mapboxgl-ctrl-${pos}`);
-    if (ctrlContainer) {
-      ctrlContainer.insertBefore(wrapper, ctrlContainer.firstChild);
-    }
-  } catch (_) {}
+  // Insert at beginning (column-reverse means first child appears at bottom)
+  const pos = options.position || 'bottom-left';
+  const ctrlContainer = (map as any).getContainer().querySelector(`.mapboxgl-ctrl-${pos}`);
+  if (ctrlContainer) {
+    ctrlContainer.insertBefore(wrapper, ctrlContainer.firstChild);
+  }
 
   return {
     destroy: () => {
-      try {
-        document.removeEventListener('click', closeOnOutsideClick);
-        document.removeEventListener('keydown', closeOnEscape);
-        wrapper.remove();
-      } catch (_) {}
+      document.removeEventListener('click', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+      wrapper.remove();
     },
     setActive: (id: string) => {
       const btn = buttons.get(id);
       if (btn) {
         buttons.forEach((b, bid) => {
-          try { b.classList.toggle('is-active', bid === id); } catch (_) {}
+          b.classList.toggle('is-active', bid === id);
         });
         activeId = id;
       }
@@ -491,8 +449,6 @@ function addBasemapSwitcher(
 // ============================================================
 // Setup All Widgets
 // ============================================================
-
-type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 export interface WidgetsSetupConfig {
   screenshot?: boolean;
@@ -547,15 +503,9 @@ export function setupWidgets(
 
   return {
     destroy: () => {
-      try {
-        cleanupOrbit();
-      } catch (_) {}
-      try {
-        basemapSwitcherHandle?.destroy();
-      } catch (_) {}
+      cleanupOrbit();
+      basemapSwitcherHandle?.destroy();
     },
     setHomeViewState: zh?.setHomeViewState
   };
 }
-
-

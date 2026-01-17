@@ -4,10 +4,9 @@
  *
  * Now integrates with LayerStore for centralized state management.
  */
-import type { LayerConfig } from '../types';
+import type { LayerConfig, WidgetPosition } from '../types';
 import type { LayerStore } from '../state';
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
-type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /**
  * Setup the layer panel
  */

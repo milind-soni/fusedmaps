@@ -1,8 +1,9 @@
 /**
  * Location search widget using Mapbox Geocoding API
  */
+import type { WidgetPosition } from '../types';
 export interface GeocoderOptions {
-    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
+    position?: WidgetPosition;
     placeholder?: string;
     mapboxToken: string;
 }

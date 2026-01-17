@@ -64,10 +64,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   store.init(normalizedLayers);
 
   // Theme (match map_utils.py: <html data-theme="dark|light">)
-  try {
-    const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
-  } catch (_) {}
+  const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
 
   // Create map
   const map = initMap({
@@ -152,8 +150,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   // Helper to refresh UI
   const refreshUI = () => {
-    try { updateLayerPanel(store.getAllConfigs(), getVisibilityState()); } catch (_) {}
-    try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData()); } catch (_) {}
+    updateLayerPanel(store.getAllConfigs(), getVisibilityState());
+    updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
   };
 
   // Subscribe to store changes for UI updates
@@ -223,9 +221,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     legendUpdateHandler = () => {
       updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
     };
-    try {
-      window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
-    } catch (_) {}
+    window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
 
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
@@ -261,50 +257,40 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     if (!config.hasCustomView) {
       autoFitBounds(map, store.getAllConfigs(), store);
       // Update home (⌂) target to the auto-fit result (esp. raster-only maps).
-      try {
-        const handler = () => {
-          try {
-            const vs = getViewState(map);
-            widgets?.setHomeViewState?.(vs);
-          } catch (_) {}
-          try { map.off('moveend', handler as any); } catch (_) {}
-        };
-        map.on('moveend', handler as any);
-      } catch (_) {}
+      const handler = () => {
+        const vs = getViewState(map);
+        widgets?.setHomeViewState?.(vs);
+        map.off('moveend', handler as any);
+      };
+      map.on('moveend', handler as any);
     }
 
     // Handle basemap style changes - re-add all layers after style switch
     // Note: This handler is set up AFTER initial load, so every style.load is a basemap switch
     map.on('style.load', () => {
       // Re-add all layers after basemap change
-      try {
-        const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
-        overlayRef.current = result.deckOverlay;
+      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
+      overlayRef.current = result.deckOverlay;
 
-        // Sync GeoJSONs from layer system to store
-        const geoJSONs = getLayerGeoJSONs();
-        Object.entries(geoJSONs).forEach(([id, geojson]) => {
-          store.setGeoJSON(id, geojson);
-        });
+      // Sync GeoJSONs from layer system to store
+      const geoJSONs = getLayerGeoJSONs();
+      Object.entries(geoJSONs).forEach(([id, geojson]) => {
+        store.setGeoJSON(id, geojson);
+      });
 
-        // Re-trigger DuckDB SQL layers (they load async and need sources re-created)
-        const layerConfigs = store.getAllConfigs();
-        layerConfigs.forEach((layer: any) => {
-          // Check if it's a DuckDB SQL layer (hex with parquetUrl, not a tile layer)
-          if (layer.layerType === 'hex' && !layer.isTileLayer && (layer.parquetUrl || layer.parquetData)) {
-            try {
-              window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', {
-                detail: { layerId: layer.id, sql: layer.sql || 'SELECT * FROM data' }
-              }));
-            } catch (_) {}
-          }
-        });
+      // Re-trigger DuckDB SQL layers (they load async and need sources re-created)
+      const layerConfigs = store.getAllConfigs();
+      layerConfigs.forEach((layer: any) => {
+        // Check if it's a DuckDB SQL layer (hex with parquetUrl, not a tile layer)
+        if (layer.layerType === 'hex' && !layer.isTileLayer && (layer.parquetUrl || layer.parquetData)) {
+          window.dispatchEvent(new CustomEvent('fusedmaps:sql:update', {
+            detail: { layerId: layer.id, sql: layer.sql || 'SELECT * FROM data' }
+          }));
+        }
+      });
 
-        // Refresh UI
-        refreshUI();
-      } catch (e) {
-        console.warn('[style.load] Error re-adding layers:', e);
-      }
+      // Refresh UI
+      refreshUI();
     });
   });
   
@@ -375,12 +361,10 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
           const vs = (action as any).viewState || {};
           const duration = Number.isFinite((action as any).options?.duration) ? (action as any).options.duration : null;
           if (duration && duration > 0) {
-            try {
-              map.easeTo({ ...vs, duration });
-              break;
-            } catch (_) {}
+            map.easeTo({ ...vs, duration });
+          } else {
+            applyViewState(map, vs);
           }
-          applyViewState(map, vs);
           break;
         }
         case 'fitBounds': {
@@ -388,13 +372,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
           if (Array.isArray(b) && b.length === 4) {
             const [west, south, east, north] = b;
             const opts = (action as any).options || {};
-            try {
-              map.fitBounds([[west, south], [east, north]] as any, {
-                padding: Number.isFinite(opts.padding) ? opts.padding : 50,
-                maxZoom: Number.isFinite(opts.maxZoom) ? opts.maxZoom : 15,
-                duration: Number.isFinite(opts.duration) ? opts.duration : 500
-              } as any);
-            } catch (_) {}
+            map.fitBounds([[west, south], [east, north]] as any, {
+              padding: Number.isFinite(opts.padding) ? opts.padding : 50,
+              maxZoom: Number.isFinite(opts.maxZoom) ? opts.maxZoom : 15,
+              duration: Number.isFinite(opts.duration) ? opts.duration : 500
+            } as any);
           }
           break;
         }
@@ -405,27 +387,27 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         case 'updateLayer': {
           const layerId = (action as any).layerId;
           const changes = (action as any).changes || {};
-          try { (instance as any).updateLayer(layerId, changes); } catch (_) {}
+          (instance as any).updateLayer(layerId, changes);
           break;
         }
         case 'addLayer': {
-          try { (instance as any).addLayer((action as any).layer, (action as any).options); } catch (_) {}
+          (instance as any).addLayer((action as any).layer, (action as any).options);
           break;
         }
         case 'removeLayer': {
-          try { (instance as any).removeLayer((action as any).layerId); } catch (_) {}
+          (instance as any).removeLayer((action as any).layerId);
           break;
         }
         case 'moveLayerUp': {
-          try { (instance as any).moveLayerUp((action as any).layerId); } catch (_) {}
+          (instance as any).moveLayerUp((action as any).layerId);
           break;
         }
         case 'moveLayerDown': {
-          try { (instance as any).moveLayerDown((action as any).layerId); } catch (_) {}
+          (instance as any).moveLayerDown((action as any).layerId);
           break;
         }
         case 'updateLegend': {
-          try { updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData()); } catch (_) {}
+          updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
           break;
         }
         default:

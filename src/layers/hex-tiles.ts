@@ -12,6 +12,7 @@
 import type { HexLayerConfig, LayerConfig, TileLayerConfig } from '../types';
 import { toH3 } from './hex';
 import { getPaletteColors } from '../color/palettes';
+import { setTileLoading } from '../ui/tile-loader';
 
 type DeckGlobal = any;
 
@@ -80,37 +81,6 @@ function hashString(s: string): string {
 
 function getDeck(): DeckGlobal | null {
   return (window as any).deck || null;
-}
-
-function ensureTileLoader(): { setLoading: (delta: number) => void } {
-  let el = document.getElementById('tile-loader');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'tile-loader';
-    el.innerHTML = `<div class="loader-spinner"></div><span id="loader-text">Loading tiles...</span>`;
-    document.body.appendChild(el);
-  }
-
-  const textEl = document.getElementById('loader-text');
-  let hideTimeout: any = null;
-  let tilesCurrentlyLoading = 0;
-
-  const setLoading = (delta: number) => {
-    tilesCurrentlyLoading = Math.max(0, tilesCurrentlyLoading + delta);
-    if (!el) return;
-    if (tilesCurrentlyLoading > 0) {
-      if (hideTimeout) clearTimeout(hideTimeout);
-      el.classList.add('active');
-      if (textEl) {
-        textEl.textContent =
-          tilesCurrentlyLoading === 1 ? 'Loading tile...' : `Loading ${tilesCurrentlyLoading} tiles...`;
-      }
-    } else {
-      hideTimeout = setTimeout(() => el?.classList.remove('active'), 300);
-    }
-  };
-
-  return { setLoading };
 }
 
 function normalizeTileData(raw: any): any[] {
@@ -871,11 +841,13 @@ export function createHexTileOverlay(
   if (!deck?.MapboxOverlay || !deck?.TileLayer) return null;
 
   const runtime = createTileRuntime();
-  const loader = ensureTileLoader();
+  const onLoadingDelta = (delta: number) => {
+    try { setTileLoading(delta); } catch (_) {}
+  };
 
   // Use a mutable ref so rebuild() can update visibility without stale closures
   const visibilityRef = { current: visibility };
-  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, loader.setLoading, beforeIds);
+  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, onLoadingDelta, beforeIds);
 
   // Store last hovered info for tooltip access
   const hoverInfoRef = { current: null as any };

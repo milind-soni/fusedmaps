@@ -4,6 +4,7 @@
 
 import type { LayerConfig, HexLayerConfig } from '../types';
 import { toH3 } from '../layers/hex';
+import { getQueryableLayerIds } from '../utils';
 
 const HIGHLIGHT_FILL = 'rgba(255,255,0,0.3)';
 const HIGHLIGHT_LINE = 'rgba(255,255,0,1)';
@@ -36,14 +37,14 @@ export function setupHighlight(
   map.on('click', (e: any) => {
     const queryLayers = getQueryableLayers(map, layers);
     if (!queryLayers.length) return;
-    
+
     let features: any[] = [];
     try {
       features = map.queryRenderedFeatures(e.point, { layers: queryLayers }) || [];
     } catch (err) {
       // Ignore errors
     }
-    
+
     if (features.length > 0) {
       highlightFeature(map, features[0]);
     } else if (deckOverlay) {
@@ -64,38 +65,31 @@ export function setupHighlight(
 }
 
 /**
- * Get queryable layer IDs for click
+ * Get queryable layer IDs for click using centralized utility
  */
 function getQueryableLayers(map: mapboxgl.Map, layers: LayerConfig[]): string[] {
   const result: string[] = [];
-  
+
   layers.forEach(layer => {
-    if ((layer as any).isTileLayer) return;
-    
-    const layerType = layer.layerType;
-    let ids: string[] = [];
-    
-    if (layerType === 'vector') {
-      ids = [`${layer.id}-fill`, `${layer.id}-circle`, `${layer.id}-line`];
-    } else if (layerType === 'hex') {
-      const hexLayer = layer as HexLayerConfig;
-      ids = [hexLayer.hexLayer?.extruded ? `${layer.id}-extrusion` : `${layer.id}-fill`];
-    }
-    
+    const ids = getQueryableLayerIds(layer);
     ids.forEach(id => {
       try {
         if (map.getLayer(id)) result.push(id);
-      } catch (e) {}
+      } catch (e) {
+        // Layer doesn't exist, skip
+      }
     });
   });
-  
-  // Also check for legacy layer IDs
+
+  // Also check for legacy layer IDs (backwards compatibility)
   ['gdf-fill', 'gdf-circle', 'hex-fill'].forEach(id => {
     try {
       if (map.getLayer(id)) result.push(id);
-    } catch (e) {}
+    } catch (e) {
+      // Layer doesn't exist, skip
+    }
   });
-  
+
   return result;
 }
 

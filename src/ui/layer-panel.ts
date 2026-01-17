@@ -5,7 +5,8 @@
  * Now integrates with LayerStore for centralized state management.
  */
 
-import type { LayerConfig, HexLayerConfig, VectorLayerConfig, PMTilesLayerConfig } from '../types';
+import type { LayerConfig, HexLayerConfig, VectorLayerConfig, PMTilesLayerConfig, WidgetPosition } from '../types';
+import { isLeftPosition } from '../types';
 import { getPaletteColors, toRgba } from '../color/palettes';
 import type { LayerStore } from '../state';
 import { getWidgetContainer } from './widget-container';
@@ -21,34 +22,28 @@ let activeVisibilityState: Record<string, boolean> = {};
 let panelEl: HTMLElement | null = null;
 
 function getCurrentVisible(layerId: string): boolean {
-  try {
-    if (activeStore) return activeStore.get(layerId)?.visible !== false;
-    return activeVisibilityState[layerId] !== false;
-  } catch (_) {
-    return true;
-  }
+  if (activeStore) return activeStore.get(layerId)?.visible !== false;
+  return activeVisibilityState[layerId] !== false;
 }
 
 function handlePanelClick(e: MouseEvent): void {
-  try {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
 
-    const item = target.closest?.('.layer-item') as HTMLElement | null;
-    if (!item) return;
-    const layerId = item.getAttribute('data-layer-id') || '';
-    if (!layerId) return;
+  const item = target.closest?.('.layer-item') as HTMLElement | null;
+  if (!item) return;
+  const layerId = item.getAttribute('data-layer-id') || '';
+  if (!layerId) return;
 
-    const isEye = !!target.closest?.('.layer-eye');
+  const isEye = !!target.closest?.('.layer-eye');
 
-    // Clicking on the item body toggles; clicking on the eye also toggles.
-    if (isEye || target.closest?.('.layer-item')) {
-      const current = getCurrentVisible(layerId);
-      visibilityCallback?.(layerId, !current);
-      e.preventDefault();
-      e.stopPropagation(); // Prevent dropdown from closing
-    }
-  } catch (_) {}
+  // Clicking on the item body toggles; clicking on the eye also toggles.
+  if (isEye || target.closest?.('.layer-item')) {
+    const current = getCurrentVisible(layerId);
+    visibilityCallback?.(layerId, !current);
+    e.preventDefault();
+    e.stopPropagation(); // Prevent dropdown from closing
+  }
 }
 
 // Eye icon SVGs
@@ -56,8 +51,6 @@ const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="curr
 const EYE_CLOSED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>';
 const LAYERS_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
-
-type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 /**
  * Setup the layer panel
@@ -78,12 +71,17 @@ export function setupLayerPanel(
   // Get widget container for proper stacking
   const widgetContainer = getWidgetContainer(position);
 
+  // Determine if position is on left side for layout adjustments
+  const isLeft = isLeftPosition(position);
+
   // Create panel container if it doesn't exist
   let panel = document.getElementById('layer-panel');
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'layer-panel';
-    panel.className = expanded ? 'fm-dropdown-widget' : 'fm-dropdown-widget collapsed'; // Start expanded or collapsed based on config
+    // Add is-left class for left-side positioning (reverses layer item layout)
+    const positionClass = isLeft ? ' is-left' : '';
+    panel.className = expanded ? `fm-dropdown-widget${positionClass}` : `fm-dropdown-widget collapsed${positionClass}`;
     panel.innerHTML = `
       <button id="layer-panel-toggle" class="fm-dropdown-toggle" title="Layers">
         ${LAYERS_ICON_SVG}
@@ -132,12 +130,10 @@ export function setupLayerPanel(
   
   // One delegated click handler for the whole panel (no window globals, no inline onclick)
   if (!clickHandlerInstalled) {
-    try {
-      panel.addEventListener('click', handlePanelClick as any);
-      clickHandlerInstalled = true;
-    } catch (_) {}
+    panel.addEventListener('click', handlePanelClick as any);
+    clickHandlerInstalled = true;
   }
-  
+
   // Initial render
   if (_store) renderPanel(_store);
   else updateLayerPanel(layers, visibilityState);
@@ -154,11 +150,9 @@ export function setupLayerPanel(
   // Keep the "gutter" gradient strips in sync when layer styles change
   if (!installedListeners) {
     installedListeners = true;
-    try {
-      window.addEventListener('fusedmaps:legend:update', () => {
-        try { if (_store) renderPanel(_store); } catch (_) {}
-      });
-    } catch (_) {}
+    window.addEventListener('fusedmaps:legend:update', () => {
+      if (_store) renderPanel(_store);
+    });
   }
 
   return {
@@ -168,9 +162,7 @@ export function setupLayerPanel(
         unsubscribeStore = null;
       }
       // Remove click handler if this is the last/only panel instance
-      try {
-        panelEl?.removeEventListener('click', handlePanelClick as any);
-      } catch (_) {}
+      panelEl?.removeEventListener('click', handlePanelClick as any);
       clickHandlerInstalled = false;
       panelEl = null;
       activeStore = null;

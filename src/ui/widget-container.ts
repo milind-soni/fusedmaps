@@ -2,7 +2,7 @@
  * Widget container management for proper stacking of UI widgets
  */
 
-type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
+import type { WidgetPosition } from '../types';
 
 const containerIds: Record<WidgetPosition, string> = {
   'top-left': 'fm-widgets-top-left',

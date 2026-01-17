@@ -274,9 +274,14 @@ export interface UIConfig {
   theme?: 'dark' | 'light';
 }
 
-// Widget positioning: string = position, false = disabled
-export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-export type WidgetSetting = WidgetPosition | false;
+/// Widget positioning
+export type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center';
+
+// Widget can be: position string, false (disabled), or full config object
+export type WidgetSetting =
+  | WidgetPosition
+  | false
+  | { position: WidgetPosition; expanded?: boolean };
 
 export interface WidgetsConfig {
   controls?: WidgetSetting;  // zoom/home/screenshot
@@ -285,6 +290,11 @@ export interface WidgetsConfig {
   layers?: WidgetSetting;    // layer visibility panel
   legend?: WidgetSetting;    // color legend
   geocoder?: WidgetSetting;  // location search bar
+}
+
+// Helper to check if position is on left side
+export function isLeftPosition(pos: WidgetPosition | string | false): boolean {
+  return pos === 'top-left' || pos === 'bottom-left';
 }
 
 // ============================================================

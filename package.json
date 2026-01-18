@@ -7,8 +7,18 @@
   "module": "dist/fusedmaps.esm.js",
   "types": "dist/types/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "fusedmaps.schema.json"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/fusedmaps.esm.js",
+      "require": "./dist/fusedmaps.umd.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./schema": "./fusedmaps.schema.json",
+    "./schema.json": "./fusedmaps.schema.json"
+  },
   "scripts": {
     "build": "rollup -c",
     "build:watch": "rollup -c -w",

@@ -86,13 +86,15 @@ VALID_TILE_PROPS = {
 FUSEDMAPS_CDN_REF_DEFAULT = "f1dae78"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
+FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"
 
-def _fusedmaps_cdn_urls(ref: typing.Optional[str] = None) -> tuple[str, str]:
-    """Return (js_url, css_url) for a given fusedmaps git ref (commit/tag/branch)."""
+def _fusedmaps_cdn_urls(ref: typing.Optional[str] = None) -> tuple[str, str, str]:
+    """Return (js_url, css_url, schema_url) for a given fusedmaps git ref (commit/tag/branch)."""
     ref = (ref or FUSEDMAPS_CDN_REF_DEFAULT).strip()
     js_url = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{ref}/dist/fusedmaps.umd.js"
     css_url = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{ref}/dist/fusedmaps.css"
-    return js_url, css_url
+    schema_url = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{ref}/fusedmaps.schema.json"
+    return js_url, css_url, schema_url
 
 # ============================================================
 # Minimal HTML Template
@@ -561,7 +563,7 @@ def deckgl_layers(
 """
 
     # Generate HTML
-    js_url, css_url = _fusedmaps_cdn_urls(fusedmaps_ref)
+    js_url, css_url, _ = _fusedmaps_cdn_urls(fusedmaps_ref)
 
     html = MINIMAL_TEMPLATE.format(
         css_url=css_url,

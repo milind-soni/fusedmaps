@@ -1,0 +1,646 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fused.io/schemas/fusedmaps.json",
+  "title": "FusedMaps Configuration",
+  "description": "Configuration schema for FusedMaps - embeddable map visualization library",
+  "type": "object",
+  "required": ["mapboxToken", "styleUrl", "initialViewState", "layers"],
+  "properties": {
+    "containerId": {
+      "type": "string",
+      "description": "DOM element ID to mount the map into. Defaults to 'map'."
+    },
+    "mapboxToken": {
+      "type": "string",
+      "description": "Mapbox access token for map tiles and geocoding"
+    },
+    "styleUrl": {
+      "type": "string",
+      "description": "Mapbox style URL (e.g., 'mapbox://styles/mapbox/dark-v11')"
+    },
+    "initialViewState": {
+      "$ref": "#/$defs/ViewState",
+      "description": "Initial camera position for the map"
+    },
+    "layers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Layer" },
+      "description": "Array of layer configurations to render on the map"
+    },
+    "hasCustomView": {
+      "type": "boolean",
+      "description": "If true, preserves user's initial view state exactly"
+    },
+    "ui": {
+      "$ref": "#/$defs/UIConfig",
+      "description": "Legacy UI configuration (use 'widgets' instead)"
+    },
+    "widgets": {
+      "$ref": "#/$defs/WidgetsConfig",
+      "description": "Widget visibility and positioning configuration"
+    },
+    "messaging": {
+      "$ref": "#/$defs/MessagingConfig",
+      "description": "Inter-frame messaging configuration for Fused integration"
+    },
+    "highlightOnClick": {
+      "type": "boolean",
+      "description": "Enable click highlighting on features"
+    },
+    "sidebar": {
+      "type": "string",
+      "enum": ["show", "hide"],
+      "description": "Sidebar visibility control"
+    }
+  },
+  "$defs": {
+    "ViewState": {
+      "type": "object",
+      "required": ["longitude", "latitude", "zoom"],
+      "properties": {
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Center longitude"
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Center latitude"
+        },
+        "zoom": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24,
+          "description": "Zoom level (0-24)"
+        },
+        "pitch": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 85,
+          "description": "Camera tilt in degrees (0 = looking straight down)"
+        },
+        "bearing": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Camera rotation in degrees (0 = north up)"
+        }
+      }
+    },
+    "Layer": {
+      "oneOf": [
+        { "$ref": "#/$defs/HexLayer" },
+        { "$ref": "#/$defs/VectorLayer" },
+        { "$ref": "#/$defs/MVTLayer" },
+        { "$ref": "#/$defs/RasterLayer" },
+        { "$ref": "#/$defs/PMTilesLayer" }
+      ]
+    },
+    "BaseLayer": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique layer identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name shown in layer panel and legend"
+        },
+        "visible": {
+          "type": "boolean",
+          "default": true,
+          "description": "Initial visibility state"
+        },
+        "tooltip": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Property names to show in tooltip on hover"
+        },
+        "dataRef": {
+          "type": "string",
+          "description": "Reference to external data source"
+        }
+      }
+    },
+    "HexLayer": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseLayer" },
+        {
+          "type": "object",
+          "required": ["layerType"],
+          "properties": {
+            "layerType": {
+              "const": "hex",
+              "description": "H3 hexagonal layer type"
+            },
+            "data": {
+              "type": "array",
+              "items": { "type": "object" },
+              "description": "Array of objects with H3 index in 'hex' property"
+            },
+            "tileUrl": {
+              "type": "string",
+              "description": "URL template for H3 tile data (with {z}/{x}/{y})"
+            },
+            "parquetUrl": {
+              "type": "string",
+              "description": "URL to Parquet file containing H3 data"
+            },
+            "parquetData": {
+              "type": "string",
+              "description": "Base64-encoded Parquet data"
+            },
+            "sql": {
+              "type": "string",
+              "description": "DuckDB SQL query to filter/transform parquet data"
+            },
+            "style": {
+              "$ref": "#/$defs/LayerStyle"
+            },
+            "tile": {
+              "$ref": "#/$defs/TileOptions"
+            },
+            "isTileLayer": {
+              "type": "boolean",
+              "description": "Internal flag for tile-based data"
+            }
+          }
+        }
+      ]
+    },
+    "VectorLayer": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseLayer" },
+        {
+          "type": "object",
+          "required": ["layerType"],
+          "properties": {
+            "layerType": {
+              "const": "vector",
+              "description": "GeoJSON vector layer type"
+            },
+            "geojson": {
+              "$ref": "#/$defs/GeoJSON",
+              "description": "GeoJSON FeatureCollection"
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "tolerance": {
+                  "type": "number",
+                  "description": "Simplification tolerance (0 = no simplification)"
+                },
+                "buffer": {
+                  "type": "number",
+                  "description": "Tile buffer in pixels"
+                },
+                "maxzoom": {
+                  "type": "number",
+                  "description": "Max zoom for tile generation"
+                }
+              },
+              "description": "GeoJSON source options for tiling"
+            },
+            "style": {
+              "$ref": "#/$defs/LayerStyle"
+            }
+          }
+        }
+      ]
+    },
+    "MVTLayer": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseLayer" },
+        {
+          "type": "object",
+          "required": ["layerType", "tileUrl"],
+          "properties": {
+            "layerType": {
+              "const": "mvt",
+              "description": "Mapbox Vector Tiles layer type"
+            },
+            "tileUrl": {
+              "type": "string",
+              "description": "URL template for MVT tiles (with {z}/{x}/{y})"
+            },
+            "sourceLayer": {
+              "type": "string",
+              "description": "Source layer name within the MVT"
+            },
+            "style": {
+              "$ref": "#/$defs/LayerStyle"
+            },
+            "tile": {
+              "$ref": "#/$defs/TileOptions"
+            }
+          }
+        }
+      ]
+    },
+    "RasterLayer": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseLayer" },
+        {
+          "type": "object",
+          "required": ["layerType"],
+          "properties": {
+            "layerType": {
+              "const": "raster",
+              "description": "Raster image/tile layer type"
+            },
+            "tileUrl": {
+              "type": "string",
+              "description": "URL template for raster tiles (with {z}/{x}/{y})"
+            },
+            "imageUrl": {
+              "type": "string",
+              "description": "URL to a single image"
+            },
+            "imageBounds": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 4,
+              "maxItems": 4,
+              "description": "Bounding box [west, south, east, north] for single image"
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Layer opacity (0-1)"
+            }
+          }
+        }
+      ]
+    },
+    "PMTilesLayer": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseLayer" },
+        {
+          "type": "object",
+          "required": ["layerType", "pmtilesUrl"],
+          "properties": {
+            "layerType": {
+              "const": "pmtiles",
+              "description": "PMTiles archive layer type"
+            },
+            "pmtilesUrl": {
+              "type": "string",
+              "description": "URL to PMTiles archive"
+            },
+            "pmtilesPath": {
+              "type": "string",
+              "description": "Alternative path reference for PMTiles"
+            },
+            "sourceLayer": {
+              "type": "string",
+              "description": "Source layer name to render"
+            },
+            "excludeSourceLayers": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Source layers to exclude from rendering"
+            },
+            "style": {
+              "$ref": "#/$defs/LayerStyle"
+            },
+            "tile": {
+              "$ref": "#/$defs/TileOptions"
+            }
+          }
+        }
+      ]
+    },
+    "LayerStyle": {
+      "type": "object",
+      "properties": {
+        "fillColor": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Fill color for polygons/hexagons"
+        },
+        "lineColor": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Stroke/outline color"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Layer opacity (0-1)"
+        },
+        "filled": {
+          "type": "boolean",
+          "description": "Enable fill rendering"
+        },
+        "stroked": {
+          "type": "boolean",
+          "description": "Enable stroke rendering"
+        },
+        "extruded": {
+          "type": "boolean",
+          "description": "Enable 3D extrusion"
+        },
+        "elevationAttr": {
+          "type": "string",
+          "description": "Property name for extrusion height"
+        },
+        "elevationScale": {
+          "type": "number",
+          "description": "Multiplier for elevation values"
+        },
+        "lineWidth": {
+          "type": "number",
+          "description": "Stroke width in pixels"
+        },
+        "pointRadius": {
+          "type": "number",
+          "description": "Point radius in pixels"
+        }
+      }
+    },
+    "ColorValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/ContinuousColor" },
+        { "$ref": "#/$defs/CategoricalColor" },
+        { "$ref": "#/$defs/RGBArray" },
+        { "$ref": "#/$defs/RGBAArray" },
+        { "type": "string", "description": "CSS color string (e.g., '#ff0000', 'red')" }
+      ]
+    },
+    "ContinuousColor": {
+      "type": "object",
+      "required": ["type", "attr", "palette"],
+      "properties": {
+        "type": {
+          "const": "continuous",
+          "description": "Continuous color scale"
+        },
+        "attr": {
+          "type": "string",
+          "description": "Property name for color mapping"
+        },
+        "domain": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Value range [min, max] for color scale"
+        },
+        "palette": {
+          "type": "string",
+          "description": "CartoColors palette name (e.g., 'Viridis', 'TealGrn', 'Sunset')"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 12,
+          "description": "Number of color steps in the palette"
+        },
+        "nullColor": {
+          "$ref": "#/$defs/RGBArray",
+          "description": "Color for null/missing values"
+        },
+        "reverse": {
+          "type": "boolean",
+          "description": "Reverse the color scale"
+        },
+        "autoDomain": {
+          "type": "boolean",
+          "description": "Automatically compute domain from data"
+        }
+      }
+    },
+    "CategoricalColor": {
+      "type": "object",
+      "required": ["type", "attr"],
+      "properties": {
+        "type": {
+          "const": "categorical",
+          "description": "Categorical color mapping"
+        },
+        "attr": {
+          "type": "string",
+          "description": "Property name for category matching"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["value", "label"],
+                "properties": {
+                  "value": { "oneOf": [{ "type": "string" }, { "type": "number" }] },
+                  "label": { "type": "string" }
+                }
+              }
+            ]
+          },
+          "description": "Category values/labels to color"
+        },
+        "labelAttr": {
+          "type": "string",
+          "description": "Property name for category labels"
+        },
+        "palette": {
+          "type": "string",
+          "description": "CartoColors palette name (e.g., 'Bold', 'Pastel')"
+        },
+        "nullColor": {
+          "$ref": "#/$defs/RGBArray",
+          "description": "Color for null/missing values"
+        }
+      }
+    },
+    "RGBArray": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "RGB color as [r, g, b]"
+    },
+    "RGBAArray": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "RGBA color as [r, g, b, a]"
+    },
+    "TileOptions": {
+      "type": "object",
+      "properties": {
+        "minZoom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24,
+          "description": "Minimum zoom level for tile loading"
+        },
+        "maxZoom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24,
+          "description": "Maximum zoom level for tile loading"
+        },
+        "zoomOffset": {
+          "type": "integer",
+          "description": "Offset for tile zoom level requests"
+        },
+        "tileSize": {
+          "type": "integer",
+          "enum": [256, 512],
+          "description": "Tile size in pixels"
+        },
+        "maxRequests": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum concurrent tile requests"
+        }
+      }
+    },
+    "WidgetPosition": {
+      "type": "string",
+      "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "top-center"],
+      "description": "Widget position on the map"
+    },
+    "WidgetSetting": {
+      "oneOf": [
+        { "$ref": "#/$defs/WidgetPosition" },
+        { "type": "boolean", "const": false, "description": "Disable the widget" },
+        {
+          "type": "object",
+          "required": ["position"],
+          "properties": {
+            "position": { "$ref": "#/$defs/WidgetPosition" },
+            "expanded": {
+              "type": "boolean",
+              "description": "Initial expanded state for dropdown widgets"
+            }
+          }
+        }
+      ]
+    },
+    "WidgetsConfig": {
+      "type": "object",
+      "properties": {
+        "controls": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Zoom/home/screenshot controls"
+        },
+        "scale": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Scale bar widget"
+        },
+        "basemap": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Basemap style switcher"
+        },
+        "layers": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Layer visibility panel"
+        },
+        "legend": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Color legend widget"
+        },
+        "geocoder": {
+          "$ref": "#/$defs/WidgetSetting",
+          "description": "Location search bar"
+        }
+      }
+    },
+    "UIConfig": {
+      "type": "object",
+      "description": "Legacy UI config (use 'widgets' instead)",
+      "properties": {
+        "tooltip": { "type": "boolean" },
+        "legend": { "type": "boolean" },
+        "layerPanel": { "type": "boolean" },
+        "screenshot": { "type": "boolean" },
+        "basemapSwitcher": { "type": "boolean" },
+        "theme": {
+          "type": "string",
+          "enum": ["dark", "light"]
+        }
+      }
+    },
+    "MessagingConfig": {
+      "type": "object",
+      "properties": {
+        "broadcast": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "channel": { "type": "string" },
+            "dataset": { "type": "string" }
+          },
+          "description": "Broadcast map state to Fused"
+        },
+        "sync": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "channel": { "type": "string" }
+          },
+          "description": "Sync view with other map instances"
+        },
+        "clickBroadcast": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "channel": { "type": "string" },
+            "messageType": { "type": "string" },
+            "properties": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "includeCoords": { "type": "boolean" },
+            "includeLayer": { "type": "boolean" }
+          },
+          "description": "Broadcast feature clicks"
+        },
+        "locationListener": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "channel": { "type": "string" },
+            "zoomOffset": { "type": "number" },
+            "padding": { "type": "number" },
+            "maxZoom": { "type": "number" },
+            "idFields": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "description": "Listen for location messages to fly to"
+        }
+      }
+    },
+    "GeoJSON": {
+      "type": "object",
+      "required": ["type", "features"],
+      "properties": {
+        "type": {
+          "const": "FeatureCollection"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "geometry"],
+            "properties": {
+              "type": { "const": "Feature" },
+              "geometry": { "type": "object" },
+              "properties": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

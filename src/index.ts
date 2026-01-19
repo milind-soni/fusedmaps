@@ -230,7 +230,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
     // Setup interactions
     if (config.highlightOnClick !== false) {
-      setupHighlight(map, store.getAllConfigs(), getVisibilityState(), overlayRef.current);
+      // Pass idFields from locationListener config if available
+      const highlightConfig = config.messaging?.locationListener?.idFields
+        ? { idFields: config.messaging.locationListener.idFields }
+        : undefined;
+      setupHighlight(map, store.getAllConfigs(), getVisibilityState(), overlayRef.current, highlightConfig);
     }
     
     // Setup messaging (pass deck overlay for hex tile click picking)

@@ -10,10 +10,30 @@ const HIGHLIGHT_FILL = 'rgba(255,255,0,0.3)';
 const HIGHLIGHT_LINE = 'rgba(255,255,0,1)';
 const HIGHLIGHT_LINE_WIDTH = 3;
 
+// Default ID fields for feature matching - expanded to include common geo fields
+const DEFAULT_ID_FIELDS = [
+  // Common generic ID fields
+  'id', 'ID', 'Id', 'fid', 'FID', 'OBJECTID', 'objectid',
+  // Name fields
+  'name', 'Name', 'NAME', 'Field Name', 'field_name',
+  // Geographic ID fields
+  'GEOID', 'geoid', 'GeoID', 'geo_id',
+  'FIPS', 'fips', 'STATEFP', 'COUNTYFP',
+  // Tile/feature IDs
+  'tile_id', 'tileId', 'feature_id', 'featureId', 'index',
+  // H3 hex fields
+  'hex', 'h3', 'h3_index', 'cell_id', 'h3_cell'
+];
+
 let highlightLayerAdded = false;
 let selectedFeature: any = null;
 let currentMap: mapboxgl.Map | null = null;
 let currentLayers: LayerConfig[] = [];
+let configuredIdFields: string[] = DEFAULT_ID_FIELDS;
+
+export interface HighlightConfig {
+  idFields?: string[];  // Custom ID fields for feature matching
+}
 
 /**
  * Setup click-to-highlight for all layers
@@ -22,10 +42,23 @@ export function setupHighlight(
   map: mapboxgl.Map,
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
-  deckOverlay: unknown
+  deckOverlay: unknown,
+  config?: HighlightConfig
 ): void {
   currentMap = map;
   currentLayers = layers;
+
+  // Set configured ID fields (merge custom with defaults, custom takes priority)
+  if (config?.idFields && Array.isArray(config.idFields) && config.idFields.length > 0) {
+    // Put custom fields first, then defaults (deduped)
+    const customSet = new Set(config.idFields);
+    configuredIdFields = [
+      ...config.idFields,
+      ...DEFAULT_ID_FIELDS.filter(f => !customSet.has(f))
+    ];
+  } else {
+    configuredIdFields = DEFAULT_ID_FIELDS;
+  }
 
   // Expose highlight function globally for location-listener
   (window as any).__fusedHighlightByProperties = (props: Record<string, any>) => {
@@ -180,8 +213,8 @@ function highlightByProperties(
   }
 
   // Find a feature that matches the incoming properties
-  // Use common ID fields to match
-  const idFields = ['Field Name', 'field_name', 'name', 'id', 'ID', 'fid', 'FID', 'OBJECTID'];
+  // Use configured ID fields (custom + defaults)
+  const idFields = configuredIdFields;
 
   for (const feature of allFeatures) {
     const featureProps = feature.properties || {};

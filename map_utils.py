@@ -226,7 +226,7 @@ def deckgl_layers(
     highlight_on_click: bool = True,
     on_click: typing.Union[dict, bool, None] = None,  # Click broadcast config, False to disable
     map_broadcast: typing.Optional[dict] = None,  # Viewport broadcast config: {"channel": "fused-bus", "dataset": "all"}
-    location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks and fly to bounds: {"channel": "fused-bus"}, False to disable
+    location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks: {"channel": "fused-bus", "idFields": ["GEOID", "id"]}, False to disable
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
@@ -549,6 +549,9 @@ def deckgl_layers(
             "padding": loc_cfg.get("padding", 50),
             "maxZoom": loc_cfg.get("maxZoom", 18),
         }
+        # Pass custom idFields for feature matching if provided
+        if loc_cfg.get("idFields"):
+            messaging_config["locationListener"]["idFields"] = loc_cfg["idFields"]
     if messaging_config:
         fusedmaps_config["messaging"] = messaging_config
     

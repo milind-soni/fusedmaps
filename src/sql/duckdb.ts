@@ -230,17 +230,19 @@ export class DuckDbSqlRuntime {
     const isSelectLike = /^(with|select)\b/i.test(sql);
     const query = isSelectLike ? sql : `SELECT * FROM data WHERE (${sql || '1=1'})`;
 
-    // Discover columns and their types cheaply (LIMIT 0) so we can build properties JSON.
-    const schemaRes = await this.conn.query(`SELECT * FROM (${query}) AS q LIMIT 0`);
-    const fields: any[] = schemaRes?.schema?.fields || [];
-    const cols: string[] = fields.map((f: any) => String(f?.name || '')).filter(Boolean);
-
-    // Build a map of column name -> type for type detection
+    // Discover columns and their types using DuckDB's DESCRIBE
+    const schemaRes = await this.conn.query(`DESCRIBE SELECT * FROM (${query}) AS q`);
+    const schemaRows = schemaRes.toArray() as any[];
+    const cols: string[] = [];
     const colTypes: Record<string, string> = {};
-    for (const f of fields) {
-      const name = String(f?.name || '');
-      const typeName = String(f?.type?.toString?.() || f?.type || '');
-      if (name) colTypes[name] = typeName;
+
+    for (const row of schemaRows) {
+      const name = String(row?.column_name || row?.name || '');
+      const typeName = String(row?.column_type || row?.type || '');
+      if (name) {
+        cols.push(name);
+        colTypes[name] = typeName;
+      }
     }
 
     // Find the H3 column using extended candidates list

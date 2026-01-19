@@ -29,8 +29,12 @@ export declare class DuckDbSqlRuntime {
      * Requirements:
      * - h3 extension available (h3_cell_to_boundary_wkt / h3_is_valid_cell)
      * - spatial extension available (ST_GeomFromText / ST_AsGeoJSON)
-     * - H3 cell column is present and castable to BIGINT (typical for Parquet int64 hex ids)
+     * - H3 cell column is present (string or numeric)
      * - Column names are "safe" identifiers (for struct_pack); otherwise we fall back to JS.
+     *
+     * Auto-detects string vs numeric H3 columns and converts appropriately:
+     * - String columns (VARCHAR, TEXT): uses h3_string_to_h3() to convert
+     * - Numeric columns (BIGINT, UBIGINT, INT): uses CAST(col AS BIGINT)
      */
     runSqlGeoJSON(layer: HexLayerConfig, sqlText: string): Promise<{
         geojson: FeatureCollection;

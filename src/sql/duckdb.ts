@@ -37,19 +37,39 @@ function decodeBase64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+// Extended list of common H3 column name variants
+const H3_COLUMN_CANDIDATES = [
+  'hex', 'h3', 'index', 'id',
+  'cell_id', 'h3_cell', 'h3_index', 'h3_id',
+  'cell', 'h3cell', 'hexid', 'hex_id'
+];
+
+// String types in DuckDB that need h3_string_to_h3() conversion
+const STRING_TYPE_PATTERNS = [
+  'VARCHAR', 'TEXT', 'STRING', 'CHAR', 'BPCHAR', 'NAME'
+];
+
+function isStringType(typeName: string): boolean {
+  const upper = (typeName || '').toUpperCase();
+  return STRING_TYPE_PATTERNS.some((p) => upper.includes(p));
+}
+
 function sanitizeDuckRow(row: Record<string, unknown>): Record<string, unknown> {
-  const hexCols = new Set(['hex', 'h3', 'index', 'id']);
+  const hexColsSet = new Set(H3_COLUMN_CANDIDATES.map((c) => c.toLowerCase()));
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(row)) {
     let v: any = (row as any)[k];
     if (typeof v === 'bigint') {
-      if (hexCols.has(k.toLowerCase())) v = v.toString(16);
+      if (hexColsSet.has(k.toLowerCase())) v = v.toString(16);
       else v = Number(v);
     }
     out[k] = v;
   }
   // Normalize hex id into `hex` if present in any common column.
-  const rawHex: any = (out as any).hex ?? (out as any).h3 ?? (out as any).index ?? (out as any).id;
+  const rawHex: any =
+    (out as any).hex ?? (out as any).h3 ?? (out as any).index ?? (out as any).id ??
+    (out as any).cell_id ?? (out as any).h3_cell ?? (out as any).h3_index ?? (out as any).h3_id ??
+    (out as any).cell ?? (out as any).h3cell ?? (out as any).hexid ?? (out as any).hex_id;
   const h = toH3(rawHex);
   if (h) out.hex = h;
   return out;
@@ -188,8 +208,12 @@ export class DuckDbSqlRuntime {
    * Requirements:
    * - h3 extension available (h3_cell_to_boundary_wkt / h3_is_valid_cell)
    * - spatial extension available (ST_GeomFromText / ST_AsGeoJSON)
-   * - H3 cell column is present and castable to BIGINT (typical for Parquet int64 hex ids)
+   * - H3 cell column is present (string or numeric)
    * - Column names are "safe" identifiers (for struct_pack); otherwise we fall back to JS.
+   *
+   * Auto-detects string vs numeric H3 columns and converts appropriately:
+   * - String columns (VARCHAR, TEXT): uses h3_string_to_h3() to convert
+   * - Numeric columns (BIGINT, UBIGINT, INT): uses CAST(col AS BIGINT)
    */
   async runSqlGeoJSON(
     layer: HexLayerConfig,
@@ -206,14 +230,33 @@ export class DuckDbSqlRuntime {
     const isSelectLike = /^(with|select)\b/i.test(sql);
     const query = isSelectLike ? sql : `SELECT * FROM data WHERE (${sql || '1=1'})`;
 
-    // Discover columns cheaply (LIMIT 0) so we can build properties JSON.
+    // Discover columns and their types cheaply (LIMIT 0) so we can build properties JSON.
     const schemaRes = await this.conn.query(`SELECT * FROM (${query}) AS q LIMIT 0`);
     const fields: any[] = schemaRes?.schema?.fields || [];
     const cols: string[] = fields.map((f: any) => String(f?.name || '')).filter(Boolean);
 
-    const h3Candidates = ['hex', 'h3', 'index', 'id'];
-    const h3Col = h3Candidates.find((c) => cols.includes(c)) || null;
+    // Build a map of column name -> type for type detection
+    const colTypes: Record<string, string> = {};
+    for (const f of fields) {
+      const name = String(f?.name || '');
+      const typeName = String(f?.type?.toString?.() || f?.type || '');
+      if (name) colTypes[name] = typeName;
+    }
+
+    // Find the H3 column using extended candidates list
+    const h3Col = H3_COLUMN_CANDIDATES.find((c) => cols.includes(c)) || null;
     if (!h3Col) return null;
+
+    // Detect if the H3 column is a string type
+    const h3ColType = colTypes[h3Col] || '';
+    const h3IsString = isStringType(h3ColType);
+
+    // Build the H3 conversion expression based on column type
+    // - String columns: use h3_string_to_h3() to convert hex string to UBIGINT
+    // - Numeric columns: use CAST to BIGINT directly
+    const h3ToIntExpr = h3IsString
+      ? `h3_string_to_h3("${h3Col}")`
+      : `CAST("${h3Col}" AS BIGINT)`;
 
     // Only support simple identifier-like column names for now.
     if (!cols.every(isSafeStructKey)) return null;
@@ -231,7 +274,7 @@ export class DuckDbSqlRuntime {
             '{"type":"FeatureCollection","features":[' ||
               string_agg(
                 '{"type":"Feature","geometry":' ||
-                  ST_AsGeoJSON(ST_GeomFromText(h3_cell_to_boundary_wkt(CAST("${h3Col}" AS BIGINT)))) ||
+                  ST_AsGeoJSON(ST_GeomFromText(h3_cell_to_boundary_wkt(${h3ToIntExpr}))) ||
                 ',"properties":' || ${propsExpr} || '}',
                 ','
               ) ||
@@ -240,7 +283,7 @@ export class DuckDbSqlRuntime {
         END AS gj
       FROM q
       WHERE "${h3Col}" IS NOT NULL
-        AND h3_is_valid_cell(CAST("${h3Col}" AS BIGINT))
+        AND h3_is_valid_cell(${h3ToIntExpr})
     `;
 
     const res = await this.conn.query(q);

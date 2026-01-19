@@ -83,7 +83,8 @@ VALID_TILE_PROPS = {
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
 # - 2ba564b: add JSON Schema for config validation
-FUSEDMAPS_CDN_REF_DEFAULT = "2ba564b"
+# - baf29a3: auto-detect string H3 columns and convert with h3_string_to_h3()
+FUSEDMAPS_CDN_REF_DEFAULT = "baf29a3"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

@@ -85,7 +85,8 @@ VALID_TILE_PROPS = {
 # - 2ba564b: add JSON Schema for config validation
 # - baf29a3: auto-detect string H3 columns and convert with h3_string_to_h3()
 # - e24eb3d: fix DESCRIBE-based type detection for H3 columns
-FUSEDMAPS_CDN_REF_DEFAULT = "e24eb3d"
+# - b53dfe0: expand idFields for feature matching and make configurable
+FUSEDMAPS_CDN_REF_DEFAULT = "b53dfe0"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

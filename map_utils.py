@@ -233,6 +233,9 @@ def deckgl_layers(
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
     # --- Widget positioning ---
     widgets: typing.Optional[dict] = None,  # Position/enable widgets: {"controls": "bottom-left", "legend": False, ...}
+    # --- Zoom constraints ---
+    min_zoom: typing.Optional[float] = None,  # Minimum zoom level (0-24), prevents zooming out beyond this
+    max_zoom: typing.Optional[float] = None,  # Maximum zoom level (0-24), prevents zooming in beyond this
     # --- AI Configuration ---
     ai_udf_url: typing.Optional[str] = None,  # URL to AI UDF that converts prompts to SQL
     ai_schema: typing.Optional[str] = None,  # Schema string to pass to AI UDF (auto-extracted if not provided)
@@ -493,6 +496,12 @@ def deckgl_layers(
         "widgets": widget_config,
         "highlightOnClick": highlight_on_click,
     }
+
+    # Add zoom constraints if provided
+    if min_zoom is not None:
+        fusedmaps_config["minZoom"] = float(min_zoom)
+    if max_zoom is not None:
+        fusedmaps_config["maxZoom"] = float(max_zoom)
 
     if sidebar is not None:
         fusedmaps_config["sidebar"] = sidebar

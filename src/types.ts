@@ -345,6 +345,8 @@ export interface FusedMapsConfig {
   messaging?: MessagingConfig;
   highlightOnClick?: boolean;
   sidebar?: 'show' | 'hide';
+  minZoom?: number;  // Minimum zoom level (0-24), prevents zooming out beyond this
+  maxZoom?: number;  // Maximum zoom level (0-24), prevents zooming in beyond this
 }
 
 // ============================================================

@@ -10,17 +10,28 @@ interface MapInitOptions {
   styleUrl: string;
   initialViewState: ViewState;
   screenshotEnabled?: boolean;
+  minZoom?: number;  // Minimum zoom level (0-24), prevents zooming out beyond this
+  maxZoom?: number;  // Maximum zoom level (0-24), prevents zooming in beyond this
 }
 
 /**
  * Initialize a Mapbox GL map
  */
 export function initMap(options: MapInitOptions): mapboxgl.Map {
-  const { containerId, mapboxToken, styleUrl, initialViewState, screenshotEnabled } = options;
-  
+  const { containerId, mapboxToken, styleUrl, initialViewState, screenshotEnabled, minZoom, maxZoom } = options;
+
   // Set access token
   (window.mapboxgl as any).accessToken = mapboxToken;
-  
+
+  // Build zoom constraints if provided
+  const zoomConstraints: Record<string, number> = {};
+  if (typeof minZoom === 'number' && Number.isFinite(minZoom)) {
+    zoomConstraints.minZoom = Math.max(0, Math.min(24, minZoom));
+  }
+  if (typeof maxZoom === 'number' && Number.isFinite(maxZoom)) {
+    zoomConstraints.maxZoom = Math.max(0, Math.min(24, maxZoom));
+  }
+
   // Create map with compact attribution by default
   const map = new window.mapboxgl.Map({
     container: containerId,
@@ -34,6 +45,8 @@ export function initMap(options: MapInitOptions): mapboxgl.Map {
     pitchWithRotate: true,
     // Disable default attribution, we'll add compact one
     attributionControl: false,
+    // Zoom constraints
+    ...zoomConstraints,
     // Needed for reliable canvas capture (screenshot button). May increase GPU memory usage.
     ...(screenshotEnabled ? { preserveDrawingBuffer: true } : {})
   });

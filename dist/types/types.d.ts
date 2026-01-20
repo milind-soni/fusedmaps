@@ -254,6 +254,8 @@ export interface FusedMapsConfig {
     messaging?: MessagingConfig;
     highlightOnClick?: boolean;
     sidebar?: 'show' | 'hide';
+    minZoom?: number;
+    maxZoom?: number;
 }
 export interface LayerState {
     config: LayerConfig;

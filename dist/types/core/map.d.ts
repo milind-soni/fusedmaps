@@ -8,6 +8,8 @@ interface MapInitOptions {
     styleUrl: string;
     initialViewState: ViewState;
     screenshotEnabled?: boolean;
+    minZoom?: number;
+    maxZoom?: number;
 }
 /**
  * Initialize a Mapbox GL map

@@ -73,7 +73,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     mapboxToken: config.mapboxToken,
     styleUrl: config.styleUrl,
     initialViewState: config.initialViewState,
-    screenshotEnabled: config.ui?.screenshot !== false
+    screenshotEnabled: config.ui?.screenshot !== false,
+    minZoom: config.minZoom,
+    maxZoom: config.maxZoom
   });
 
   // Widget positions from config (defaults: controls/scale/basemap=bottom-left, layers=top-right, legend=bottom-right, geocoder=false)

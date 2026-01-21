@@ -219,23 +219,27 @@ function buildLayerLegend(
       const maxCats = Number.isFinite(cfg.legendMaxCategories) ? cfg.legendMaxCategories : 40;
       return buildRgbCategoryLegend(layer.name, tileData, legendAttr, maxCats);
     }
-  } else if (layer.layerType === 'vector') {
+  } else if (layer.layerType === 'vector' || layer.layerType === 'mvt' || layer.layerType === 'pmtiles') {
     const vecLayer = layer as VectorLayerConfig;
 
     // Check if fill is transparent/disabled - if so, prefer line color config
-    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? 1;
-    const isFillTransparent = fillOpacity < 0.1 || (vecLayer as any).vectorLayer?.filled === false;
+    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? (vecLayer as any).style?.opacity ?? 1;
+    const isFillTransparent = fillOpacity < 0.1 || (vecLayer as any).vectorLayer?.filled === false || (vecLayer as any).style?.filled === false;
 
     // Helper to check if a color config has a color function (old or new format)
     const hasColorFn = (cfg: any) => cfg?.['@@function'] || cfg?.type === 'continuous' || cfg?.type === 'categorical';
 
-    if (isFillTransparent && hasColorFn(vecLayer.lineColorConfig)) {
-      colorCfg = vecLayer.lineColorConfig;
-    } else if (hasColorFn(vecLayer.fillColorConfig)) {
-      colorCfg = vecLayer.fillColorConfig;
-    } else if (hasColorFn(vecLayer.lineColorConfig)) {
+    // Check both legacy format (fillColorConfig) and new format (style.fillColor)
+    const fillColorCfg = vecLayer.fillColorConfig || (vecLayer as any).style?.fillColor;
+    const lineColorCfg = vecLayer.lineColorConfig || (vecLayer as any).style?.lineColor;
+
+    if (isFillTransparent && hasColorFn(lineColorCfg)) {
+      colorCfg = lineColorCfg;
+    } else if (hasColorFn(fillColorCfg)) {
+      colorCfg = fillColorCfg;
+    } else if (hasColorFn(lineColorCfg)) {
       // Fallback to lineColor if fillColor has no color function
-      colorCfg = vecLayer.lineColorConfig;
+      colorCfg = lineColorCfg;
     }
 
     // Show simple line legend for stroke-only vector layers (no color function)

@@ -197,6 +197,16 @@ function buildColorAccessor(
       const maxV = Math.max(d0, d1);
       const nullColor = Array.isArray(colorCfg.nullColor) ? colorCfg.nullColor : [184, 184, 184];
 
+      // Pre-parse palette colors to RGB arrays for fast interpolation
+      const colsRgb = cols.map((c: string) => {
+        const hex = c.replace('#', '');
+        return [
+          parseInt(hex.slice(0, 2), 16),
+          parseInt(hex.slice(2, 4), 16),
+          parseInt(hex.slice(4, 6), 16)
+        ];
+      });
+
       return (obj: any) => {
         const p = obj?.properties || obj || {};
         const raw = p[attr];
@@ -208,14 +218,20 @@ function buildColorAccessor(
         }
         if (v == null || !Number.isFinite(v)) return nullColor;
 
-        const t = (v - minV) / (maxV - minV);
-        const idx = Math.max(0, Math.min(cols.length - 1, Math.round(t * (cols.length - 1))));
-        // Convert "#rrggbb" to [r,g,b]
-        const hex = cols[idx].replace('#', '');
-        const r = parseInt(hex.slice(0, 2), 16);
-        const g = parseInt(hex.slice(2, 4), 16);
-        const b = parseInt(hex.slice(4, 6), 16);
-        return [r, g, b];
+        // Linear interpolation between color stops (smooth gradient)
+        const t = Math.max(0, Math.min(1, (v - minV) / (maxV - minV)));
+        const fIdx = t * (colsRgb.length - 1);
+        const idx0 = Math.floor(fIdx);
+        const idx1 = Math.min(idx0 + 1, colsRgb.length - 1);
+        const frac = fIdx - idx0;
+
+        const c0 = colsRgb[idx0];
+        const c1 = colsRgb[idx1];
+        return [
+          Math.round(c0[0] + (c1[0] - c0[0]) * frac),
+          Math.round(c0[1] + (c1[1] - c0[1]) * frac),
+          Math.round(c0[2] + (c1[2] - c0[2]) * frac)
+        ];
       };
     }
 

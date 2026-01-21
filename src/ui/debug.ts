@@ -217,9 +217,24 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const tabUiPanel = document.getElementById('dbg-tab-panel-ui') as HTMLElement | null;
   const tabSqlPanel = document.getElementById('dbg-tab-panel-sql') as HTMLElement | null;
 
+  // Check if any layers support SQL (have parquetUrl or parquetData)
+  const hasSqlLayers = config.layers.some((l: any) =>
+    l.layerType === 'hex' && !l.isTileLayer && (l.parquetUrl || l.parquetData)
+  );
+
+  // Hide SQL tab if no SQL-capable layers exist
+  if (!hasSqlLayers && tabSqlBtn) {
+    tabSqlBtn.style.display = 'none';
+  }
+
   let sqlPanel: SqlPanel | null = null;
 
   const setActiveTab = (tab: 'ui' | 'sql', persist = true) => {
+    // If trying to set SQL tab but no SQL layers, force UI tab
+    if (tab === 'sql' && !hasSqlLayers) {
+      tab = 'ui';
+    }
+
     try {
       if (tabUiPanel) tabUiPanel.style.display = tab === 'ui' ? 'block' : 'none';
       if (tabSqlPanel) tabSqlPanel.style.display = tab === 'sql' ? 'block' : 'none';
@@ -254,13 +269,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     tabSqlBtn?.addEventListener('click', onTabClick as any);
   } catch (_) {}
 
-  try {
-    const saved = String(localStorage.getItem('fusedmaps:debug:tab') || '').toLowerCase();
-    if (saved === 'sql') setActiveTab('sql', false);
-    else setActiveTab('ui', false);
-  } catch (_) {
-    setActiveTab('ui', false);
-  }
+  // Always default to UI tab
+  setActiveTab('ui', false);
 
   const initial: ViewState = config.initialViewState;
 

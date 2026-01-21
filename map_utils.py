@@ -229,6 +229,7 @@ def deckgl_layers(
     highlight_on_click: bool = True,
     on_click: typing.Union[dict, bool, None] = None,  # Click broadcast config, False to disable
     map_broadcast: typing.Optional[dict] = None,  # Viewport broadcast config: {"channel": "fused-bus", "dataset": "all"}
+    map_sync: typing.Union[dict, bool, None] = None,  # Sync viewports between maps: True or {"channel": "my-sync-channel"}
     location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks: {"channel": "fused-bus", "idFields": ["GEOID", "id"]}, False to disable
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
@@ -541,6 +542,14 @@ def deckgl_layers(
             "enabled": True,
             "channel": map_broadcast.get("channel", "fused-bus"),
             "dataset": map_broadcast.get("dataset", "all")
+        }
+    # Map sync: sync viewports between multiple maps
+    # Pass map_sync=True or map_sync={"channel": "my-channel"}
+    if map_sync:
+        sync_cfg = map_sync if isinstance(map_sync, dict) else {}
+        messaging_config["sync"] = {
+            "enabled": True,
+            "channel": sync_cfg.get("channel", "fused-bus")
         }
     # Click broadcast: enabled by default so forms/charts receive feature clicks
     # Pass on_click=False to disable

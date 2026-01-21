@@ -89,7 +89,8 @@ VALID_TILE_PROPS = {
 # - f4c0932: add minZoom/maxZoom parameters to lock map zoom range
 # - b279acc: fix categorical legend for MVT/PMTiles layers with new style format
 # - 6a50155: sidebar defaults to UI tab, SQL tab only shown for DuckDB layers
-FUSEDMAPS_CDN_REF_DEFAULT = "6a50155"
+# - dda385a: conditionally show Fill/Line Color sections based on checkboxes
+FUSEDMAPS_CDN_REF_DEFAULT = "dda385a"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

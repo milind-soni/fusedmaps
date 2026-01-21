@@ -87,7 +87,8 @@ VALID_TILE_PROPS = {
 # - e24eb3d: fix DESCRIBE-based type detection for H3 columns
 # - b53dfe0: expand idFields for feature matching and make configurable
 # - f4c0932: add minZoom/maxZoom parameters to lock map zoom range
-FUSEDMAPS_CDN_REF_DEFAULT = "f4c0932"
+# - b279acc: fix categorical legend for MVT/PMTiles layers with new style format
+FUSEDMAPS_CDN_REF_DEFAULT = "b279acc"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

@@ -60,20 +60,21 @@ export function addVectorLayer(
   
   // Add polygon layers
   if (hasPoly) {
-    if (layer.isFilled !== false) {
-      map.addLayer({
-        id: `${layer.id}-fill`,
-        type: 'fill',
-        source: layer.id,
-        paint: {
-          'fill-color': fillColorExpr as any,
-          'fill-opacity': layerOpacity
-        },
-        filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']],
-        layout: { visibility: visible ? 'visible' : 'none' }
-      });
-    }
-    
+    // Always create fill layer so it can be toggled from debug panel
+    // Use opacity 0 when not filled
+    const fillOpacity = layer.isFilled === false ? 0 : layerOpacity;
+    map.addLayer({
+      id: `${layer.id}-fill`,
+      type: 'fill',
+      source: layer.id,
+      paint: {
+        'fill-color': fillColorExpr as any,
+        'fill-opacity': fillOpacity
+      },
+      filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']],
+      layout: { visibility: visible ? 'visible' : 'none' }
+    });
+
     if (layer.isStroked !== false) {
       map.addLayer({
         id: `${layer.id}-outline`,

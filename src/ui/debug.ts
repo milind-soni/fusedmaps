@@ -549,6 +549,24 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     lineFnEl.disabled = fn === 'expression';
   };
 
+  // Show/hide Fill Color section based on Filled checkbox
+  const updateFillSectionVisibility = () => {
+    try {
+      if (fillColorSection) {
+        fillColorSection.style.display = filledEl.checked ? 'block' : 'none';
+      }
+    } catch (_) {}
+  };
+
+  // Show/hide Line Color section based on Stroked checkbox
+  const updateLineSectionVisibility = () => {
+    try {
+      if (lineColorSection) {
+        lineColorSection.style.display = strokedEl.checked ? 'block' : 'none';
+      }
+    } catch (_) {}
+  };
+
   const readLayerToUI = () => {
     const layer = getActiveLayer();
     if (!layer) return;
@@ -559,8 +577,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
     // Toggle section visibility
     try { if (hexSection) hexSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
-    try { if (fillColorSection) fillColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
-    try { if (lineColorSection) lineColorSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
+    // Fill/Line color sections are shown based on filled/stroked state (updated after setting checkboxes below)
     try { if (viewStateSection) viewStateSection.style.display = 'block'; } catch (_) {}
 
     // Basic toggles
@@ -574,6 +591,10 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
       strokedEl.checked = (layer as any).isStroked !== false;
       extrudedEl.checked = false;
     }
+
+    // Update fill/line color section visibility based on filled/stroked checkboxes
+    updateFillSectionVisibility();
+    updateLineSectionVisibility();
 
     // Extrusion controls (hex only)
     try {
@@ -992,7 +1013,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   layerSelect.addEventListener('change', () => readLayerToUI());
   fillFnEl.addEventListener('change', () => { updateFillFnOptions(); applyUIToLayer(); });
   lineFnEl.addEventListener('change', () => { updateLineFnOptions(); applyUIToLayer(); });
-  [filledEl, strokedEl].forEach((el) => el.addEventListener('change', applyUIToLayer));
+  filledEl.addEventListener('change', () => { updateFillSectionVisibility(); applyUIToLayer(); });
+  strokedEl.addEventListener('change', () => { updateLineSectionVisibility(); applyUIToLayer(); });
   extrudedEl.addEventListener('change', () => {
     try { if (extrusionControls) extrusionControls.style.display = extrudedEl.checked ? 'block' : 'none'; } catch (_) {}
     applyUIToLayer();

@@ -328,6 +328,29 @@ export interface MessagingConfig {
     maxZoom?: number;
     idFields?: string[];
   };
+  /**
+   * Style listener - receives style parameters from JSON UI components
+   * and applies them to layers without re-running the UDF.
+   *
+   * @example
+   * {
+   *   styleListener: {
+   *     enabled: true,
+   *     channel: "fused-params",
+   *     layerId: "all",
+   *     mappings: {
+   *       "palette": "style.fillColor.palette",
+   *       "opacity": "style.opacity"
+   *     }
+   *   }
+   * }
+   */
+  styleListener?: {
+    enabled?: boolean;
+    channel?: string;
+    layerId?: string;  // Target layer ID, or "all" to apply to all layers
+    mappings?: Record<string, string>;  // { paramName: "dotPath.to.property" }
+  };
 }
 
 // ============================================================

@@ -7,16 +7,19 @@ import { enableBroadcast } from './broadcast';
 import { enableClickBroadcast, type ClickBroadcastConfig } from './click-broadcast';
 import { enableSync } from './sync';
 import { enableLocationListener, type LocationListenerConfig } from './location-listener';
+import { enableStyleListener, type StyleListenerConfig } from './style-listener';
 
 export * from './bus';
 export * from './broadcast';
 export * from './click-broadcast';
 export * from './sync';
 export * from './location-listener';
+export * from './style-listener';
 
 interface MessagingState {
   clickBroadcastDestroy?: () => void;
   locationListenerDestroy?: () => void;
+  styleListenerDestroy?: () => void;
 }
 
 /**
@@ -26,7 +29,8 @@ export function setupMessaging(
   map: mapboxgl.Map,
   config: MessagingConfig,
   layers: LayerConfig[],
-  deckOverlay?: any  // DeckTileOverlayState for hex tile layer picking
+  deckOverlay?: any,  // DeckTileOverlayState for hex tile layer picking
+  instance?: any      // FusedMapsInstance for styleListener
 ): MessagingState {
   const state: MessagingState = {};
 
@@ -69,6 +73,17 @@ export function setupMessaging(
     };
     const listenerState = enableLocationListener(map, listenerConfig);
     state.locationListenerDestroy = listenerState.destroy;
+  }
+
+  // Style listener (receives style parameters and applies them to layers)
+  if (config.styleListener?.enabled && instance) {
+    const styleConfig: StyleListenerConfig = {
+      channel: config.styleListener.channel,
+      layerId: config.styleListener.layerId,
+      mappings: config.styleListener.mappings
+    };
+    const styleState = enableStyleListener(instance, layers, styleConfig);
+    state.styleListenerDestroy = styleState.destroy;
   }
 
   return state;

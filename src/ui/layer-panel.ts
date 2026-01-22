@@ -274,6 +274,9 @@ function renderPanel(store: LayerStore): void {
     }
   });
 
+  // Debug: log group detection
+  console.log('[LayerPanel] Groups detected:', groupOrder, 'Ungrouped:', ungrouped.length);
+
   let html = '';
 
   // Render ungrouped layers first (in their original order)
@@ -322,6 +325,9 @@ function renderPanel(store: LayerStore): void {
     });
     html += `</div>`;
   });
+
+  // Debug: log final HTML structure
+  console.log('[LayerPanel] Rendered groups:', groupOrder.length, 'HTML group headers:', (html.match(/layer-group-header/g) || []).length);
 
   list.innerHTML = html;
 }

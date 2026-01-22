@@ -1127,7 +1127,6 @@ html[data-theme="light"] .fm-basemap-switcher.is-open .fm-basemap-trigger {
   gap: 6px;
   padding: 8px 10px;
   background: var(--ui-surface);
-  border-bottom: 1px solid var(--ui-border);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s;
@@ -1191,10 +1190,12 @@ html[data-theme="light"] .layer-group-header:hover {
 .layer-group-content {
   overflow: hidden;
   transition: max-height 0.2s ease;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .layer-group-content.collapsed {
   display: none;
+  border-bottom: none;
 }
 
 /* Grouped layer items (indented) */

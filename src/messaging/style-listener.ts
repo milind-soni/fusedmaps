@@ -93,24 +93,36 @@ export function enableStyleListener(
 
   const bus = createBus(channel);
 
+  console.log(`[FusedMaps] Style listener enabled on channel "${channel}" with mappings:`, effectiveMappings);
+
   bus.onMessage((msg: BusMessage) => {
+    console.log('[FusedMaps] Style listener received message:', msg);
+
     // Check for parameter update messages
-    // Format from JSON UI: { type: "PARAM", parameter: "palette", values: "OrYel" }
-    if (msg.type !== 'PARAM' && msg.type !== 'style_update') return;
+    // Format from JSON UI: { type: "param", parameter: "palette", values: "OrYel" }
+    // Note: type is lowercase "param" not "PARAM"
+    if (msg.type !== 'param' && msg.type !== 'PARAM' && msg.type !== 'style_update') {
+      console.log('[FusedMaps] Style listener: ignoring message with type:', msg.type);
+      return;
+    }
 
     const paramName = (msg as any).parameter || (msg as any).param;
     const value = (msg as any).values ?? (msg as any).value;
 
-    if (!paramName || value === undefined) return;
+    if (!paramName || value === undefined) {
+      console.log('[FusedMaps] Style listener: missing paramName or value');
+      return;
+    }
 
     // Check if we have a mapping for this parameter
     const propertyPath = effectiveMappings[paramName];
     if (!propertyPath) {
       // Not a mapped style parameter, ignore
+      console.log(`[FusedMaps] Style listener: no mapping for param "${paramName}"`);
       return;
     }
 
-    console.debug(`[FusedMaps] Style listener: ${paramName} -> ${propertyPath} = ${JSON.stringify(value)}`);
+    console.log(`[FusedMaps] Style listener: applying ${paramName} -> ${propertyPath} = ${JSON.stringify(value)}`);
 
     try {
       // Get target layers

@@ -95,7 +95,8 @@ VALID_TILE_PROPS = {
 # - ab686b7: add collapsible layer groups to layer panel
 # - ea497b4: move group border to bottom of group content
 # - 1cd81d3: add styleListener for client-side style updates from JSON UI
-FUSEDMAPS_CDN_REF_DEFAULT = "1cd81d3"
+# - 4070ce2: fix styleListener channel to match JSON UI (parameter-updates)
+FUSEDMAPS_CDN_REF_DEFAULT = "4070ce2"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

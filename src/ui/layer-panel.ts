@@ -30,6 +30,45 @@ function handlePanelClick(e: MouseEvent): void {
   const target = e.target as HTMLElement | null;
   if (!target) return;
 
+  // Handle group header click (expand/collapse)
+  const groupHeader = target.closest?.('.layer-group-header') as HTMLElement | null;
+  if (groupHeader) {
+    const groupName = groupHeader.getAttribute('data-group-name') || '';
+    if (!groupName) return;
+
+    const isEye = !!target.closest?.('.group-eye');
+
+    if (isEye) {
+      // Toggle visibility of all layers in this group
+      const groupLayers = document.querySelectorAll(`.layer-item[data-group="${groupName}"]`);
+      const layerIds: string[] = [];
+      groupLayers.forEach(el => {
+        const id = el.getAttribute('data-layer-id');
+        if (id) layerIds.push(id);
+      });
+
+      // Determine target state: if any are visible, hide all; otherwise show all
+      const anyVisible = layerIds.some(id => getCurrentVisible(id));
+      layerIds.forEach(id => visibilityCallback?.(id, !anyVisible));
+    } else {
+      // Toggle expand/collapse
+      groupExpandedState[groupName] = !groupExpandedState[groupName];
+      const groupContent = groupHeader.nextElementSibling as HTMLElement | null;
+      if (groupContent?.classList.contains('layer-group-content')) {
+        groupContent.classList.toggle('collapsed', !groupExpandedState[groupName]);
+      }
+      // Update chevron
+      const chevron = groupHeader.querySelector('.group-chevron');
+      if (chevron) {
+        chevron.innerHTML = groupExpandedState[groupName] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
+      }
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Handle regular layer item click
   const item = target.closest?.('.layer-item') as HTMLElement | null;
   if (!item) return;
   const layerId = item.getAttribute('data-layer-id') || '';
@@ -51,6 +90,11 @@ const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="curr
 const EYE_CLOSED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>';
 const LAYERS_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+const CHEVRON_DOWN_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
+const CHEVRON_RIGHT_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>';
+
+// Track group expanded states (default to expanded)
+const groupExpandedState: Record<string, boolean> = {};
 
 /**
  * Setup the layer panel
@@ -171,30 +215,115 @@ export function setupLayerPanel(
 }
 
 /**
+ * Render a single layer item HTML
+ */
+function renderLayerItem(layer: LayerConfig, visible: boolean, order: number, groupName?: string): string {
+  const stripBg = getLayerStripGradient(layer);
+  const eyeIcon = visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
+  const groupAttr = groupName ? ` data-group="${groupName}"` : '';
+  const indentClass = groupName ? ' layer-item-grouped' : '';
+
+  return `
+    <div class="layer-item${indentClass} ${visible ? '' : 'disabled'}"
+         data-layer-id="${layer.id}"
+         data-order="${order}"${groupAttr}
+         style="--layer-strip: ${stripBg};">
+      <span class="layer-name">${layer.name}</span>
+      <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
+    </div>
+  `;
+}
+
+/**
+ * Get group visibility state (all visible, none visible, or mixed)
+ */
+function getGroupVisibility(layerIds: string[]): 'all' | 'none' | 'mixed' {
+  let visibleCount = 0;
+  layerIds.forEach(id => {
+    if (getCurrentVisible(id)) visibleCount++;
+  });
+  if (visibleCount === 0) return 'none';
+  if (visibleCount === layerIds.length) return 'all';
+  return 'mixed';
+}
+
+/**
  * Render the panel from store state
  */
 function renderPanel(store: LayerStore): void {
   const list = document.getElementById('layer-list');
   if (!list) return;
-  
-  const layers = store.getAll();
-  
-  list.innerHTML = layers.map(layerState => {
-    const layer = layerState.config;
-    const visible = layerState.visible;
-    const stripBg = getLayerStripGradient(layer);
-    const eyeIcon = visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
-    
-    return `
-      <div class="layer-item ${visible ? '' : 'disabled'}"
-           data-layer-id="${layer.id}"
-           data-order="${layerState.order}"
-           style="--layer-strip: ${stripBg};">
-        <span class="layer-name">${layer.name}</span>
-        <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
+
+  const allLayers = store.getAll();
+
+  // Separate ungrouped and grouped layers, maintaining order
+  const ungrouped: typeof allLayers = [];
+  const groups = new Map<string, typeof allLayers>();
+  const groupOrder: string[] = []; // Track first-appearance order
+
+  allLayers.forEach(layerState => {
+    const groupName = (layerState.config as any).group;
+    if (groupName && typeof groupName === 'string') {
+      if (!groups.has(groupName)) {
+        groups.set(groupName, []);
+        groupOrder.push(groupName);
+      }
+      groups.get(groupName)!.push(layerState);
+    } else {
+      ungrouped.push(layerState);
+    }
+  });
+
+  let html = '';
+
+  // Render ungrouped layers first (in their original order)
+  ungrouped.forEach(layerState => {
+    html += renderLayerItem(layerState.config, layerState.visible, layerState.order);
+  });
+
+  // Render groups (in first-appearance order)
+  groupOrder.forEach(groupName => {
+    const groupLayers = groups.get(groupName)!;
+    const layerIds = groupLayers.map(ls => ls.config.id);
+
+    // Initialize group state if not set (default: expanded)
+    if (groupExpandedState[groupName] === undefined) {
+      groupExpandedState[groupName] = true;
+    }
+    const isExpanded = groupExpandedState[groupName];
+
+    // Calculate group visibility state
+    const groupVis = getGroupVisibility(layerIds);
+    let groupEyeIcon = EYE_OPEN_SVG;
+    let groupEyeClass = '';
+    if (groupVis === 'none') {
+      groupEyeIcon = EYE_CLOSED_SVG;
+      groupEyeClass = ' group-hidden';
+    } else if (groupVis === 'mixed') {
+      groupEyeClass = ' group-mixed';
+    }
+
+    const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
+
+    // Group header
+    html += `
+      <div class="layer-group-header" data-group-name="${groupName}">
+        <span class="group-chevron">${chevronIcon}</span>
+        <span class="group-name">${groupName}</span>
+        <span class="group-count">(${groupLayers.length})</span>
+        <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
       </div>
     `;
-  }).join('');
+
+    // Group content (collapsible)
+    html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
+    groupLayers.forEach(layerState => {
+      html += renderLayerItem(layerState.config, layerState.visible, layerState.order, groupName);
+    });
+    html += `</div>`;
+  });
+
+  list.innerHTML = html;
 }
 
 /**
@@ -207,21 +336,73 @@ export function updateLayerPanel(
   const list = document.getElementById('layer-list');
   if (!list) return;
   activeVisibilityState = visibilityState || {};
-  
-  list.innerHTML = layers.map(layer => {
+
+  // Separate ungrouped and grouped layers, maintaining order
+  const ungrouped: LayerConfig[] = [];
+  const groups = new Map<string, LayerConfig[]>();
+  const groupOrder: string[] = [];
+
+  layers.forEach(layer => {
+    const groupName = (layer as any).group;
+    if (groupName && typeof groupName === 'string') {
+      if (!groups.has(groupName)) {
+        groups.set(groupName, []);
+        groupOrder.push(groupName);
+      }
+      groups.get(groupName)!.push(layer);
+    } else {
+      ungrouped.push(layer);
+    }
+  });
+
+  let html = '';
+
+  // Render ungrouped layers first
+  ungrouped.forEach((layer, idx) => {
     const visible = visibilityState[layer.id] !== false;
-    const stripBg = getLayerStripGradient(layer);
-    const eyeIcon = visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
-    
-    return `
-      <div class="layer-item ${visible ? '' : 'disabled'}" 
-           data-layer-id="${layer.id}" 
-           style="--layer-strip: ${stripBg};">
-        <span class="layer-name">${layer.name}</span>
-        <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
+    html += renderLayerItem(layer, visible, idx);
+  });
+
+  // Render groups
+  groupOrder.forEach(groupName => {
+    const groupLayers = groups.get(groupName)!;
+    const layerIds = groupLayers.map(l => l.id);
+
+    if (groupExpandedState[groupName] === undefined) {
+      groupExpandedState[groupName] = true;
+    }
+    const isExpanded = groupExpandedState[groupName];
+
+    const groupVis = getGroupVisibility(layerIds);
+    let groupEyeIcon = EYE_OPEN_SVG;
+    let groupEyeClass = '';
+    if (groupVis === 'none') {
+      groupEyeIcon = EYE_CLOSED_SVG;
+      groupEyeClass = ' group-hidden';
+    } else if (groupVis === 'mixed') {
+      groupEyeClass = ' group-mixed';
+    }
+
+    const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
+
+    html += `
+      <div class="layer-group-header" data-group-name="${groupName}">
+        <span class="group-chevron">${chevronIcon}</span>
+        <span class="group-name">${groupName}</span>
+        <span class="group-count">(${groupLayers.length})</span>
+        <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
       </div>
     `;
-  }).join('');
+
+    html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
+    groupLayers.forEach((layer, idx) => {
+      const visible = visibilityState[layer.id] !== false;
+      html += renderLayerItem(layer, visible, idx, groupName);
+    });
+    html += `</div>`;
+  });
+
+  list.innerHTML = html;
 }
 
 /**

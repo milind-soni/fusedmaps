@@ -266,6 +266,7 @@ def deckgl_layers(
             - "tile_url": XYZ tile URL template (for hex tile layers)
             - "config": Layer config dict
             - "name": Display name for layer toggle (optional)
+            - "group": Group name for organizing layers in collapsible sections (optional)
         mapbox_token: Mapbox access token.
         basemap: 'dark', 'satellite', 'light', or 'streets'.
         initialViewState: Optional view state override.
@@ -361,6 +362,7 @@ def deckgl_layers(
         parquet_url = layer_def.get("parquetUrl") or layer_def.get("parquet_url")
         sql = layer_def.get("sql")
         data_ref = layer_def.get("data_ref") or layer_def.get("dataRef") or layer_def.get("data_var") or layer_def.get("dataVar")
+        group = layer_def.get("group")  # Optional group for layer organization
         
         # Validate sources early so "missing data" doesn't silently render nothing.
         if layer_type == "hex":
@@ -408,6 +410,9 @@ def deckgl_layers(
             tooltip_from_def = layer_def.get("tooltip") or layer_def.get("tooltipColumns")
             if processed and tooltip_from_def:
                 processed["tooltip"] = list(tooltip_from_def)
+            # Add group if specified
+            if processed and group:
+                processed["group"] = str(group)
             if processed:
                 processed_layers.append(processed)
                 if processed.get("isTileLayer"):
@@ -429,6 +434,9 @@ def deckgl_layers(
             tooltip_from_def = layer_def.get("tooltip") or layer_def.get("tooltipColumns")
             if processed and tooltip_from_def:
                 processed["tooltip"] = list(tooltip_from_def)
+            # Add group if specified
+            if processed and group:
+                processed["group"] = str(group)
             if processed:
                 processed_layers.append(processed)
                 # Auto-center from polygons/points
@@ -441,10 +449,16 @@ def deckgl_layers(
             if image_data is not None and not image_url:
                 raster_image_url = _numpy_to_data_url(image_data)
             processed = _process_raster_layer(i, tile_url, raster_image_url, bounds, config, name, visible)
+            # Add group if specified
+            if processed and group:
+                processed["group"] = str(group)
             if processed:
                 processed_layers.append(processed)
         elif layer_type == "mvt":
             processed = _process_mvt_layer(i, tile_url, source_layer, config, name, visible)
+            # Add group if specified
+            if processed and group:
+                processed["group"] = str(group)
             if processed:
                 processed_layers.append(processed)
         
@@ -453,12 +467,15 @@ def deckgl_layers(
             pmtiles_path = layer_def.get("pmtiles_path") or layer_def.get("pmtilesPath")
             minzoom = layer_def.get("minzoom") if layer_def.get("minzoom") is not None else layer_def.get("minZoom")
             maxzoom = layer_def.get("maxzoom") if layer_def.get("maxzoom") is not None else layer_def.get("maxZoom")
-            
+
             # Sign S3 path if needed
             if pmtiles_path and not pmtiles_url:
                 pmtiles_url = fused.api.sign_url(pmtiles_path)
-            
+
             processed = _process_pmtiles_layer(i, pmtiles_url, pmtiles_path, source_layer, config, name, visible, minzoom=minzoom, maxzoom=maxzoom)
+            # Add group if specified
+            if processed and group:
+                processed["group"] = str(group)
             if processed:
                 processed_layers.append(processed)
     

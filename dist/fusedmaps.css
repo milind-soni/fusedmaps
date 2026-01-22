@@ -1119,3 +1119,100 @@ html[data-theme="light"] .fm-basemap-switcher.is-open .fm-basemap-trigger {
   color: var(--ui-muted-2);
   flex-shrink: 0;
 }
+
+/* Layer Groups */
+.layer-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.layer-group-header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="light"] .layer-group-header:hover {
+  background: rgba(124, 155, 182, 0.15);
+}
+
+.layer-group-header .group-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--ui-muted);
+  flex-shrink: 0;
+}
+
+.layer-group-header .group-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text);
+  flex: 1;
+}
+
+.layer-group-header .group-count {
+  font-size: 10px;
+  color: var(--ui-muted-2);
+  margin-right: 4px;
+}
+
+.layer-group-header .group-eye {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-muted);
+  transition: color 0.15s;
+}
+
+.layer-group-header .group-eye:hover {
+  color: var(--ui-text);
+}
+
+.layer-group-header .group-eye.group-hidden {
+  color: rgba(73, 104, 131, 0.45);
+}
+
+.layer-group-header .group-eye.group-mixed {
+  color: var(--ui-muted-2);
+  opacity: 0.7;
+}
+
+/* Group content (collapsible) */
+.layer-group-content {
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.layer-group-content.collapsed {
+  display: none;
+}
+
+/* Grouped layer items (indented) */
+.layer-item.layer-item-grouped {
+  padding-left: 26px;
+}
+
+.layer-item.layer-item-grouped::before {
+  left: 10px;
+}
+
+/* Left-side positioning for grouped items */
+#layer-panel.is-left .layer-item.layer-item-grouped {
+  padding-left: 10px;
+  padding-right: 26px;
+}
+
+#layer-panel.is-left .layer-item.layer-item-grouped::before {
+  left: auto;
+  right: 10px;
+}

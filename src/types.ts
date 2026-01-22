@@ -111,6 +111,7 @@ interface BaseLayer {
   visible?: boolean;
   tooltip?: string[];
   dataRef?: string;
+  group?: string;  // Optional group name for layer organization
 }
 
 export interface HexLayer extends BaseLayer {

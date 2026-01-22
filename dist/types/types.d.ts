@@ -83,6 +83,7 @@ interface BaseLayer {
     visible?: boolean;
     tooltip?: string[];
     dataRef?: string;
+    group?: string;
 }
 export interface HexLayer extends BaseLayer {
     layerType: 'hex';

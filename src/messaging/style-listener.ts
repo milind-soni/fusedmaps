@@ -75,7 +75,8 @@ export function enableStyleListener(
   layers: any[],
   config: StyleListenerConfig
 ): StyleListenerState {
-  const channel = config.channel || 'fused-params';
+  // Default to "parameter-updates" which is the channel used by JSON UI components
+  const channel = config.channel || 'parameter-updates';
   const targetLayerId = config.layerId || 'all';
   const mappings = config.mappings || {};
 

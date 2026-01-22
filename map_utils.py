@@ -94,7 +94,8 @@ VALID_TILE_PROPS = {
 # - 5c90ffc: smooth color gradients for continuous colors (linear interpolation)
 # - ab686b7: add collapsible layer groups to layer panel
 # - ea497b4: move group border to bottom of group content
-FUSEDMAPS_CDN_REF_DEFAULT = "ea497b4"
+# - 1cd81d3: add styleListener for client-side style updates from JSON UI
+FUSEDMAPS_CDN_REF_DEFAULT = "1cd81d3"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"
@@ -237,6 +238,7 @@ def deckgl_layers(
     map_broadcast: typing.Optional[dict] = None,  # Viewport broadcast config: {"channel": "fused-bus", "dataset": "all"}
     map_sync: typing.Union[dict, bool, None] = None,  # Sync viewports between maps: True or {"channel": "my-sync-channel"}
     location_listener: typing.Union[dict, bool, None] = None,  # Listen for feature clicks: {"channel": "fused-bus", "idFields": ["GEOID", "id"]}, False to disable
+    style_listener: typing.Union[dict, bool, None] = None,  # Listen for style updates: {"channel": "fused-params", "mappings": {"palette": "style.fillColor.palette"}}
     sidebar: typing.Optional[str] = None,  # None | "show" | "hide"
     debug: typing.Optional[bool] = None,  # deprecated alias for sidebar
     fusedmaps_ref: typing.Optional[str] = None,  # override CDN ref (commit/tag/branch)
@@ -277,6 +279,12 @@ def deckgl_layers(
         on_click: Click broadcast config (sends feature clicks to other components).
         map_broadcast: Viewport broadcast config (sends map bounds to other components).
             Example: {"channel": "fused-bus", "dataset": "all"}
+        style_listener: Listen for style parameters from JSON UI and apply them client-side.
+            Enables dropdown/slider components to change palette, opacity, etc. without
+            re-running the UDF. Example:
+            - True: Use default mappings (palette, opacity, fillColor, etc.)
+            - {"mappings": {"palette": "style.fillColor.palette"}}: Custom mappings
+            - {"channel": "fused-params", "layerId": "layer-0"}: Target specific layer
         
         # Custom injection (extend without modifying FusedMaps package):
         custom_head: HTML to inject in <head> (e.g., external scripts, stylesheets).
@@ -303,6 +311,12 @@ def deckgl_layers(
         }));
         '''
         return deckgl_layers(layers=layers, custom_head=geocoder_head, on_init=geocoder_init)
+    
+    Example (style listener for JSON UI palette dropdown):
+        return deckgl_layers(
+            layers=[...],
+            style_listener=True  # or {"mappings": {"palette": "style.fillColor.palette"}}
+        )
     """
     
     # Basemap styles
@@ -601,6 +615,18 @@ def deckgl_layers(
         # Pass custom idFields for feature matching if provided
         if loc_cfg.get("idFields"):
             messaging_config["locationListener"]["idFields"] = loc_cfg["idFields"]
+    # Style listener: receives style parameters from JSON UI and applies them client-side
+    # Pass style_listener=True for defaults or style_listener={"mappings": {...}} to customize
+    if style_listener:
+        style_cfg = style_listener if isinstance(style_listener, dict) else {}
+        messaging_config["styleListener"] = {
+            "enabled": True,
+            "channel": style_cfg.get("channel", "parameter-updates"),  # Match JSON UI channel
+            "layerId": style_cfg.get("layerId", "all"),
+        }
+        # Pass custom mappings for parameter->style property paths
+        if style_cfg.get("mappings"):
+            messaging_config["styleListener"]["mappings"] = style_cfg["mappings"]
     if messaging_config:
         fusedmaps_config["messaging"] = messaging_config
     

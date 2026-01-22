@@ -109,6 +109,7 @@ function normalizeHexLayer(layer: HexLayer): any {
     name: layer.name,
     layerType: 'hex',
     visible: layer.visible,
+    group: (layer as any).group,  // Preserve group for layer panel
     data: layer.data,
     tileUrl: layer.tileUrl,
     isTileLayer: !!layer.tileUrl,
@@ -158,6 +159,7 @@ function normalizeVectorLayer(layer: VectorLayer): any {
     name: layer.name,
     layerType: 'vector',
     visible: layer.visible,
+    group: (layer as any).group,  // Preserve group for layer panel
     geojson: layer.geojson,
     geojsonSource: layer.source,
     dataRef: layer.dataRef,
@@ -195,6 +197,7 @@ function normalizeMVTLayer(layer: MVTLayer): any {
     name: layer.name,
     layerType: 'mvt',
     visible: layer.visible,
+    group: (layer as any).group,  // Preserve group for layer panel
     tileUrl: layer.tileUrl,
     sourceLayer: layer.sourceLayer,
     dataRef: layer.dataRef,
@@ -220,6 +223,7 @@ function normalizeRasterLayer(layer: RasterLayer): any {
     name: layer.name,
     layerType: 'raster',
     visible: layer.visible,
+    group: (layer as any).group,  // Preserve group for layer panel
     tileUrl: layer.tileUrl,
     imageUrl: layer.imageUrl,
     imageBounds: layer.imageBounds,
@@ -243,6 +247,7 @@ function normalizePMTilesLayer(layer: PMTilesLayer): any {
     name: layer.name,
     layerType: 'pmtiles',
     visible: layer.visible,
+    group: (layer as any).group,  // Preserve group for layer panel
     pmtilesUrl: layer.pmtilesUrl,
     pmtilesPath: layer.pmtilesPath,
     sourceLayer: layer.sourceLayer,

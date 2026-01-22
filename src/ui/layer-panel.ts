@@ -256,78 +256,73 @@ function renderPanel(store: LayerStore): void {
 
   const allLayers = store.getAll();
 
-  // Separate ungrouped and grouped layers, maintaining order
-  const ungrouped: typeof allLayers = [];
+  // Build groups map (collect all layers per group)
   const groups = new Map<string, typeof allLayers>();
-  const groupOrder: string[] = []; // Track first-appearance order
-
   allLayers.forEach(layerState => {
     const groupName = (layerState.config as any).group;
     if (groupName && typeof groupName === 'string') {
       if (!groups.has(groupName)) {
         groups.set(groupName, []);
-        groupOrder.push(groupName);
       }
       groups.get(groupName)!.push(layerState);
-    } else {
-      ungrouped.push(layerState);
     }
   });
 
-  // Debug: log group detection
-  console.log('[LayerPanel] Groups detected:', groupOrder, 'Ungrouped:', ungrouped.length);
+  // Track which groups we've already rendered
+  const renderedGroups = new Set<string>();
 
   let html = '';
 
-  // Render ungrouped layers first (in their original order)
-  ungrouped.forEach(layerState => {
-    html += renderLayerItem(layerState.config, layerState.visible, layerState.order);
-  });
+  // Render in definition order - groups appear at position of first layer
+  allLayers.forEach(layerState => {
+    const groupName = (layerState.config as any).group;
 
-  // Render groups (in first-appearance order)
-  groupOrder.forEach(groupName => {
-    const groupLayers = groups.get(groupName)!;
-    const layerIds = groupLayers.map(ls => ls.config.id);
+    if (!groupName) {
+      // Ungrouped layer - render at its position
+      html += renderLayerItem(layerState.config, layerState.visible, layerState.order);
+    } else if (!renderedGroups.has(groupName)) {
+      // First layer of this group - render entire group here
+      renderedGroups.add(groupName);
+      const groupLayers = groups.get(groupName)!;
+      const layerIds = groupLayers.map(ls => ls.config.id);
 
-    // Initialize group state if not set (default: expanded)
-    if (groupExpandedState[groupName] === undefined) {
-      groupExpandedState[groupName] = true;
+      // Initialize group state if not set (default: expanded)
+      if (groupExpandedState[groupName] === undefined) {
+        groupExpandedState[groupName] = true;
+      }
+      const isExpanded = groupExpandedState[groupName];
+
+      // Calculate group visibility state
+      const groupVis = getGroupVisibility(layerIds);
+      let groupEyeIcon = EYE_OPEN_SVG;
+      let groupEyeClass = '';
+      if (groupVis === 'none') {
+        groupEyeIcon = EYE_CLOSED_SVG;
+        groupEyeClass = ' group-hidden';
+      } else if (groupVis === 'mixed') {
+        groupEyeClass = ' group-mixed';
+      }
+
+      const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
+
+      // Group header (no count)
+      html += `
+        <div class="layer-group-header" data-group-name="${groupName}">
+          <span class="group-chevron">${chevronIcon}</span>
+          <span class="group-name">${groupName}</span>
+          <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
+        </div>
+      `;
+
+      // Group content (collapsible)
+      html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
+      groupLayers.forEach(ls => {
+        html += renderLayerItem(ls.config, ls.visible, ls.order, groupName);
+      });
+      html += `</div>`;
     }
-    const isExpanded = groupExpandedState[groupName];
-
-    // Calculate group visibility state
-    const groupVis = getGroupVisibility(layerIds);
-    let groupEyeIcon = EYE_OPEN_SVG;
-    let groupEyeClass = '';
-    if (groupVis === 'none') {
-      groupEyeIcon = EYE_CLOSED_SVG;
-      groupEyeClass = ' group-hidden';
-    } else if (groupVis === 'mixed') {
-      groupEyeClass = ' group-mixed';
-    }
-
-    const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
-
-    // Group header
-    html += `
-      <div class="layer-group-header" data-group-name="${groupName}">
-        <span class="group-chevron">${chevronIcon}</span>
-        <span class="group-name">${groupName}</span>
-        <span class="group-count">(${groupLayers.length})</span>
-        <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
-      </div>
-    `;
-
-    // Group content (collapsible)
-    html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
-    groupLayers.forEach(layerState => {
-      html += renderLayerItem(layerState.config, layerState.visible, layerState.order, groupName);
-    });
-    html += `</div>`;
+    // else: grouped layer whose group was already rendered - skip
   });
-
-  // Debug: log final HTML structure
-  console.log('[LayerPanel] Rendered groups:', groupOrder.length, 'HTML group headers:', (html.match(/layer-group-header/g) || []).length);
 
   list.innerHTML = html;
 }
@@ -343,69 +338,71 @@ export function updateLayerPanel(
   if (!list) return;
   activeVisibilityState = visibilityState || {};
 
-  // Separate ungrouped and grouped layers, maintaining order
-  const ungrouped: LayerConfig[] = [];
+  // Build groups map (collect all layers per group)
   const groups = new Map<string, LayerConfig[]>();
-  const groupOrder: string[] = [];
-
   layers.forEach(layer => {
     const groupName = (layer as any).group;
     if (groupName && typeof groupName === 'string') {
       if (!groups.has(groupName)) {
         groups.set(groupName, []);
-        groupOrder.push(groupName);
       }
       groups.get(groupName)!.push(layer);
-    } else {
-      ungrouped.push(layer);
     }
   });
+
+  // Track which groups we've already rendered
+  const renderedGroups = new Set<string>();
 
   let html = '';
 
-  // Render ungrouped layers first
-  ungrouped.forEach((layer, idx) => {
-    const visible = visibilityState[layer.id] !== false;
-    html += renderLayerItem(layer, visible, idx);
-  });
+  // Render in definition order - groups appear at position of first layer
+  layers.forEach((layer, idx) => {
+    const groupName = (layer as any).group;
 
-  // Render groups
-  groupOrder.forEach(groupName => {
-    const groupLayers = groups.get(groupName)!;
-    const layerIds = groupLayers.map(l => l.id);
-
-    if (groupExpandedState[groupName] === undefined) {
-      groupExpandedState[groupName] = true;
-    }
-    const isExpanded = groupExpandedState[groupName];
-
-    const groupVis = getGroupVisibility(layerIds);
-    let groupEyeIcon = EYE_OPEN_SVG;
-    let groupEyeClass = '';
-    if (groupVis === 'none') {
-      groupEyeIcon = EYE_CLOSED_SVG;
-      groupEyeClass = ' group-hidden';
-    } else if (groupVis === 'mixed') {
-      groupEyeClass = ' group-mixed';
-    }
-
-    const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
-
-    html += `
-      <div class="layer-group-header" data-group-name="${groupName}">
-        <span class="group-chevron">${chevronIcon}</span>
-        <span class="group-name">${groupName}</span>
-        <span class="group-count">(${groupLayers.length})</span>
-        <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
-      </div>
-    `;
-
-    html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
-    groupLayers.forEach((layer, idx) => {
+    if (!groupName) {
+      // Ungrouped layer - render at its position
       const visible = visibilityState[layer.id] !== false;
-      html += renderLayerItem(layer, visible, idx, groupName);
-    });
-    html += `</div>`;
+      html += renderLayerItem(layer, visible, idx);
+    } else if (!renderedGroups.has(groupName)) {
+      // First layer of this group - render entire group here
+      renderedGroups.add(groupName);
+      const groupLayers = groups.get(groupName)!;
+      const layerIds = groupLayers.map(l => l.id);
+
+      if (groupExpandedState[groupName] === undefined) {
+        groupExpandedState[groupName] = true;
+      }
+      const isExpanded = groupExpandedState[groupName];
+
+      const groupVis = getGroupVisibility(layerIds);
+      let groupEyeIcon = EYE_OPEN_SVG;
+      let groupEyeClass = '';
+      if (groupVis === 'none') {
+        groupEyeIcon = EYE_CLOSED_SVG;
+        groupEyeClass = ' group-hidden';
+      } else if (groupVis === 'mixed') {
+        groupEyeClass = ' group-mixed';
+      }
+
+      const chevronIcon = isExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG;
+
+      // Group header (no count)
+      html += `
+        <div class="layer-group-header" data-group-name="${groupName}">
+          <span class="group-chevron">${chevronIcon}</span>
+          <span class="group-name">${groupName}</span>
+          <span class="group-eye${groupEyeClass}" title="Toggle group visibility">${groupEyeIcon}</span>
+        </div>
+      `;
+
+      html += `<div class="layer-group-content${isExpanded ? '' : ' collapsed'}">`;
+      groupLayers.forEach((l, i) => {
+        const visible = visibilityState[l.id] !== false;
+        html += renderLayerItem(l, visible, i, groupName);
+      });
+      html += `</div>`;
+    }
+    // else: grouped layer whose group was already rendered - skip
   });
 
   list.innerHTML = html;

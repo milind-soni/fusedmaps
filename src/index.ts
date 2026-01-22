@@ -239,9 +239,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       setupHighlight(map, store.getAllConfigs(), getVisibilityState(), overlayRef.current, highlightConfig);
     }
     
-    // Setup messaging (pass deck overlay for hex tile click picking, instance for styleListener)
+    // Setup messaging (pass deck overlay for hex tile click picking)
     if (config.messaging) {
-      setupMessaging(map, config.messaging, store.getAllConfigs(), overlayRef.current, instance);
+      setupMessaging(map, config.messaging, store.getAllConfigs(), overlayRef.current);
     }
 
     // DuckDB-WASM SQL layers (non-tile Parquet-backed hex layers)

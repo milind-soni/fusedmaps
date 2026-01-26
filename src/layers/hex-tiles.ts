@@ -37,7 +37,7 @@ interface TileRuntime {
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500; // Exponential backoff: 500ms, 1000ms, 2000ms
 
-const DEFAULT_MAX_REQUESTS = 10;
+const DEFAULT_MAX_REQUESTS = 20;
 const DEFAULT_HYPARQUET_ESM_URL = 'https://cdn.jsdelivr.net/npm/hyparquet@1.23.3/+esm';
 
 let HYPARQUET_LOAD_PROMISE: Promise<any> | null = null;
@@ -656,7 +656,7 @@ function buildHexTileDeckLayers(
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
-        maxCacheSize: 200, // Keep more tiles in memory to reduce re-fetching during pan/zoom
+        maxCacheSize: 500, // Keep more tiles in memory to reduce re-fetching during pan/zoom
         refinementStrategy,
         pickable: true,
         autoHighlight: true,
@@ -902,6 +902,9 @@ export function createHexTileOverlay(
     .filter((x) => x.enabled && x.attr);
 
   let autoTimer: any = null;
+  let lastRebuildTime = 0;
+  const MIN_REBUILD_INTERVAL = 3000; // Don't rebuild more than once every 3 seconds
+
   const scheduleAuto = (delayMs: number) => {
     if (!autoCandidates.length) return;
     if (autoTimer) clearTimeout(autoTimer);
@@ -916,16 +919,21 @@ export function createHexTileOverlay(
         }
       }
       if (changed) {
-        rebuild();
-        // Ask host to refresh legend (index.ts listens)
+        // Throttle rebuilds to prevent patchy tile loading
+        const now = Date.now();
+        if (now - lastRebuildTime > MIN_REBUILD_INTERVAL) {
+          lastRebuildTime = now;
+          rebuild();
+        }
+        // Always update legend even if rebuild is throttled
         try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
       }
     }, delayMs);
   };
 
-  const onMoveEnd = () => scheduleAuto(800);
-  const onIdle = () => scheduleAuto(1200);
-  const onDirty = () => scheduleAuto(150);
+  const onMoveEnd = () => scheduleAuto(1500); // Increased from 800
+  const onIdle = () => scheduleAuto(2000);    // Increased from 1200
+  const onDirty = () => scheduleAuto(500);    // Increased from 150
   if (autoCandidates.length) {
     map.on('moveend', onMoveEnd);
     map.on('idle', onIdle);

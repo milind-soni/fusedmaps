@@ -28,14 +28,72 @@ export interface DeckTileOverlayState {
 interface TileRuntime {
   cache: Map<string, any[]>;
   inflight: Map<string, Promise<any[] | null>>;
-  retryState: Map<string, { attempts: number; lastAttempt: number }>; // Track retry attempts per tile
   tilesLoading: number;
   tileStats: Record<string, Record<string, { min: number; max: number }>>; // layerId -> "z/x/y" -> min/max
   catState: Record<string, Record<string, { lut: Map<string, number[]>; pairs: Array<{ value: string; label: string }>; next: number; debounce?: any }>>; // layerId -> attr -> state
 }
 
-const DEFAULT_MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 500; // Exponential backoff: 500ms, 1000ms, 2000ms
+// Custom refinement strategy (matches live-map's updateTileStateDefault2)
+// Shows tiles while loading, walks ancestors/children for placeholders
+type Tile2DHeader = {
+  isSelected: boolean;
+  isLoaded: boolean;
+  isLoading: boolean;
+  content: any;
+  parent: Tile2DHeader | null;
+  children: Tile2DHeader[] | null;
+  state: number;
+  isVisible: boolean;
+};
+
+function fusedRefinementStrategy(allTiles: Tile2DHeader[]) {
+  // Reset all tile states
+  for (const tile of allTiles) {
+    tile.state = 0;
+  }
+  // For each selected tile, find placeholder in ancestors if not loaded
+  for (const tile of allTiles) {
+    if (tile.isSelected && !getPlaceholderInAncestors(tile)) {
+      getPlaceholderInChildren(tile);
+    }
+  }
+  // Set visibility based on state
+  for (const tile of allTiles) {
+    tile.isVisible = Boolean(tile.state & TILE_STATE_VISIBLE);
+  }
+}
+
+// Walk up the tree until we find one ancestor that is loaded
+function getPlaceholderInAncestors(startTile: Tile2DHeader): boolean {
+  let tile: Tile2DHeader | null = startTile;
+  while (tile) {
+    if (tile.isLoaded || tile.content) {
+      tile.state |= TILE_STATE_VISIBLE;
+      return true;
+    } else if (tile.isLoading) {
+      // Don't return true on isLoading - parent should also be shown
+      // This allows both loading tile and its parent to be visible
+      tile.state |= TILE_STATE_VISIBLE;
+    }
+    tile = tile.parent;
+  }
+  return false;
+}
+
+// Recursively set children as placeholder
+function getPlaceholderInChildren(tile: Tile2DHeader) {
+  if (!tile.children) return;
+  for (const child of tile.children) {
+    if (child.isLoading || child.isLoaded || child.content) {
+      child.state |= TILE_STATE_VISIBLE;
+    } else {
+      getPlaceholderInChildren(child);
+    }
+  }
+}
+
+// Tile state flags (from deck.gl tileset-2d.ts)
+const TILE_STATE_VISIBLE = 2;
 
 const DEFAULT_MAX_REQUESTS = 20;
 const DEFAULT_HYPARQUET_ESM_URL = 'https://cdn.jsdelivr.net/npm/hyparquet@1.23.3/+esm';
@@ -318,7 +376,6 @@ function createTileRuntime(): TileRuntime {
   return {
     cache: new Map(),
     inflight: new Map(),
-    retryState: new Map(),
     tilesLoading: 0,
     tileStats: {},
     catState: {}
@@ -559,7 +616,7 @@ function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number])
 
 function getTileConfig(
   layer: HexLayerConfig
-): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number; refinementStrategy: string } {
+): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number } {
   const cfg = layer.tileLayerConfig || {};
   return {
     tileSize: cfg.tileSize ?? 256,
@@ -567,7 +624,6 @@ function getTileConfig(
     maxZoom: cfg.maxZoom ?? 19,
     zoomOffset: (cfg as any).zoomOffset ?? 0,
     maxRequests: (cfg as any).maxRequests ?? DEFAULT_MAX_REQUESTS,
-    refinementStrategy: (cfg as any).refinementStrategy ?? 'best-available'
   };
 }
 
@@ -635,9 +691,8 @@ function buildHexTileDeckLayers(
         (fillCfgEffective && typeof fillCfgEffective === 'object' ? (fillCfgEffective as any).attr : null) ||
         null;
 
-      // Always default to 'best-available' for better UX - shows parent tiles while children load
-      // User can explicitly set 'no-overlap' if they want strict zoom-level matching
-      const refinementStrategy = (tileCfg as any).refinementStrategy || 'best-available';
+      // Use custom refinement strategy that matches live-map behavior
+      // Shows loading tiles, walks ancestors/children for placeholders
 
       // Get beforeId for proper layer ordering (interleaved with Mapbox layers)
       const beforeId = beforeIds?.[layer.id];
@@ -657,7 +712,7 @@ function buildHexTileDeckLayers(
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
         maxCacheSize: 500, // Keep more tiles in memory to reduce re-fetching during pan/zoom
-        refinementStrategy,
+        refinementStrategy: fusedRefinementStrategy,
         pickable: true,
         autoHighlight: true,
         visible,
@@ -668,45 +723,27 @@ function buildHexTileDeckLayers(
           const cacheKey = url;
           const tileKey = `${z}/${x}/${y}`;
 
+          // Return from cache if available
           if (runtime.cache.has(cacheKey)) return runtime.cache.get(cacheKey);
+
+          // Wait for inflight request if one exists
           if (runtime.inflight.has(cacheKey)) {
             try {
-              const data = await runtime.inflight.get(cacheKey);
-              // IMPORTANT: preserve null (abort) so the tileset doesn't think we loaded data.
-              return data;
+              return await runtime.inflight.get(cacheKey);
             } catch {
-              return runtime.cache.get(cacheKey) || [];
+              // If inflight failed, continue to fetch
             }
-          }
-
-          // Check retry state - if we've exceeded max retries recently, don't retry immediately
-          const retryInfo = runtime.retryState.get(cacheKey);
-          if (retryInfo && retryInfo.attempts >= DEFAULT_MAX_RETRIES) {
-            const timeSinceLastAttempt = Date.now() - retryInfo.lastAttempt;
-            // After 30 seconds, reset retry counter and try again
-            if (timeSinceLastAttempt < 30000) {
-              return []; // Return empty rather than null to avoid infinite retry loops
-            }
-            // Reset retry state after cooldown
-            runtime.retryState.delete(cacheKey);
           }
 
           onLoadingDelta(1);
           const p = (async () => {
-            const currentAttempt = (retryInfo?.attempts || 0) + 1;
-
-            // Helper to handle retry scheduling
-            const scheduleRetry = () => {
-              runtime.retryState.set(cacheKey, {
-                attempts: currentAttempt,
-                lastAttempt: Date.now()
-              });
-            };
-
             try {
               const res = await fetch(url, { signal });
               if (signal?.aborted) return null;
-              if (!res.ok) throw new Error(`tile http ${res.status}`);
+              if (!res.ok) {
+                console.warn(`[tiles] HTTP ${res.status} for ${tileKey}`);
+                return null; // Return null so deck.gl can retry
+              }
 
               const ct = (res.headers.get('Content-Type') || '').toLowerCase();
               let data: any;
@@ -720,8 +757,7 @@ function buildHexTileDeckLayers(
                     hp = await ensureHyparquetLoaded();
                   } catch (e) {
                     console.error('[tiles] failed to auto-load hyparquet', e);
-                    scheduleRetry();
-                    return null;
+                    return null; // Return null so deck.gl can retry
                   }
                 }
                 const buf = await res.arrayBuffer();
@@ -748,8 +784,6 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
-              // Clear retry state on success
-              runtime.retryState.delete(cacheKey);
 
               // Parquet metadata min/max (instant autoDomain)
               try {
@@ -771,26 +805,8 @@ function buildHexTileDeckLayers(
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
-
-              // Track retry attempt
-              scheduleRetry();
-
-              // If we haven't exceeded max retries, schedule a retry with exponential backoff
-              if (currentAttempt < DEFAULT_MAX_RETRIES) {
-                const delay = RETRY_BASE_DELAY_MS * Math.pow(2, currentAttempt - 1);
-                console.warn(`[tiles] Tile load failed (attempt ${currentAttempt}/${DEFAULT_MAX_RETRIES}), retrying in ${delay}ms:`, tileKey);
-
-                // Schedule retry by dispatching an event that triggers rebuild
-                setTimeout(() => {
-                  try {
-                    // Dispatch event to trigger tile layer rebuild (which will retry failed tiles)
-                    window.dispatchEvent(new CustomEvent('fusedmaps:tiles:retry'));
-                  } catch (_) {}
-                }, delay);
-              } else {
-                console.warn(`[tiles] Tile load failed after ${DEFAULT_MAX_RETRIES} attempts:`, tileKey);
-              }
-
+              console.warn(`[tiles] Tile load error for ${tileKey}:`, e);
+              // Return null so deck.gl knows to retry this tile
               return null;
             } finally {
               runtime.inflight.delete(cacheKey);
@@ -799,9 +815,7 @@ function buildHexTileDeckLayers(
           })();
 
           runtime.inflight.set(cacheKey, p);
-          const out = await p;
-          // Preserve null for abort/failure semantics (prevents "holes stuck forever")
-          return out;
+          return p;
         },
         renderSubLayers: (props: any) => {
           const data = props.data || [];
@@ -942,20 +956,11 @@ export function createHexTileOverlay(
     scheduleAuto(1500);
   }
 
-  // Listen for tile retry events (triggered after failed tile load with exponential backoff)
-  const onTileRetry = () => {
-    try {
-      rebuild();
-    } catch (_) {}
-  };
-  try { window.addEventListener('fusedmaps:tiles:retry', onTileRetry as any); } catch {}
-
   const destroy = () => {
     if (autoTimer) clearTimeout(autoTimer);
     try { map.off('moveend', onMoveEnd); } catch {}
     try { map.off('idle', onIdle); } catch {}
     try { window.removeEventListener('fusedmaps:autodomain:dirty', onDirty as any); } catch {}
-    try { window.removeEventListener('fusedmaps:tiles:retry', onTileRetry as any); } catch {}
     try { map.removeControl(overlay); } catch {}
   };
 

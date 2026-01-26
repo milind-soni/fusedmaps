@@ -717,6 +717,17 @@ function buildHexTileDeckLayers(
         autoHighlight: true,
         visible,
         ...(beforeId ? { beforeId } : {}),
+
+        // Tile lifecycle callbacks (like live-map)
+        onTileError: (error: Error) => {
+          console.warn('[tiles] Tile error:', error.message);
+          // deck.gl will retry failed tiles automatically
+        },
+        onViewportLoad: () => {
+          // All tiles in viewport loaded - trigger any pending updates
+          try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
+        },
+
         getTileData: async ({ index, signal }: any) => {
           const { x, y, z } = index;
           const url = tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
@@ -741,8 +752,8 @@ function buildHexTileDeckLayers(
               const res = await fetch(url, { signal });
               if (signal?.aborted) return null;
               if (!res.ok) {
-                console.warn(`[tiles] HTTP ${res.status} for ${tileKey}`);
-                return null; // Return null so deck.gl can retry
+                // Throw error so deck.gl knows to retry this tile
+                throw new Error(`HTTP ${res.status} for tile ${tileKey}`);
               }
 
               const ct = (res.headers.get('Content-Type') || '').toLowerCase();
@@ -756,8 +767,8 @@ function buildHexTileDeckLayers(
                   try {
                     hp = await ensureHyparquetLoaded();
                   } catch (e) {
-                    console.error('[tiles] failed to auto-load hyparquet', e);
-                    return null; // Return null so deck.gl can retry
+                    // Throw error so deck.gl knows to retry
+                    throw new Error(`Failed to load hyparquet for tile ${tileKey}`);
                   }
                 }
                 const buf = await res.arrayBuffer();
@@ -805,9 +816,8 @@ function buildHexTileDeckLayers(
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
-              console.warn(`[tiles] Tile load error for ${tileKey}:`, e);
-              // Return null so deck.gl knows to retry this tile
-              return null;
+              // Re-throw error so deck.gl can handle retry via onTileError
+              throw e;
             } finally {
               runtime.inflight.delete(cacheKey);
               onLoadingDelta(-1);

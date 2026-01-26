@@ -70,15 +70,6 @@ async function ensureHyparquetLoaded(): Promise<any> {
   return HYPARQUET_LOAD_PROMISE;
 }
 
-function hashString(s: string): string {
-  // Small stable hash (djb2-ish) for IDs; not crypto.
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) + h) ^ s.charCodeAt(i);
-  }
-  return (h >>> 0).toString(16);
-}
-
 function getDeck(): DeckGlobal | null {
   return (window as any).deck || null;
 }
@@ -628,24 +619,9 @@ function buildHexTileDeckLayers(
       const getFillColor = buildColorAccessor(runtime, layer, fillCfgEffective);
       const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
 
-      // IMPORTANT: When autoDomain updates, we must force TileLayer + its sublayers to fully update.
-      // Otherwise, some already-loaded tiles can keep old attribute buffers and you see "tile seams".
-      const domKey = JSON.stringify({
-        fd: (fillCfgEffective && typeof fillCfgEffective === 'object') ? (fillCfgEffective.domain || fillCfgEffective._dynamicDomain) : null,
-        ld: (lineCfgEffective && typeof lineCfgEffective === 'object') ? (lineCfgEffective.domain || lineCfgEffective._dynamicDomain) : null
-      });
-      const styleKey = JSON.stringify({
-        f: fillCfgEffective,
-        l: lineCfgEffective,
-        stroked: rawHexCfg.stroked !== false,
-        filled: rawHexCfg.filled !== false,
-        extruded: rawHexCfg.extruded === true,
-        opacity: rawHexCfg.opacity,
-        elevationScale: rawHexCfg.elevationScale,
-        coverage: rawHexCfg.coverage,
-        lineWidthMinPixels: rawHexCfg.lineWidthMinPixels
-      });
-      const idHash = hashString(`${domKey}|${styleKey}`);
+      // Use stable layer ID (like live-map pattern) - don't include style in hash.
+      // This preserves tileset state across style/domain changes.
+      // Use updateTriggers on sublayers to force color recalculation when needed.
 
       const stroked = rawHexCfg.stroked !== false;
       const filled = rawHexCfg.filled !== false;
@@ -666,8 +642,14 @@ function buildHexTileDeckLayers(
       // Get beforeId for proper layer ordering (interleaved with Mapbox layers)
       const beforeId = beforeIds?.[layer.id];
 
+      // Build updateTriggers key for sublayer color updates (like live-map pattern)
+      const colorTrigger = JSON.stringify({
+        fill: fillCfgEffective,
+        line: lineCfgEffective,
+      });
+
       return new TileLayer({
-        id: `${layer.id}-tiles-${idHash}`,
+        id: `${layer.id}-tiles`,
         data: tileUrl,
         tileSize: tileCfg.tileSize,
         minZoom: tileCfg.minZoom,
@@ -840,7 +822,12 @@ function buildHexTileDeckLayers(
             elevationScale,
             ...(extruded && elevationProperty ? { getElevation: (d: any) => Number(d?.[elevationProperty] ?? 0) } : {}),
             ...(getFillColor ? { getFillColor } : {}),
-            ...(getLineColor ? { getLineColor } : {})
+            ...(getLineColor ? { getLineColor } : {}),
+            // Update triggers force deck.gl to re-evaluate accessors when colors change
+            updateTriggers: {
+              getFillColor: colorTrigger,
+              getLineColor: colorTrigger,
+            },
           });
         }
       });

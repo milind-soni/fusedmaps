@@ -683,10 +683,16 @@ function buildHexTileDeckLayers(
   // IMPORTANT: Only include visible tile layers.
   // Using `visible: false` on Deck layers can still leave stale tiles/picking artifacts in some setups.
   // Filtering them out ensures the layer is truly removed from rendering + picking (matches map_utils.py).
-  const tileLayers = layers
+  const allTileLayers = layers
     .filter((l) => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl)
-    .map((l) => l as HexLayerConfig)
-    .filter((l) => visibility[l.id] !== false);
+    .map((l) => l as HexLayerConfig);
+
+  console.log('[tiles] Building TileLayers', {
+    allTileLayers: allTileLayers.map(l => l.id),
+    visibility,
+  });
+
+  const tileLayers = allTileLayers.filter((l) => visibility[l.id] !== false);
 
   // Reverse to keep UI order consistent (top of menu renders on top)
   return tileLayers
@@ -972,22 +978,28 @@ export function createHexTileOverlay(
 
   // AutoDomain scheduler (only for layers that request it)
   const autoLayers = layers.filter((l) => l.layerType === 'hex' && (l as any).isTileLayer) as HexLayerConfig[];
-  const autoCandidates = autoLayers
+  const allAutoCandidates = autoLayers
     .map((l) => ({ layer: l, ...wantsAutoDomain(l), tileCfg: getTileConfig(l) }))
     .filter((x) => x.enabled && x.attr);
+
+  // Filter to only visible layers (using visibilityRef so it stays current)
+  const getVisibleAutoCandidates = () =>
+    allAutoCandidates.filter((c) => visibilityRef.current[c.layer.id] !== false);
 
   let autoTimer: any = null;
   let lastRebuildTime = -Infinity; // Start at -Infinity so first rebuild always happens
   const MIN_REBUILD_INTERVAL = 3000; // Don't rebuild more than once every 3 seconds
 
   const scheduleAuto = (delayMs: number) => {
-    if (!autoCandidates.length) return;
+    if (!allAutoCandidates.length) return;
     if (autoTimer) clearTimeout(autoTimer);
-    console.log('[autoDomain] Scheduling autoDomain check in', delayMs, 'ms, candidates:', autoCandidates.map(c => c.layer.id));
+    const visibleCandidates = getVisibleAutoCandidates();
+    console.log('[autoDomain] Scheduling autoDomain check in', delayMs, 'ms, visible candidates:', visibleCandidates.map(c => c.layer.id));
     autoTimer = setTimeout(() => {
-      console.log('[autoDomain] Running autoDomain check');
+      const candidates = getVisibleAutoCandidates();
+      console.log('[autoDomain] Running autoDomain check for', candidates.map(c => c.layer.id));
       let changed = false;
-      for (const c of autoCandidates) {
+      for (const c of candidates) {
         const expectedZ = Math.round(map.getZoom()) + (c.tileCfg.zoomOffset || 0);
         const dom = calculateDomainFromTiles(map, runtime, c.layer, c.attr!, expectedZ);
         console.log('[autoDomain] Domain result for', c.layer.id, ':', dom);
@@ -1020,7 +1032,7 @@ export function createHexTileOverlay(
   const onMoveEnd = () => scheduleAuto(1000);
   const onIdle = () => scheduleAuto(1500);
   const onDirty = () => scheduleAuto(200); // Quick response when tiles first load
-  if (autoCandidates.length) {
+  if (allAutoCandidates.length) {
     map.on('moveend', onMoveEnd);
     map.on('idle', onIdle);
     try { window.addEventListener('fusedmaps:autodomain:dirty', onDirty as any); } catch {}

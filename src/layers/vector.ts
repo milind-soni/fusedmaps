@@ -5,6 +5,7 @@
 import type { VectorLayerConfig, MVTLayerConfig } from '../types';
 import { buildColorExpr } from '../color/expressions';
 import { toRgba } from '../color/palettes';
+import { registerOriginalGeoJSON } from '../interactions/highlight';
 
 /**
  * Add a GeoJSON vector layer to the map
@@ -28,6 +29,9 @@ export function addVectorLayer(
     if (typeof opts.maxzoom === 'number') src.maxzoom = opts.maxzoom;
   }
   map.addSource(layer.id, src);
+
+  // Register original GeoJSON for highlight lookup (avoids tile-clipped geometries)
+  registerOriginalGeoJSON(layer.id, geojson);
   
   // Extract layer properties
   const vecData = geojson.features.map((f: any) => f.properties || {});

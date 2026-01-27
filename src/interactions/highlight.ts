@@ -31,8 +31,64 @@ let currentMap: mapboxgl.Map | null = null;
 let currentLayers: LayerConfig[] = [];
 let configuredIdFields: string[] = DEFAULT_ID_FIELDS;
 
+// Store original GeoJSON data for each vector layer to get full (non-clipped) geometries
+const originalGeoJSONStore: Map<string, GeoJSON.FeatureCollection> = new Map();
+
 export interface HighlightConfig {
   idFields?: string[];  // Custom ID fields for feature matching
+}
+
+/**
+ * Register original GeoJSON data for a layer (called from vector.ts)
+ * This allows highlight to use full geometries instead of tile-clipped fragments
+ */
+export function registerOriginalGeoJSON(layerId: string, geojson: GeoJSON.FeatureCollection): void {
+  originalGeoJSONStore.set(layerId, geojson);
+}
+
+/**
+ * Find a feature in the original GeoJSON by matching properties
+ */
+function findOriginalFeature(layerId: string, props: Record<string, any>): GeoJSON.Feature | null {
+  const geojson = originalGeoJSONStore.get(layerId);
+  if (!geojson?.features) return null;
+
+  // Try to match by ID fields first
+  for (const feature of geojson.features) {
+    const featureProps = feature.properties || {};
+
+    // Check each configured ID field
+    for (const field of configuredIdFields) {
+      if (props[field] !== undefined && featureProps[field] !== undefined) {
+        if (String(props[field]) === String(featureProps[field])) {
+          return feature;
+        }
+      }
+    }
+  }
+
+  // Fallback: try to match all properties
+  for (const feature of geojson.features) {
+    const featureProps = feature.properties || {};
+    let allMatch = true;
+    let hasMatch = false;
+
+    for (const [key, value] of Object.entries(props)) {
+      if (featureProps[key] !== undefined) {
+        hasMatch = true;
+        if (String(featureProps[key]) !== String(value)) {
+          allMatch = false;
+          break;
+        }
+      }
+    }
+
+    if (allMatch && hasMatch) {
+      return feature;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -131,11 +187,11 @@ function getQueryableLayers(map: mapboxgl.Map, layers: LayerConfig[]): string[] 
  */
 function highlightFeature(map: mapboxgl.Map, feature: any): void {
   let geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-  
+
   if (feature) {
     const props = feature.properties || {};
     const hexId = props.hex || props.h3;
-    
+
     // If it's a hex, use H3 to get boundary
     if (hexId && window.h3) {
       try {
@@ -151,7 +207,26 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
         }
       } catch (e) {}
     }
-    // Otherwise use the feature's actual geometry (for vectors)
+    // For vector features, look up the FULL geometry from original GeoJSON
+    // (queryRenderedFeatures returns tile-clipped geometry which causes cut-off highlights)
+    else if (feature.source && originalGeoJSONStore.has(feature.source)) {
+      const originalFeature = findOriginalFeature(feature.source, props);
+      if (originalFeature?.geometry) {
+        geojson.features.push({
+          type: 'Feature',
+          geometry: originalFeature.geometry,
+          properties: props
+        });
+      } else if (feature.geometry) {
+        // Fallback to clipped geometry if original not found
+        geojson.features.push({
+          type: 'Feature',
+          geometry: feature.geometry,
+          properties: props
+        });
+      }
+    }
+    // Fallback: use the feature's geometry directly (may be clipped for tiled sources)
     else if (feature.geometry) {
       geojson.features.push({
         type: 'Feature',

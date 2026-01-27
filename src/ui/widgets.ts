@@ -94,7 +94,7 @@ function downloadScreenshot(map: mapboxgl.Map) {
 function addScaleControl(map: mapboxgl.Map, position: WidgetPosition = 'bottom-left') {
   // top-center not supported by Mapbox, fallback to top-left
   const mapboxPos = position === 'top-center' ? 'top-left' : position;
-  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'metric' }), mapboxPos);
+  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'imperial' }), mapboxPos);
 }
 
 function addZoomHomeControl(

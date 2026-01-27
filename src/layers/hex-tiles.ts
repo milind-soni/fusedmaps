@@ -534,12 +534,18 @@ function calculateDomainFromTiles(
   expectedZ: number
 ): [number, number] | null {
   const zoom = map.getZoom();
+  // Get the layer's tile URL pattern and create a base for matching
+  const layerTileUrl = layer.tileUrl || '';
+  // Remove the {z}/{x}/{y} placeholders to get the URL base pattern
+  const layerUrlBase = layerTileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
+
   console.log('[autoDomain] calculateDomainFromTiles called', {
     layerId: layer.id,
     attr,
     expectedZ,
     zoom,
-    cacheSize: runtime.cache.size
+    cacheSize: runtime.cache.size,
+    layerUrlBase: layerUrlBase.substring(0, 80)
   });
 
   if (zoom < AUTO_DOMAIN_MIN_ZOOM) {
@@ -547,6 +553,7 @@ function calculateDomainFromTiles(
     return null;
   }
   if (!attr) return null;
+  if (!layerTileUrl) return null;
 
   const b = map.getBounds();
   const viewportBounds = {
@@ -560,15 +567,19 @@ function calculateDomainFromTiles(
   const values: number[] = [];
   let tilesChecked = 0;
   let tilesMatched = 0;
+  let tilesForLayer = 0;
 
   for (const [cacheKey, rows] of runtime.cache.entries()) {
     tilesChecked++;
     // Parse tile key (format: "url|z/x/y")
     const parts = cacheKey.split('|');
-    if (parts.length < 2) {
-      console.log('[autoDomain] Skipping tile - no pipe separator:', cacheKey.substring(0, 80));
-      continue;
-    }
+    if (parts.length < 2) continue;
+
+    // Filter to only this layer's tiles by checking if resolved URL starts with layer's base URL
+    const tileUrl = parts[0];
+    if (!tileUrl.startsWith(layerUrlBase)) continue;
+
+    tilesForLayer++;
     const [z, x, y] = parts[1].split('/').map(Number);
     if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
@@ -595,6 +606,7 @@ function calculateDomainFromTiles(
 
   console.log('[autoDomain] Tile scan result:', {
     tilesChecked,
+    tilesForLayer,
     tilesMatched,
     valuesCollected: values.length,
     attr

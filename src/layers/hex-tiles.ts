@@ -987,8 +987,6 @@ export function createHexTileOverlay(
     allAutoCandidates.filter((c) => visibilityRef.current[c.layer.id] !== false);
 
   let autoTimer: any = null;
-  let lastRebuildTime = -Infinity; // Start at -Infinity so first rebuild always happens
-  const MIN_REBUILD_INTERVAL = 500; // Don't rebuild more than twice per second (reduced from 3s to allow visibility changes)
 
   const scheduleAuto = (delayMs: number) => {
     if (!allAutoCandidates.length) return;
@@ -1010,18 +1008,10 @@ export function createHexTileOverlay(
         }
       }
       if (changed) {
-        // Throttle rebuilds to prevent patchy tile loading
-        const now = Date.now();
-        const timeSinceLastRebuild = now - lastRebuildTime;
-        console.log('[autoDomain] Domain changed, timeSinceLastRebuild:', timeSinceLastRebuild, 'threshold:', MIN_REBUILD_INTERVAL);
-        if (timeSinceLastRebuild > MIN_REBUILD_INTERVAL) {
-          console.log('[autoDomain] Triggering rebuild');
-          lastRebuildTime = now;
-          rebuild();
-        } else {
-          console.log('[autoDomain] Rebuild throttled');
-        }
-        // Always update legend even if rebuild is throttled
+        // Always rebuild when domain changes - no throttle
+        // The autoDomain delay (200ms) already prevents excessive rebuilds
+        console.log('[autoDomain] Domain changed, triggering rebuild');
+        rebuild();
         try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
       } else {
         console.log('[autoDomain] No domain change detected');

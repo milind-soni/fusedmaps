@@ -731,8 +731,9 @@ function buildHexTileDeckLayers(
         getTileData: async ({ index, signal }: any) => {
           const { x, y, z } = index;
           const url = tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
-          const cacheKey = url;
           const tileKey = `${z}/${x}/${y}`;
+          // Cache key format: "url|z/x/y" - used by calculateDomainFromTiles for viewport filtering
+          const cacheKey = `${url}|${tileKey}`;
 
           // Return from cache if available
           if (runtime.cache.has(cacheKey)) return runtime.cache.get(cacheKey);

@@ -774,8 +774,13 @@ function buildHexTileDeckLayers(
           // Cache key format: "url|z/x/y" - used by calculateDomainFromTiles for viewport filtering
           const cacheKey = `${url}|${tileKey}`;
 
+          console.log('[tiles] getTileData called', { layerId: layer.id, tileKey, urlBase: url.substring(0, 60) });
+
           // Return from cache if available
-          if (runtime.cache.has(cacheKey)) return runtime.cache.get(cacheKey);
+          if (runtime.cache.has(cacheKey)) {
+            console.log('[tiles] Cache hit', { layerId: layer.id, tileKey });
+            return runtime.cache.get(cacheKey);
+          }
 
           // Wait for inflight request if one exists
           if (runtime.inflight.has(cacheKey)) {
@@ -835,6 +840,7 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
+              console.log('[tiles] Cached tile', { layerId: layer.id, tileKey, rowCount: normalized.length, cacheSize: runtime.cache.size });
 
               // Parquet metadata min/max (instant autoDomain)
               try {

@@ -687,12 +687,13 @@ function buildHexTileDeckLayers(
     .filter((l) => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl)
     .map((l) => l as HexLayerConfig);
 
+  const tileLayers = allTileLayers.filter((l) => visibility[l.id] !== false);
+
   console.log('[tiles] Building TileLayers', {
     allTileLayers: allTileLayers.map(l => l.id),
+    visibleLayers: tileLayers.map(l => l.id),
     visibility,
   });
-
-  const tileLayers = allTileLayers.filter((l) => visibility[l.id] !== false);
 
   // Reverse to keep UI order consistent (top of menu renders on top)
   return tileLayers
@@ -759,8 +760,17 @@ function buildHexTileDeckLayers(
         line: lineCfgEffective,
       });
 
+      const tileLayerId = `${layer.id}-tiles-${idHash}`;
+      console.log('[tiles] Creating TileLayer', {
+        tileLayerId,
+        layerId: layer.id,
+        hasDomain: !!(fillCfgEffective?.domain || fillCfgEffective?._dynamicDomain),
+        domain: fillCfgEffective?.domain || fillCfgEffective?._dynamicDomain,
+        tileUrl: tileUrl.substring(0, 60),
+      });
+
       return new TileLayer({
-        id: `${layer.id}-tiles-${idHash}`,
+        id: tileLayerId,
         data: tileUrl,
         tileSize: tileCfg.tileSize,
         minZoom: tileCfg.minZoom,

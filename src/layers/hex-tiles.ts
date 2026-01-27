@@ -533,7 +533,19 @@ function calculateDomainFromTiles(
   attr: string,
   expectedZ: number
 ): [number, number] | null {
-  if (map.getZoom() < AUTO_DOMAIN_MIN_ZOOM) return null;
+  const zoom = map.getZoom();
+  console.log('[autoDomain] calculateDomainFromTiles called', {
+    layerId: layer.id,
+    attr,
+    expectedZ,
+    zoom,
+    cacheSize: runtime.cache.size
+  });
+
+  if (zoom < AUTO_DOMAIN_MIN_ZOOM) {
+    console.log('[autoDomain] Skipping: zoom', zoom, '< minZoom', AUTO_DOMAIN_MIN_ZOOM);
+    return null;
+  }
   if (!attr) return null;
 
   const b = map.getBounds();
@@ -546,11 +558,17 @@ function calculateDomainFromTiles(
 
   // Collect values from cached tiles in viewport
   const values: number[] = [];
+  let tilesChecked = 0;
+  let tilesMatched = 0;
 
   for (const [cacheKey, rows] of runtime.cache.entries()) {
+    tilesChecked++;
     // Parse tile key (format: "url|z/x/y")
     const parts = cacheKey.split('|');
-    if (parts.length < 2) continue;
+    if (parts.length < 2) {
+      console.log('[autoDomain] Skipping tile - no pipe separator:', cacheKey.substring(0, 80));
+      continue;
+    }
     const [z, x, y] = parts[1].split('/').map(Number);
     if (!Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (Math.abs(z - expectedZ) > AUTO_DOMAIN_ZOOM_TOLERANCE) continue;
@@ -558,6 +576,7 @@ function calculateDomainFromTiles(
     const tb = tileToBounds(x, y, z);
     if (!boundsIntersect(tb, viewportBounds)) continue;
 
+    tilesMatched++;
     // Sample values from this tile
     if (!Array.isArray(rows)) continue;
     for (const row of rows) {
@@ -574,8 +593,16 @@ function calculateDomainFromTiles(
     if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
   }
 
+  console.log('[autoDomain] Tile scan result:', {
+    tilesChecked,
+    tilesMatched,
+    valuesCollected: values.length,
+    attr
+  });
+
   // Need enough samples for meaningful percentiles
   if (values.length < 30) {
+    console.log('[autoDomain] Not enough values, falling back to tileStats');
     // Fallback to Parquet stats if not enough samples
     return calculateDomainFromTileStats(map, runtime, layer, expectedZ);
   }
@@ -938,25 +965,36 @@ export function createHexTileOverlay(
   const scheduleAuto = (delayMs: number) => {
     if (!autoCandidates.length) return;
     if (autoTimer) clearTimeout(autoTimer);
+    console.log('[autoDomain] Scheduling autoDomain check in', delayMs, 'ms, candidates:', autoCandidates.map(c => c.layer.id));
     autoTimer = setTimeout(() => {
+      console.log('[autoDomain] Running autoDomain check');
       let changed = false;
       for (const c of autoCandidates) {
         const expectedZ = Math.round(map.getZoom()) + (c.tileCfg.zoomOffset || 0);
         const dom = calculateDomainFromTiles(map, runtime, c.layer, c.attr!, expectedZ);
+        console.log('[autoDomain] Domain result for', c.layer.id, ':', dom);
         if (dom) {
           const did = maybeUpdateDynamicDomain(c.layer, dom);
+          console.log('[autoDomain] Domain changed?', did);
           if (did) changed = true;
         }
       }
       if (changed) {
         // Throttle rebuilds to prevent patchy tile loading
         const now = Date.now();
-        if (now - lastRebuildTime > MIN_REBUILD_INTERVAL) {
+        const timeSinceLastRebuild = now - lastRebuildTime;
+        console.log('[autoDomain] Domain changed, timeSinceLastRebuild:', timeSinceLastRebuild, 'threshold:', MIN_REBUILD_INTERVAL);
+        if (timeSinceLastRebuild > MIN_REBUILD_INTERVAL) {
+          console.log('[autoDomain] Triggering rebuild');
           lastRebuildTime = now;
           rebuild();
+        } else {
+          console.log('[autoDomain] Rebuild throttled');
         }
         // Always update legend even if rebuild is throttled
         try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
+      } else {
+        console.log('[autoDomain] No domain change detected');
       }
     }, delayMs);
   };

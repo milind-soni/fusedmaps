@@ -720,9 +720,20 @@ function buildHexTileDeckLayers(
       const getFillColor = buildColorAccessor(runtime, layer, fillCfgEffective);
       const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
 
-      // Use stable layer ID (like live-map pattern) - don't include style in hash.
-      // This preserves tileset state across style/domain changes.
-      // Use updateTriggers on sublayers to force color recalculation when needed.
+      // IMPORTANT: When autoDomain updates, we must force TileLayer + its sublayers to fully update.
+      // Otherwise, some already-loaded tiles can keep old attribute buffers and colors don't update.
+      // Include domain in the layer ID hash to force recreation when domain changes.
+      const domKey = JSON.stringify({
+        fd: (fillCfgEffective && typeof fillCfgEffective === 'object') ? (fillCfgEffective.domain || fillCfgEffective._dynamicDomain) : null,
+        ld: (lineCfgEffective && typeof lineCfgEffective === 'object') ? (lineCfgEffective.domain || lineCfgEffective._dynamicDomain) : null
+      });
+      // Simple hash function for stable IDs
+      const hashStr = (s: string): string => {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+        return (h >>> 0).toString(16);
+      };
+      const idHash = hashStr(domKey);
 
       const stroked = rawHexCfg.stroked !== false;
       const filled = rawHexCfg.filled !== false;
@@ -749,7 +760,7 @@ function buildHexTileDeckLayers(
       });
 
       return new TileLayer({
-        id: `${layer.id}-tiles`,
+        id: `${layer.id}-tiles-${idHash}`,
         data: tileUrl,
         tileSize: tileCfg.tileSize,
         minZoom: tileCfg.minZoom,

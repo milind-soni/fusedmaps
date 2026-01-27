@@ -33,8 +33,8 @@ interface TileRuntime {
   catState: Record<string, Record<string, { lut: Map<string, number[]>; pairs: Array<{ value: string; label: string }>; next: number; debounce?: any }>>; // layerId -> attr -> state
 }
 
-// Custom refinement strategy (matches live-map's updateTileStateDefault2)
-// Shows tiles while loading, walks ancestors/children for placeholders
+// Custom refinement strategy - matches live-map's finestNoOverlap
+// Shows finest (highest zoom) tiles, hides ancestors to prevent overlap
 type Tile2DHeader = {
   isSelected: boolean;
   isLoaded: boolean;
@@ -44,22 +44,56 @@ type Tile2DHeader = {
   children: Tile2DHeader[] | null;
   state: number;
   isVisible: boolean;
+  zoom: number;
 };
 
-function fusedRefinementStrategy(allTiles: Tile2DHeader[]) {
+// Tile state flags (from deck.gl tileset-2d.ts)
+const TILE_STATE_VISITED = 1;
+const TILE_STATE_VISIBLE = 2;
+
+/**
+ * Refinement strategy matching live-map's finestNoOverlap
+ * Shows finest (highest zoom) loaded tiles, hides ancestors to prevent overlap
+ */
+function finestNoOverlap(allTiles: Tile2DHeader[]) {
   // Reset all tile states
   for (const tile of allTiles) {
     tile.state = 0;
   }
-  // For each selected tile, find placeholder in ancestors if not loaded
-  for (const tile of allTiles) {
-    if (tile.isSelected && !getPlaceholderInAncestors(tile)) {
-      getPlaceholderInChildren(tile);
+
+  // Sort by zoom descending (finest/highest zoom first)
+  const finestSortedTiles = Array.from(allTiles).sort(
+    (t1, t2) => t2.zoom - t1.zoom
+  );
+
+  // For each selected tile, find placeholder in ancestors
+  for (const tile of finestSortedTiles) {
+    if (tile.isSelected) {
+      getPlaceholderInAncestors(tile);
     }
   }
-  // Set visibility based on state
-  for (const tile of allTiles) {
+
+  // For any tile we have selected and loaded, hide all of its ancestors
+  // We don't show the ancestor over a selected tile because it could have overlap
+  for (const tile of finestSortedTiles) {
+    if (tile.isSelected && (tile.isLoaded || tile.content)) {
+      hideAncestors(tile);
+    }
+  }
+
+  // Process coarsest first for visibility
+  const sortedTiles = Array.from(finestSortedTiles).reverse();
+  for (const tile of sortedTiles) {
     tile.isVisible = Boolean(tile.state & TILE_STATE_VISIBLE);
+
+    if (tile.children && (tile.isVisible || (tile.state & TILE_STATE_VISITED))) {
+      // If the tile is rendered, or if the tile has been explicitly hidden, hide all of its children
+      for (const child of tile.children) {
+        child.state = TILE_STATE_VISITED;
+      }
+    } else if (tile.isSelected) {
+      getPlaceholderInChildren(tile);
+    }
   }
 }
 
@@ -70,30 +104,33 @@ function getPlaceholderInAncestors(startTile: Tile2DHeader): boolean {
     if (tile.isLoaded || tile.content) {
       tile.state |= TILE_STATE_VISIBLE;
       return true;
-    } else if (tile.isLoading) {
-      // Don't return true on isLoading - parent should also be shown
-      // This allows both loading tile and its parent to be visible
-      tile.state |= TILE_STATE_VISIBLE;
     }
     tile = tile.parent;
   }
   return false;
 }
 
+// Hide all ancestors of a tile
+function hideAncestors(tile: Tile2DHeader) {
+  let parent = tile.parent;
+  while (parent) {
+    parent.state = 0;
+    parent.isVisible = false;
+    parent = parent.parent;
+  }
+}
+
 // Recursively set children as placeholder
 function getPlaceholderInChildren(tile: Tile2DHeader) {
   if (!tile.children) return;
   for (const child of tile.children) {
-    if (child.isLoading || child.isLoaded || child.content) {
+    if (child.isLoaded || child.content) {
       child.state |= TILE_STATE_VISIBLE;
     } else {
       getPlaceholderInChildren(child);
     }
   }
 }
-
-// Tile state flags (from deck.gl tileset-2d.ts)
-const TILE_STATE_VISIBLE = 2;
 
 const DEFAULT_MAX_REQUESTS = 20;
 const DEFAULT_HYPARQUET_ESM_URL = 'https://cdn.jsdelivr.net/npm/hyparquet@1.23.3/+esm';
@@ -778,7 +815,7 @@ function buildHexTileDeckLayers(
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
         maxCacheSize: 200, // Match live-map behavior - don't cache too many tiles
-        refinementStrategy: fusedRefinementStrategy,
+        refinementStrategy: finestNoOverlap,
         pickable: true,
         autoHighlight: true,
         visible,

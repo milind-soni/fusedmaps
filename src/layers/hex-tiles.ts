@@ -988,7 +988,7 @@ export function createHexTileOverlay(
 
   let autoTimer: any = null;
   let lastRebuildTime = -Infinity; // Start at -Infinity so first rebuild always happens
-  const MIN_REBUILD_INTERVAL = 3000; // Don't rebuild more than once every 3 seconds
+  const MIN_REBUILD_INTERVAL = 500; // Don't rebuild more than twice per second (reduced from 3s to allow visibility changes)
 
   const scheduleAuto = (delayMs: number) => {
     if (!allAutoCandidates.length) return;

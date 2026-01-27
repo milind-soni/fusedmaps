@@ -976,9 +976,15 @@ export function createHexTileOverlay(
     }
     try {
       overlay.setProps({ layers: build() });
+
+      // Force viewport sync by triggering a map move event
+      // This ensures deck.gl uses the current viewport, not a stale one
       try {
+        map.fire('move');
+        map.fire('moveend');
         (map as any).triggerRepaint?.();
       } catch {}
+
       // Trigger autoDomain recalculation when visibility changes
       // This handles the case where a layer becomes visible and tiles are already cached
       if (newVisibility) {

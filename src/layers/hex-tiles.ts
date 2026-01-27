@@ -777,7 +777,7 @@ function buildHexTileDeckLayers(
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
-        maxCacheSize: 500, // Keep more tiles in memory to reduce re-fetching during pan/zoom
+        maxCacheSize: 200, // Match live-map behavior - don't cache too many tiles
         refinementStrategy: fusedRefinementStrategy,
         pickable: true,
         autoHighlight: true,

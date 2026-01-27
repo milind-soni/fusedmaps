@@ -926,7 +926,7 @@ export function createHexTileOverlay(
     .filter((x) => x.enabled && x.attr);
 
   let autoTimer: any = null;
-  let lastRebuildTime = 0;
+  let lastRebuildTime = -Infinity; // Start at -Infinity so first rebuild always happens
   const MIN_REBUILD_INTERVAL = 3000; // Don't rebuild more than once every 3 seconds
 
   const scheduleAuto = (delayMs: number) => {
@@ -955,9 +955,9 @@ export function createHexTileOverlay(
     }, delayMs);
   };
 
-  const onMoveEnd = () => scheduleAuto(1500); // Increased from 800
-  const onIdle = () => scheduleAuto(2000);    // Increased from 1200
-  const onDirty = () => scheduleAuto(500);    // Increased from 150
+  const onMoveEnd = () => scheduleAuto(1000);
+  const onIdle = () => scheduleAuto(1500);
+  const onDirty = () => scheduleAuto(200); // Quick response when tiles first load
   if (autoCandidates.length) {
     map.on('moveend', onMoveEnd);
     map.on('idle', onIdle);

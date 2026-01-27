@@ -576,17 +576,7 @@ function calculateDomainFromTiles(
   // Remove the {z}/{x}/{y} placeholders to get the URL base pattern
   const layerUrlBase = layerTileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
 
-  console.log('[autoDomain] calculateDomainFromTiles called', {
-    layerId: layer.id,
-    attr,
-    expectedZ,
-    zoom,
-    cacheSize: runtime.cache.size,
-    layerUrlBase: layerUrlBase.substring(0, 80)
-  });
-
   if (zoom < AUTO_DOMAIN_MIN_ZOOM) {
-    console.log('[autoDomain] Skipping: zoom', zoom, '< minZoom', AUTO_DOMAIN_MIN_ZOOM);
     return null;
   }
   if (!attr) return null;
@@ -641,17 +631,8 @@ function calculateDomainFromTiles(
     if (values.length >= AUTO_DOMAIN_MAX_SAMPLES) break;
   }
 
-  console.log('[autoDomain] Tile scan result:', {
-    tilesChecked,
-    tilesForLayer,
-    tilesMatched,
-    valuesCollected: values.length,
-    attr
-  });
-
   // Need enough samples for meaningful percentiles
   if (values.length < 30) {
-    console.log('[autoDomain] Not enough values, falling back to tileStats');
     // Fallback to Parquet stats if not enough samples
     return calculateDomainFromTileStats(map, runtime, layer, expectedZ);
   }
@@ -726,12 +707,6 @@ function buildHexTileDeckLayers(
 
   const tileLayers = allTileLayers.filter((l) => visibility[l.id] !== false);
 
-  console.log('[tiles] Building TileLayers', {
-    allTileLayers: allTileLayers.map(l => l.id),
-    visibleLayers: tileLayers.map(l => l.id),
-    visibility,
-  });
-
   // Reverse to keep UI order consistent (top of menu renders on top)
   return tileLayers
     .slice()
@@ -798,13 +773,6 @@ function buildHexTileDeckLayers(
       });
 
       const tileLayerId = `${layer.id}-tiles-${idHash}`;
-      console.log('[tiles] Creating TileLayer', {
-        tileLayerId,
-        layerId: layer.id,
-        hasDomain: !!(fillCfgEffective?.domain || fillCfgEffective?._dynamicDomain),
-        domain: fillCfgEffective?.domain || fillCfgEffective?._dynamicDomain,
-        tileUrl: tileUrl.substring(0, 60),
-      });
 
       return new TileLayer({
         id: tileLayerId,
@@ -838,11 +806,8 @@ function buildHexTileDeckLayers(
           // Cache key format: "url|z/x/y" - used by calculateDomainFromTiles for viewport filtering
           const cacheKey = `${url}|${tileKey}`;
 
-          console.log('[tiles] getTileData called', { layerId: layer.id, tileKey, urlBase: url.substring(0, 60) });
-
           // Return from cache if available
           if (runtime.cache.has(cacheKey)) {
-            console.log('[tiles] Cache hit', { layerId: layer.id, tileKey });
             return runtime.cache.get(cacheKey);
           }
 
@@ -904,7 +869,6 @@ function buildHexTileDeckLayers(
               // Normalize + sanitize
               const normalized = sanitizeRows(normalizeTileData(data));
               runtime.cache.set(cacheKey, normalized);
-              console.log('[tiles] Cached tile', { layerId: layer.id, tileKey, rowCount: normalized.length, cacheSize: runtime.cache.size });
 
               // Parquet metadata min/max (instant autoDomain)
               try {
@@ -1017,8 +981,8 @@ export function createHexTileOverlay(
       // Force viewport sync by triggering a map move event
       // This ensures deck.gl uses the current viewport, not a stale one
       try {
-        map.fire('move');
-        map.fire('moveend');
+        (map as any).fire('move');
+        (map as any).fire('moveend');
         (map as any).triggerRepaint?.();
       } catch {}
 
@@ -1055,30 +1019,22 @@ export function createHexTileOverlay(
   const scheduleAuto = (delayMs: number) => {
     if (!allAutoCandidates.length) return;
     if (autoTimer) clearTimeout(autoTimer);
-    const visibleCandidates = getVisibleAutoCandidates();
-    console.log('[autoDomain] Scheduling autoDomain check in', delayMs, 'ms, visible candidates:', visibleCandidates.map(c => c.layer.id));
     autoTimer = setTimeout(() => {
       const candidates = getVisibleAutoCandidates();
-      console.log('[autoDomain] Running autoDomain check for', candidates.map(c => c.layer.id));
       let changed = false;
       for (const c of candidates) {
         const expectedZ = Math.round(map.getZoom()) + (c.tileCfg.zoomOffset || 0);
         const dom = calculateDomainFromTiles(map, runtime, c.layer, c.attr!, expectedZ);
-        console.log('[autoDomain] Domain result for', c.layer.id, ':', dom);
         if (dom) {
           const did = maybeUpdateDynamicDomain(c.layer, dom);
-          console.log('[autoDomain] Domain changed?', did);
           if (did) changed = true;
         }
       }
       if (changed) {
         // Always rebuild when domain changes - no throttle
         // The autoDomain delay (200ms) already prevents excessive rebuilds
-        console.log('[autoDomain] Domain changed, triggering rebuild');
         rebuild();
         try { window.dispatchEvent(new CustomEvent('fusedmaps:legend:update')); } catch {}
-      } else {
-        console.log('[autoDomain] No domain change detected');
       }
     }, delayMs);
   };

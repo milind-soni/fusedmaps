@@ -906,6 +906,11 @@ export function createHexTileOverlay(
       try {
         (map as any).triggerRepaint?.();
       } catch {}
+      // Trigger autoDomain recalculation when visibility changes
+      // This handles the case where a layer becomes visible and tiles are already cached
+      if (newVisibility) {
+        try { window.dispatchEvent(new CustomEvent('fusedmaps:autodomain:dirty')); } catch {}
+      }
     } catch {
       // ignore
     }

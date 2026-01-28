@@ -96,7 +96,8 @@ VALID_TILE_PROPS = {
 # - ea497b4: move group border to bottom of group content
 # - b51295c: fix location_change highlight by normalizing field name variants
 # - e295ed4: add multi-feature highlighting for farm selection (matchAll)
-FUSEDMAPS_CDN_REF_DEFAULT = "e295ed4"
+# - 82e182c: default matchAll to true, expand name to Farm Name variants
+FUSEDMAPS_CDN_REF_DEFAULT = "82e182c"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

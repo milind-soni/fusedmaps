@@ -14,8 +14,9 @@ const HIGHLIGHT_LINE_WIDTH = 3;
 const DEFAULT_ID_FIELDS = [
   // Common generic ID fields
   'id', 'ID', 'Id', 'fid', 'FID', 'OBJECTID', 'objectid',
-  // Name fields
+  // Name fields (field and farm)
   'name', 'Name', 'NAME', 'Field Name', 'field_name',
+  'Farm Name', 'farm_name', 'Farm', 'farm',
   // Geographic ID fields
   'GEOID', 'geoid', 'GeoID', 'geo_id',
   'FIPS', 'fips', 'STATEFP', 'COUNTYFP',

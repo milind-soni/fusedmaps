@@ -118,6 +118,7 @@ export function enableClickBroadcast(
       message.layer = layerName;
     }
 
+    console.log('[ClickBroadcast] Sending feature_click:', message);
     bus.send(message);
   }
 

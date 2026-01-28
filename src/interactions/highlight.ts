@@ -48,25 +48,76 @@ export function registerOriginalGeoJSON(layerId: string, geojson: GeoJSON.Featur
   originalGeoJSONStore.set(layerId, geojson);
 }
 
+// Priority order for ID fields - unique IDs first, then specific names, then general names
+// Higher priority fields should be matched preferentially
+const PRIORITY_ID_FIELDS = [
+  // Truly unique IDs - highest priority
+  'id', 'ID', 'Id', 'fid', 'FID', 'OBJECTID', 'objectid', 'index',
+  // Specific name fields - high priority
+  'Field Name', 'field_name', 'name', 'Name', 'NAME',
+  // Geographic/hex IDs
+  'GEOID', 'geoid', 'GeoID', 'geo_id', 'FIPS', 'fips',
+  'tile_id', 'tileId', 'feature_id', 'featureId',
+  'hex', 'h3', 'h3_index', 'cell_id', 'h3_cell',
+  // Farm-level fields - lower priority (multiple fields per farm)
+  'Farm Name', 'farm_name', 'Farm', 'farm',
+  'STATEFP', 'COUNTYFP'
+];
+
 /**
  * Find a feature in the original GeoJSON by matching properties
+ * Uses a scoring system: features matching more (and higher-priority) ID fields win
  */
 function findOriginalFeature(layerId: string, props: Record<string, any>): GeoJSON.Feature | null {
   const geojson = originalGeoJSONStore.get(layerId);
   if (!geojson?.features) return null;
 
-  // Try to match by ID fields first
+  let bestMatch: GeoJSON.Feature | null = null;
+  let bestScore = 0;
+  let bestPriority = Infinity;  // Lower is better
+
   for (const feature of geojson.features) {
     const featureProps = feature.properties || {};
+    let score = 0;
+    let highestPriority = Infinity;
 
-    // Check each configured ID field
-    for (const field of configuredIdFields) {
+    // Count how many ID fields match and track highest priority match
+    for (let i = 0; i < PRIORITY_ID_FIELDS.length; i++) {
+      const field = PRIORITY_ID_FIELDS[i];
       if (props[field] !== undefined && featureProps[field] !== undefined) {
         if (String(props[field]) === String(featureProps[field])) {
-          return feature;
+          score++;
+          if (i < highestPriority) {
+            highestPriority = i;
+          }
         }
       }
     }
+
+    // Also check configuredIdFields that might not be in PRIORITY_ID_FIELDS
+    for (const field of configuredIdFields) {
+      if (!PRIORITY_ID_FIELDS.includes(field)) {
+        if (props[field] !== undefined && featureProps[field] !== undefined) {
+          if (String(props[field]) === String(featureProps[field])) {
+            score++;
+          }
+        }
+      }
+    }
+
+    // Prefer features with:
+    // 1. Higher score (more matching fields)
+    // 2. If tied, higher priority match (lower priority index)
+    if (score > bestScore || (score === bestScore && highestPriority < bestPriority)) {
+      bestScore = score;
+      bestPriority = highestPriority;
+      bestMatch = feature;
+    }
+  }
+
+  if (bestMatch) {
+    console.log('[Highlight] findOriginalFeature: best match score', bestScore, 'priority', bestPriority);
+    return bestMatch;
   }
 
   // Fallback: try to match all properties

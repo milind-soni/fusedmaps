@@ -123,19 +123,26 @@ export function enableLocationListener(
                           ((msg as any).matchAll !== false && properties.matchAll !== false);
 
           (window as any).__fusedHighlightByProperties(matchProps, matchAll);
-
-          // Re-broadcast as feature_click so charts can highlight too
-          // (charts listen for feature_click, not location_change)
-          if (selectionType === 'field' && properties.field) {
-            const rebroadcast = {
-              type: 'feature_click',
-              source: 'location-listener',
-              properties: { 'Field Name': properties.field },
-              bounds: bounds
-            };
-            bus.send(rebroadcast);
-          }
         } catch {}
+
+        // Re-broadcast as feature_click so charts can highlight too
+        // (charts listen for feature_click, not location_change)
+        // This is OUTSIDE the try-catch to ensure it always runs
+        if (selectionType === 'field' && properties.field) {
+          const rebroadcast = {
+            type: 'feature_click',
+            fromComponent: componentId,
+            source: 'fusedmaps-location-listener',
+            properties: { 'Field Name': properties.field },
+            bounds: bounds
+          };
+          console.log('[LocationListener] Re-broadcasting field selection:', rebroadcast);
+          try {
+            bus.send(rebroadcast);
+          } catch (e) {
+            console.warn('[LocationListener] Re-broadcast failed:', e);
+          }
+        }
       }
 
       if (bounds && Array.isArray(bounds) && bounds.length === 4) {

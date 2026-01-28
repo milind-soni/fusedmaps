@@ -72,9 +72,15 @@ export function enableLocationListener(
 
       const selectionType = (msg as any).selectionType;
 
+      // Skip highlighting for feature_click messages from this map's click-broadcast
+      // (the highlight handler already handles map clicks directly)
+      const source = (msg as any).fromComponent || '';
+      const isFromMapClick = type === 'feature_click' && source.startsWith('click-broadcast');
+
       // For FARM selection: zoom only, no highlighting
       // For FIELD selection and other messages: highlight the feature
-      if (selectionType !== 'farm' && properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
+      // Skip for map clicks (already highlighted by click handler)
+      if (!isFromMapClick && selectionType !== 'farm' && properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
         try {
           // Build a normalized properties object for matching
           const matchProps: Record<string, any> = {};

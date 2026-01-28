@@ -116,9 +116,9 @@ export function setupHighlight(
     configuredIdFields = DEFAULT_ID_FIELDS;
   }
 
-  // Expose highlight function globally for location-listener
-  (window as any).__fusedHighlightByProperties = (props: Record<string, any>) => {
-    highlightByProperties(map, layers, props);
+  // Expose highlight functions globally for location-listener
+  (window as any).__fusedHighlightByProperties = (props: Record<string, any>, matchAll?: boolean) => {
+    highlightByProperties(map, layers, props, matchAll);
   };
   (window as any).__fusedHighlightClear = () => {
     highlightFeature(map, null);
@@ -265,12 +265,95 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
 }
 
 /**
+ * Highlight multiple features on the map
+ */
+function highlightFeatures(map: mapboxgl.Map, features: any[]): void {
+  const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+  for (const feature of features) {
+    if (!feature) continue;
+    const props = feature.properties || {};
+    const hexId = props.hex || props.h3;
+
+    // If it's a hex, use H3 to get boundary
+    if (hexId && window.h3) {
+      try {
+        const id = toH3(hexId);
+        if (id && window.h3.isValidCell(id)) {
+          const boundary = window.h3.cellToBoundary(id).map(([lat, lng]: [number, number]) => [lng, lat]);
+          boundary.push(boundary[0]);
+          geojson.features.push({
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [boundary] },
+            properties: props
+          });
+        }
+      } catch (e) {}
+    }
+    // For vector features, look up the FULL geometry from original GeoJSON
+    else if (feature.source && originalGeoJSONStore.has(feature.source)) {
+      const originalFeature = findOriginalFeature(feature.source, props);
+      if (originalFeature?.geometry) {
+        geojson.features.push({
+          type: 'Feature',
+          geometry: originalFeature.geometry,
+          properties: props
+        });
+      } else if (feature.geometry) {
+        geojson.features.push({
+          type: 'Feature',
+          geometry: feature.geometry,
+          properties: props
+        });
+      }
+    }
+    // Fallback: use the feature's geometry directly
+    else if (feature.geometry) {
+      geojson.features.push({
+        type: 'Feature',
+        geometry: feature.geometry,
+        properties: props
+      });
+    }
+  }
+
+  if (!highlightLayerAdded) {
+    map.addSource('feature-hl', { type: 'geojson', data: geojson });
+    map.addLayer({
+      id: 'feature-hl-fill',
+      type: 'fill',
+      source: 'feature-hl',
+      paint: {
+        'fill-color': HIGHLIGHT_FILL,
+        'fill-opacity': 1
+      }
+    });
+    map.addLayer({
+      id: 'feature-hl-line',
+      type: 'line',
+      source: 'feature-hl',
+      paint: {
+        'line-color': HIGHLIGHT_LINE,
+        'line-width': HIGHLIGHT_LINE_WIDTH
+      }
+    });
+    highlightLayerAdded = true;
+  } else {
+    (map.getSource('feature-hl') as any).setData(geojson);
+  }
+
+  selectedFeature = features.length > 0 ? features[0] : null;
+}
+
+/**
  * Highlight a feature by matching properties (for external click events)
+ * @param matchAll - if true, highlight ALL matching features (for farm selection)
  */
 function highlightByProperties(
   map: mapboxgl.Map,
   layers: LayerConfig[],
-  props: Record<string, any>
+  props: Record<string, any>,
+  matchAll: boolean = false
 ): void {
   if (!props || Object.keys(props).length === 0) return;
 
@@ -287,39 +370,65 @@ function highlightByProperties(
     return;
   }
 
-  // Find a feature that matches the incoming properties
+  // Find features that match the incoming properties
   // Use configured ID fields (custom + defaults)
   const idFields = configuredIdFields;
+  const matchingFeatures: any[] = [];
+  const matchedIds = new Set<string>();  // Dedupe by ID
 
   for (const feature of allFeatures) {
     const featureProps = feature.properties || {};
 
     // Check if any ID field matches
+    let matched = false;
     for (const field of idFields) {
       if (props[field] !== undefined && featureProps[field] !== undefined) {
         if (String(props[field]) === String(featureProps[field])) {
-          highlightFeature(map, feature);
-          return;
+          // Dedupe by a unique identifier
+          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] || JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
+          if (!matchedIds.has(String(featureId))) {
+            matchedIds.add(String(featureId));
+            matchingFeatures.push(feature);
+          }
+          matched = true;
+          if (!matchAll) {
+            highlightFeature(map, feature);
+            return;
+          }
+          break;
         }
       }
     }
 
     // Fallback: check if all incoming props match
-    let allMatch = true;
-    for (const [key, value] of Object.entries(props)) {
-      if (featureProps[key] !== undefined && String(featureProps[key]) !== String(value)) {
-        allMatch = false;
-        break;
+    if (!matched) {
+      let allMatch = true;
+      for (const [key, value] of Object.entries(props)) {
+        if (featureProps[key] !== undefined && String(featureProps[key]) !== String(value)) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch && Object.keys(props).length > 0) {
+        const hasMatch = Object.keys(props).some(k => featureProps[k] !== undefined);
+        if (hasMatch) {
+          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] || JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
+          if (!matchedIds.has(String(featureId))) {
+            matchedIds.add(String(featureId));
+            matchingFeatures.push(feature);
+          }
+          if (!matchAll) {
+            highlightFeature(map, feature);
+            return;
+          }
+        }
       }
     }
-    if (allMatch && Object.keys(props).length > 0) {
-      // Verify at least one prop actually matched
-      const hasMatch = Object.keys(props).some(k => featureProps[k] !== undefined);
-      if (hasMatch) {
-        highlightFeature(map, feature);
-        return;
-      }
-    }
+  }
+
+  // If matchAll mode and we found features, highlight them all
+  if (matchAll && matchingFeatures.length > 0) {
+    highlightFeatures(map, matchingFeatures);
   }
 }
 

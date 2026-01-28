@@ -74,8 +74,9 @@ export function enableLocationListener(
       if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
         try {
           // Build a normalized properties object for matching
-          // If location.name exists, also add common field name variants
           const matchProps: Record<string, any> = { ...properties };
+          
+          // If location.name exists, also add common field name variants
           if (properties.name) {
             matchProps['name'] = properties.name;
             matchProps['Name'] = properties.name;
@@ -83,7 +84,20 @@ export function enableLocationListener(
             matchProps['Field Name'] = properties.name;
             matchProps['field_name'] = properties.name;
           }
-          (window as any).__fusedHighlightByProperties(matchProps);
+          
+          // If location.farm exists, add common farm name variants
+          if (properties.farm) {
+            matchProps['farm'] = properties.farm;
+            matchProps['Farm'] = properties.farm;
+            matchProps['FARM'] = properties.farm;
+            matchProps['Farm Name'] = properties.farm;
+            matchProps['farm_name'] = properties.farm;
+          }
+          
+          // Check if matchAll is requested (for highlighting all features in a group)
+          const matchAll = (msg as any).matchAll === true || properties.matchAll === true;
+          
+          (window as any).__fusedHighlightByProperties(matchProps, matchAll);
         } catch {}
       }
 

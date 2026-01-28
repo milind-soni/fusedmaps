@@ -176,6 +176,7 @@ export function setupHighlight(
 
   // Expose highlight functions globally for location-listener
   (window as any).__fusedHighlightByProperties = (props: Record<string, any>, matchAll?: boolean) => {
+    console.log('[Highlight] __fusedHighlightByProperties called with:', props);
     highlightByProperties(map, layers, props, matchAll);
   };
   (window as any).__fusedHighlightClear = () => {

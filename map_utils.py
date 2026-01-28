@@ -97,7 +97,8 @@ VALID_TILE_PROPS = {
 # - b51295c: fix location_change highlight by normalizing field name variants
 # - e295ed4: add multi-feature highlighting for farm selection (matchAll)
 # - 82e182c: default matchAll to true, expand name to Farm Name variants
-FUSEDMAPS_CDN_REF_DEFAULT = "82e182c"
+# - 07dd96f: add Farm Name to DEFAULT_ID_FIELDS for farm matching
+FUSEDMAPS_CDN_REF_DEFAULT = "07dd96f"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

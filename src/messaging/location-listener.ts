@@ -74,33 +74,54 @@ export function enableLocationListener(
       if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
         try {
           // Build a normalized properties object for matching
-          const matchProps: Record<string, any> = { ...properties };
-          
-          // If location.name exists, add common field AND farm name variants
-          // This allows matching whether name is a field name or farm name
-          if (properties.name) {
-            matchProps['name'] = properties.name;
-            matchProps['Name'] = properties.name;
-            matchProps['NAME'] = properties.name;
-            matchProps['Field Name'] = properties.name;
-            matchProps['field_name'] = properties.name;
-            matchProps['Farm Name'] = properties.name;
-            matchProps['farm_name'] = properties.name;
+          const matchProps: Record<string, any> = {};
+          const selectionType = (msg as any).selectionType;
+
+          // Handle explicit field selection (from dropdown)
+          if (selectionType === 'field' && properties.field) {
+            // Match by Field Name only
+            matchProps['Field Name'] = properties.field;
+            matchProps['field_name'] = properties.field;
+            matchProps['name'] = properties.field;
+            matchProps['Name'] = properties.field;
           }
-          
-          // If location.farm exists, add common farm name variants
-          if (properties.farm) {
-            matchProps['farm'] = properties.farm;
-            matchProps['Farm'] = properties.farm;
-            matchProps['FARM'] = properties.farm;
+          // Handle explicit farm selection (from dropdown) - highlight ALL fields in the farm
+          else if (selectionType === 'farm' && properties.farm) {
+            // Match by Farm Name only - this will match ALL fields with this Farm Name
             matchProps['Farm Name'] = properties.farm;
             matchProps['farm_name'] = properties.farm;
+            matchProps['Farm'] = properties.farm;
+            matchProps['farm'] = properties.farm;
           }
-          
-          // Default matchAll to true - highlight all matching features
-          // (single field matches still work since only one feature will match)
-          const matchAll = (msg as any).matchAll !== false && properties.matchAll !== false;
-          
+          // Handle generic location messages (backwards compatibility)
+          else {
+            // Copy all properties
+            Object.assign(matchProps, properties);
+
+            // If location.name exists, add common name variants
+            if (properties.name) {
+              matchProps['name'] = properties.name;
+              matchProps['Name'] = properties.name;
+              matchProps['NAME'] = properties.name;
+              matchProps['Field Name'] = properties.name;
+              matchProps['field_name'] = properties.name;
+            }
+
+            // If location.farm exists, add common farm name variants
+            if (properties.farm) {
+              matchProps['farm'] = properties.farm;
+              matchProps['Farm'] = properties.farm;
+              matchProps['FARM'] = properties.farm;
+              matchProps['Farm Name'] = properties.farm;
+              matchProps['farm_name'] = properties.farm;
+            }
+          }
+
+          // Default matchAll to true for farm selection, false for field selection
+          const matchAll = selectionType === 'farm' ? true :
+                          selectionType === 'field' ? false :
+                          ((msg as any).matchAll !== false && properties.matchAll !== false);
+
           (window as any).__fusedHighlightByProperties(matchProps, matchAll);
         } catch {}
       }

@@ -1,21 +1,23 @@
-@fused.udf(cache_max_age="1d")
+@fused.udf
 def udf():
     """Dynamic dashboard"""
 
-    # Load vector/geometry data (farm boundaries)
+    # Load vector/geometry data (farm boun)
     farm_boundaries = fused.run("field_analysis_summary_2")
+    farm_boundaries_updated = fused.run("field_analysis_bo_minor_update")
+    farm_boundaries_farmability_updated = fused.run("field_analysis_bo_minor_farmability_update_v2")
     print("farms", len(farm_boundaries))
 
     # Load yield per hectare data
     yield_per_hec_data = fused.run("yield_per_hec")
     print("yield_per_hec rows:", len(yield_per_hec_data))
     
-    # Print the data type of 'Harvested Year' column
+    # Print the data type of 'Harvested Ye
     # Load map utilityy
-    map_utils = fused.load("https://github.com/fusedio/udfs/tree/3900e50/community/milind/map_utils/")
+    map_utils = fused.load("general_squid")
     initialViewState = {
-        "longitude": -84.06,
-        "latitude": 32.03,
+        "longitude": -84.0443658206521,
+        "latitude": 32.016397926059,
         "zoom": 13,
         "pitch": 0,
         "bearing": 0
@@ -82,7 +84,7 @@ def udf():
             "opacity": 1
         },
         "tile": {"minZoom": 0, "maxZoom": 19},
-        "tooltip": ["taxsubgrp"]
+        "tooltip": ["taxpartsize"]
     }
 
     # Yield
@@ -157,13 +159,54 @@ def udf():
             },
             "filled": True,
             "stroked": True,
-            "opacity": 0.01, # added opacity 
+            "opacity": 0.01,
             "lineWidth": 3
         },
         "tooltip": [
             "Area Hectares", "Crop Name Harvested", "Farmability Score",
             "Field Name", "Field Openness Score", "Median Vehicle Speed MPH",
             "Terrain Category", "Terrain Smoothness Score", "Total Wet Mass", "Total Yield"
+        ]
+    }
+    config_boundaries_updated = {
+        "style": {
+            "fillColor": {"nullColor": [200, 200, 200]},
+            "lineColor": [255, 255, 255],  # White line color
+            "filled": True, 
+            "stroked": True,
+            "opacity": 0.01,
+            "lineWidth": 3
+        },
+        "tooltip": [
+            "FIELD_NAME", "area_hectares", "Particle Size Class",
+            "min_elev", "max_elev", "slope_range",
+            "Terrain Category", "Terrain Smoothness Score", "Total Wet Mass", "Total Yield"
+        ]
+    }
+
+    config_boundaries_updated_farmability = {
+        "style": {
+           "fillColor": {"nullColor": [200, 200, 200]},
+            "lineColor": {
+                "type": "categorical",
+                "attr": "Terrain Category",
+                "categories": [
+                    "smooth - open",
+                    "rough - open",
+                    "smooth - broken up",
+                    "rough - broken up"
+                ],
+                "palette": "Fall"
+            },
+            "filled": True,
+            "stroked": True,
+            "opacity": 0.01,
+            "lineWidth": 3
+        },
+        "tooltip": [
+            "Field Name", "Farm Name", "Area Hectares", "Farmability Score",
+             "Field Openness Score", "Terrain Smoothness Score",
+            "Terrain Category" 
         ]
     }
 
@@ -174,8 +217,8 @@ def udf():
         "controls": "bottom-right",   # zoom/home/screenshot buttons
         "scale": "bottom-left",      # scale bar
         "basemap": "bottom-right",    # basemap switcher (dark/light/satellite)
-        "layers": "top-right",       # layer visibility toggle panel
-        "legend": "top-right",    # color legend
+        "layers": {"position": "top-right", "expanded":False},      
+        "legend": {"position": "top-right", "expanded":False},    # color legend
         "geocoder": "top-left",           # location search (set to position to enable)
     }
 
@@ -186,17 +229,34 @@ def udf():
             # Vector layer (geometry boundaries)
             {
                 "type": "vector",
-                "data": farm_boundaries,
-                "config": config_boundaries,
-                "visible": False,
-                "name": "Farm Boundaries"
+                "data": farm_boundaries_farmability_updated,
+                "config": config_boundaries_updated_farmability,
+                "visible": True,
+                "name": "Field Boundaries"
             },
+            
+            # Vector layer (geometry boundaries)
+            {
+                "type": "vector",
+                "data": farm_boundaries_updated,
+                "config": config_boundaries_updated,
+                "visible": False,
+                "name": "Field Boundaries White"
+            },
+            # Vector layer (geometry boundaries)
+            # {
+            #     "type": "vector",
+            #     "data": farm_boundaries,
+            #     "config": config_boundaries,
+            #     "visible": False,
+            #     "name": "Farm Boundaries"
+            # },
             # Yield data
             {
                 "type": "hex",
                 "tile_url": "https://udf.ai/fsh_3ErLB7KouxSau3wrjiTRBj/run/tiles/{z}/{x}/{y}?dtype_out_vector=parquet",
                 "config": config_yield,
-                "visible": True,
+                "visible": False,
                 "name": "Yield"
             },
             # Yield per Hectare (vector layer)
@@ -204,7 +264,7 @@ def udf():
                 "type": "vector",
                 "data": yield_per_hec_data,
                 "config": config_yield_per_hec,
-                "visible": True,
+                "visible": False,
                 "name": "Yield per Hectare"
             },
             # Slopes
@@ -226,7 +286,8 @@ def udf():
             # Soil
             {
                 "type": "hex",
-                "tile_url": "https://udf.ai/fsh_4INmjtA4UBS7dehWkrKaJE/run/tiles/{z}/{x}/{y}?dtype_out_vector=parquet",
+                #"tile_url": "https://udf.ai/fsh_4INmjtA4UBS7dehWkrKaJE/run/tiles/{z}/{x}/{y}?dtype_out_vector=parquet",
+                "tile_url": "https://udf.ai/fsh_2Jhx7Vl4blXDmx8nFVnQA7/run/tiles/{z}/{x}/{y}?dtype_out_vector=parquet",
                 "config": config_soil,
                 "visible": False,
                 "name": "Soil Type"
@@ -244,6 +305,7 @@ def udf():
         theme="light",
         initialViewState=initialViewState,
         widgets=widgets,
+        debug=False,
         # on_click enabled by default (broadcasts to "fused-bus")
         # location_listener enabled by default
         location_listener={"channel": "fused-bus", "zoom_offset": 0, "padding": 40, "max_zoom": 16},

@@ -347,6 +347,42 @@ function highlightFeatures(map: mapboxgl.Map, features: any[]): void {
 }
 
 /**
+ * Find all matching features from original GeoJSON store
+ * This searches the FULL data, not just rendered features
+ */
+function findAllOriginalFeatures(props: Record<string, any>): GeoJSON.Feature[] {
+  const results: GeoJSON.Feature[] = [];
+  const matchedIds = new Set<string>();
+
+  for (const [layerId, geojson] of originalGeoJSONStore.entries()) {
+    if (!geojson?.features) continue;
+
+    for (const feature of geojson.features) {
+      const featureProps = feature.properties || {};
+
+      // Check if any configured ID field matches
+      for (const field of configuredIdFields) {
+        if (props[field] !== undefined && featureProps[field] !== undefined) {
+          if (String(props[field]) === String(featureProps[field])) {
+            // Dedupe by unique identifier
+            const featureId = featureProps.id || featureProps['Field Name'] || featureProps.name ||
+              JSON.stringify(feature.geometry?.type === 'Polygon' ?
+                (feature.geometry as any).coordinates?.[0]?.[0] : Math.random());
+            if (!matchedIds.has(String(featureId))) {
+              matchedIds.add(String(featureId));
+              results.push(feature);
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
  * Highlight a feature by matching properties (for external click events)
  * @param matchAll - if true, highlight ALL matching features (for farm selection)
  */
@@ -358,24 +394,30 @@ function highlightByProperties(
 ): void {
   if (!props || Object.keys(props).length === 0) return;
 
-  // Get all queryable layer IDs
+  // For matchAll mode (farm selection), search the FULL original GeoJSON
+  // This ensures we find all fields even if they're outside the current viewport
+  if (matchAll) {
+    const originalFeatures = findAllOriginalFeatures(props);
+    if (originalFeatures.length > 0) {
+      highlightOriginalFeatures(map, originalFeatures);
+      return;
+    }
+  }
+
+  // For single feature selection, query rendered features first (faster)
   const queryLayers = getQueryableLayers(map, layers);
   if (!queryLayers.length) return;
 
-  // Query all rendered features in current viewport
   let allFeatures: any[] = [];
   try {
-    // Cast to any to avoid TS issues with overloaded signature
     allFeatures = (map as any).queryRenderedFeatures(undefined, { layers: queryLayers }) || [];
   } catch (err) {
     return;
   }
 
-  // Find features that match the incoming properties
-  // Use configured ID fields (custom + defaults)
   const idFields = configuredIdFields;
   const matchingFeatures: any[] = [];
-  const matchedIds = new Set<string>();  // Dedupe by ID
+  const matchedIds = new Set<string>();
 
   for (const feature of allFeatures) {
     const featureProps = feature.properties || {};
@@ -385,8 +427,8 @@ function highlightByProperties(
     for (const field of idFields) {
       if (props[field] !== undefined && featureProps[field] !== undefined) {
         if (String(props[field]) === String(featureProps[field])) {
-          // Dedupe by a unique identifier
-          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] || JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
+          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] ||
+            JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
           if (!matchedIds.has(String(featureId))) {
             matchedIds.add(String(featureId));
             matchingFeatures.push(feature);
@@ -413,7 +455,8 @@ function highlightByProperties(
       if (allMatch && Object.keys(props).length > 0) {
         const hasMatch = Object.keys(props).some(k => featureProps[k] !== undefined);
         if (hasMatch) {
-          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] || JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
+          const featureId = featureProps.id || featureProps.name || featureProps['Field Name'] ||
+            JSON.stringify(feature.geometry?.coordinates?.[0]?.[0] || Math.random());
           if (!matchedIds.has(String(featureId))) {
             matchedIds.add(String(featureId));
             matchingFeatures.push(feature);
@@ -427,10 +470,65 @@ function highlightByProperties(
     }
   }
 
-  // If matchAll mode and we found features, highlight them all
+  // Fallback: if no rendered features matched, try original GeoJSON
+  if (matchingFeatures.length === 0) {
+    const originalFeatures = findAllOriginalFeatures(props);
+    if (originalFeatures.length > 0) {
+      if (matchAll) {
+        highlightOriginalFeatures(map, originalFeatures);
+      } else {
+        highlightOriginalFeatures(map, [originalFeatures[0]]);
+      }
+      return;
+    }
+  }
+
   if (matchAll && matchingFeatures.length > 0) {
     highlightFeatures(map, matchingFeatures);
   }
+}
+
+/**
+ * Highlight features directly from original GeoJSON (already has full geometry)
+ */
+function highlightOriginalFeatures(map: mapboxgl.Map, features: GeoJSON.Feature[]): void {
+  const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+  for (const feature of features) {
+    if (!feature?.geometry) continue;
+    geojson.features.push({
+      type: 'Feature',
+      geometry: feature.geometry,
+      properties: feature.properties || {}
+    });
+  }
+
+  if (!highlightLayerAdded) {
+    map.addSource('feature-hl', { type: 'geojson', data: geojson });
+    map.addLayer({
+      id: 'feature-hl-fill',
+      type: 'fill',
+      source: 'feature-hl',
+      paint: {
+        'fill-color': HIGHLIGHT_FILL,
+        'fill-opacity': 1
+      }
+    });
+    map.addLayer({
+      id: 'feature-hl-line',
+      type: 'line',
+      source: 'feature-hl',
+      paint: {
+        'line-color': HIGHLIGHT_LINE,
+        'line-width': HIGHLIGHT_LINE_WIDTH
+      }
+    });
+    highlightLayerAdded = true;
+  } else {
+    (map.getSource('feature-hl') as any).setData(geojson);
+  }
+
+  selectedFeature = features.length > 0 ? features[0] : null;
 }
 
 

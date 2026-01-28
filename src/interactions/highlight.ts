@@ -116,7 +116,12 @@ function findOriginalFeature(layerId: string, props: Record<string, any>): GeoJS
   }
 
   if (bestMatch) {
-    console.log('[Highlight] findOriginalFeature: best match score', bestScore, 'priority', bestPriority);
+    const matchedName = (bestMatch.properties as any)?.['Field Name'] ||
+                        (bestMatch.properties as any)?.field_name ||
+                        (bestMatch.properties as any)?.name || 'unknown';
+    const searchedName = props['Field Name'] || props.field_name || props.name || 'unknown';
+    console.log('[Highlight] findOriginalFeature: searched for', searchedName, '-> matched', matchedName,
+                '(score:', bestScore, 'priority:', bestPriority, ')');
     return bestMatch;
   }
 

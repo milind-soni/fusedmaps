@@ -127,12 +127,17 @@ export function enableLocationListener(
       // Re-broadcast as feature_click so charts can highlight too
       // (charts listen for feature_click, not location_change)
       // Only re-broadcast for location_change from dropdown, NOT for feature_click from map
-      if (type === 'location_change' && selectionType === 'field' && properties?.field) {
+      // Support both explicit selectionType='field' and inferred from properties (backwards compat)
+      const fieldName = properties?.field || properties?.name;
+      const isFieldSelection = selectionType === 'field' ||
+        (type === 'location_change' && fieldName && selectionType !== 'farm');
+
+      if (type === 'location_change' && isFieldSelection && fieldName) {
         const rebroadcast = {
           type: 'feature_click',
           fromComponent: componentId,
           source: 'fusedmaps-location-listener',
-          properties: { 'Field Name': properties.field },
+          properties: { 'Field Name': fieldName },
           bounds: bounds
         };
         console.log('[LocationListener] Re-broadcasting field selection:', rebroadcast);

@@ -44,6 +44,7 @@ export interface HighlightConfig {
  * This allows highlight to use full geometries instead of tile-clipped fragments
  */
 export function registerOriginalGeoJSON(layerId: string, geojson: GeoJSON.FeatureCollection): void {
+  console.log('[Highlight] Registering original GeoJSON for source:', layerId, 'with', geojson?.features?.length, 'features');
   originalGeoJSONStore.set(layerId, geojson);
 }
 
@@ -126,13 +127,21 @@ export function setupHighlight(
   };
   map.on('click', (e: any) => {
     const queryLayers = getQueryableLayers(map, layers);
-    if (!queryLayers.length) return;
+    console.log('[Highlight] Click - queryLayers:', queryLayers);
+    if (!queryLayers.length) {
+      console.log('[Highlight] No queryable layers, skipping');
+      return;
+    }
 
     let features: any[] = [];
     try {
       features = map.queryRenderedFeatures(e.point, { layers: queryLayers }) || [];
+      console.log('[Highlight] queryRenderedFeatures returned:', features.length, 'features');
+      if (features.length > 0) {
+        console.log('[Highlight] First feature:', features[0].layer?.id, features[0].properties);
+      }
     } catch (err) {
-      // Ignore errors
+      console.warn('[Highlight] queryRenderedFeatures error:', err);
     }
 
     if (features.length > 0) {
@@ -187,6 +196,13 @@ function getQueryableLayers(map: mapboxgl.Map, layers: LayerConfig[]): string[] 
  * Highlight a feature on the map
  */
 function highlightFeature(map: mapboxgl.Map, feature: any): void {
+  console.log('[Highlight] highlightFeature called with:', feature ? {
+    layer: feature.layer?.id,
+    source: feature.source,
+    hasGeometry: !!feature.geometry,
+    props: feature.properties
+  } : 'null (clearing)');
+
   let geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
   if (feature) {
@@ -211,14 +227,17 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
     // For vector features, look up the FULL geometry from original GeoJSON
     // (queryRenderedFeatures returns tile-clipped geometry which causes cut-off highlights)
     else if (feature.source && originalGeoJSONStore.has(feature.source)) {
+      console.log('[Highlight] Looking up original geometry for source:', feature.source);
       const originalFeature = findOriginalFeature(feature.source, props);
       if (originalFeature?.geometry) {
+        console.log('[Highlight] Found original geometry');
         geojson.features.push({
           type: 'Feature',
           geometry: originalFeature.geometry,
           properties: props
         });
       } else if (feature.geometry) {
+        console.log('[Highlight] Original not found, using clipped geometry');
         // Fallback to clipped geometry if original not found
         geojson.features.push({
           type: 'Feature',
@@ -261,7 +280,8 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
   } else {
     (map.getSource('feature-hl') as any).setData(geojson);
   }
-  
+
+  console.log('[Highlight] Set highlight data with', geojson.features.length, 'features');
   selectedFeature = feature;
 }
 

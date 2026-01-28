@@ -95,7 +95,8 @@ VALID_TILE_PROPS = {
 # - ab686b7: add collapsible layer groups to layer panel
 # - ea497b4: move group border to bottom of group content
 # - b51295c: fix location_change highlight by normalizing field name variants
-FUSEDMAPS_CDN_REF_DEFAULT = "b51295c"
+# - e295ed4: add multi-feature highlighting for farm selection (matchAll)
+FUSEDMAPS_CDN_REF_DEFAULT = "e295ed4"
 FUSEDMAPS_CDN_JS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.umd.js"
 FUSEDMAPS_CDN_CSS = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/dist/fusedmaps.css"
 FUSEDMAPS_SCHEMA_URL = f"https://cdn.jsdelivr.net/gh/milind-soni/fusedmaps@{FUSEDMAPS_CDN_REF_DEFAULT}/fusedmaps.schema.json"

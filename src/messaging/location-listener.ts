@@ -76,13 +76,16 @@ export function enableLocationListener(
           // Build a normalized properties object for matching
           const matchProps: Record<string, any> = { ...properties };
           
-          // If location.name exists, also add common field name variants
+          // If location.name exists, add common field AND farm name variants
+          // This allows matching whether name is a field name or farm name
           if (properties.name) {
             matchProps['name'] = properties.name;
             matchProps['Name'] = properties.name;
             matchProps['NAME'] = properties.name;
             matchProps['Field Name'] = properties.name;
             matchProps['field_name'] = properties.name;
+            matchProps['Farm Name'] = properties.name;
+            matchProps['farm_name'] = properties.name;
           }
           
           // If location.farm exists, add common farm name variants
@@ -94,8 +97,9 @@ export function enableLocationListener(
             matchProps['farm_name'] = properties.farm;
           }
           
-          // Check if matchAll is requested (for highlighting all features in a group)
-          const matchAll = (msg as any).matchAll === true || properties.matchAll === true;
+          // Default matchAll to true - highlight all matching features
+          // (single field matches still work since only one feature will match)
+          const matchAll = (msg as any).matchAll !== false && properties.matchAll !== false;
           
           (window as any).__fusedHighlightByProperties(matchProps, matchAll);
         } catch {}

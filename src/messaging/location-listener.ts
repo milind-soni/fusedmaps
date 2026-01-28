@@ -70,12 +70,14 @@ export function enableLocationListener(
       const bounds = (msg as any).bounds || (msg as any).location?.bounds;
       const properties = (msg as any).properties || (msg as any).location;
 
-      // Highlight the feature by matching properties (for external clicks like scatter plots)
-      if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
+      const selectionType = (msg as any).selectionType;
+
+      // For FARM selection: zoom only, no highlighting
+      // For FIELD selection and other messages: highlight the feature
+      if (selectionType !== 'farm' && properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
         try {
           // Build a normalized properties object for matching
           const matchProps: Record<string, any> = {};
-          const selectionType = (msg as any).selectionType;
 
           // Handle explicit field selection (from dropdown)
           if (selectionType === 'field' && properties.field) {
@@ -84,14 +86,6 @@ export function enableLocationListener(
             matchProps['field_name'] = properties.field;
             matchProps['name'] = properties.field;
             matchProps['Name'] = properties.field;
-          }
-          // Handle explicit farm selection (from dropdown) - highlight ALL fields in the farm
-          else if (selectionType === 'farm' && properties.farm) {
-            // Match by Farm Name only - this will match ALL fields with this Farm Name
-            matchProps['Farm Name'] = properties.farm;
-            matchProps['farm_name'] = properties.farm;
-            matchProps['Farm'] = properties.farm;
-            matchProps['farm'] = properties.farm;
           }
           // Handle generic location messages (backwards compatibility)
           else {
@@ -117,17 +111,11 @@ export function enableLocationListener(
             }
           }
 
-          // Default matchAll to true for farm selection, false for field selection
-          const matchAll = selectionType === 'farm' ? true :
-                          selectionType === 'field' ? false :
-                          ((msg as any).matchAll !== false && properties.matchAll !== false);
-
-          (window as any).__fusedHighlightByProperties(matchProps, matchAll);
+          (window as any).__fusedHighlightByProperties(matchProps, false);
         } catch {}
 
         // Re-broadcast as feature_click so charts can highlight too
         // (charts listen for feature_click, not location_change)
-        // This is OUTSIDE the try-catch to ensure it always runs
         if (selectionType === 'field' && properties.field) {
           const rebroadcast = {
             type: 'feature_click',
@@ -143,6 +131,15 @@ export function enableLocationListener(
             console.warn('[LocationListener] Re-broadcast failed:', e);
           }
         }
+      }
+
+      // Clear highlight when selecting a farm (zoom only)
+      if (selectionType === 'farm') {
+        try {
+          if (typeof (window as any).__fusedHighlightClear === 'function') {
+            (window as any).__fusedHighlightClear();
+          }
+        } catch {}
       }
 
       if (bounds && Array.isArray(bounds) && bounds.length === 4) {

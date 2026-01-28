@@ -73,7 +73,17 @@ export function enableLocationListener(
       // Highlight the feature by matching properties (for external clicks like scatter plots)
       if (properties && typeof (window as any).__fusedHighlightByProperties === 'function') {
         try {
-          (window as any).__fusedHighlightByProperties(properties);
+          // Build a normalized properties object for matching
+          // If location.name exists, also add common field name variants
+          const matchProps: Record<string, any> = { ...properties };
+          if (properties.name) {
+            matchProps['name'] = properties.name;
+            matchProps['Name'] = properties.name;
+            matchProps['NAME'] = properties.name;
+            matchProps['Field Name'] = properties.name;
+            matchProps['field_name'] = properties.name;
+          }
+          (window as any).__fusedHighlightByProperties(matchProps);
         } catch {}
       }
 

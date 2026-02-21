@@ -24,5 +24,6 @@ export interface WidgetsSetupConfig {
         scale?: WidgetPosition | false;
         basemap?: WidgetPosition | false;
     };
+    scaleUnit?: 'imperial' | 'metric' | 'nautical';
 }
 export declare function setupWidgets(map: mapboxgl.Map, initialView: ViewState, configOrScreenshot?: boolean | WidgetsSetupConfig): WidgetsHandle;

@@ -284,13 +284,20 @@ export type WidgetSetting =
   | false
   | { position: WidgetPosition; expanded?: boolean };
 
+export type ScaleUnit = 'imperial' | 'metric' | 'nautical';
+
+export type ScaleWidgetSetting =
+  | WidgetPosition
+  | false
+  | { position: WidgetPosition; expanded?: boolean; unit?: ScaleUnit };
+
 export interface WidgetsConfig {
-  controls?: WidgetSetting;  // zoom/home/screenshot
-  scale?: WidgetSetting;     // scale bar
-  basemap?: WidgetSetting;   // basemap switcher
-  layers?: WidgetSetting;    // layer visibility panel
-  legend?: WidgetSetting;    // color legend
-  geocoder?: WidgetSetting;  // location search bar
+  controls?: WidgetSetting;       // zoom/home/screenshot
+  scale?: ScaleWidgetSetting;     // scale bar (supports unit: 'imperial' | 'metric' | 'nautical')
+  basemap?: WidgetSetting;        // basemap switcher
+  layers?: WidgetSetting;         // layer visibility panel
+  legend?: WidgetSetting;         // color legend
+  geocoder?: WidgetSetting;       // location search bar
 }
 
 // Helper to check if position is on left side

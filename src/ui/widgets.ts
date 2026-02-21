@@ -91,10 +91,13 @@ function downloadScreenshot(map: mapboxgl.Map) {
   }
 }
 
-function addScaleControl(map: mapboxgl.Map, position: WidgetPosition = 'bottom-left') {
-  // top-center not supported by Mapbox, fallback to top-left
+function addScaleControl(
+  map: mapboxgl.Map,
+  position: WidgetPosition = 'bottom-left',
+  unit: 'imperial' | 'metric' | 'nautical' = 'imperial'
+) {
   const mapboxPos = position === 'top-center' ? 'top-left' : position;
-  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit: 'imperial' }), mapboxPos);
+  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 110, unit }), mapboxPos);
 }
 
 function addZoomHomeControl(
@@ -455,12 +458,12 @@ export interface WidgetsSetupConfig {
   basemapSwitcher?: boolean;
   currentStyle?: string;
   onStyleChange?: (basemap: BasemapOption) => void;
-  // Widget positions (false = disabled)
   positions?: {
     controls?: WidgetPosition | false;
     scale?: WidgetPosition | false;
     basemap?: WidgetPosition | false;
   };
+  scaleUnit?: 'imperial' | 'metric' | 'nautical';
 }
 
 export function setupWidgets(
@@ -480,7 +483,7 @@ export function setupWidgets(
 
   // Scale control
   if (scalePos !== false) {
-    addScaleControl(map, scalePos);
+    addScaleControl(map, scalePos, config.scaleUnit || 'imperial');
   }
 
   // Zoom/Home/Screenshot controls

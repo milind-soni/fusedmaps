@@ -97,6 +97,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
   const controlsCfg = parseWidgetConfig(widgetCfg.controls, 'bottom-left');
   const scaleCfg = parseWidgetConfig(widgetCfg.scale, 'bottom-left');
+  const rawScale = widgetCfg.scale;
+  const scaleUnit: 'imperial' | 'metric' | 'nautical' =
+    (rawScale && typeof rawScale === 'object' && 'unit' in rawScale && rawScale.unit) || 'imperial';
   const basemapCfg = parseWidgetConfig(widgetCfg.basemap, 'bottom-left');
   const layersCfg = parseWidgetConfig(widgetCfg.layers, 'top-right');
   const legendCfg = parseWidgetConfig(widgetCfg.legend, 'bottom-right');
@@ -119,7 +122,8 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       controls: controlsPos === false ? false : controlsPos,
       scale: scalePos === false ? false : scalePos,
       basemap: basemapPos === false ? false : basemapPos,
-    }
+    },
+    scaleUnit
   });
 
   // Sidebar panel (inspector)

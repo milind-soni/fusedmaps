@@ -65,12 +65,14 @@ export function addAllLayers(
         const hexLayer = layer as HexLayerConfig;
         if (hexLayer.isTileLayer) {
           // Tile layers are handled by Deck.gl overlay
-          // Skip here - they'll be set up separately
         } else if (hexLayer.data?.length) {
-          // Convert hex data to GeoJSON
-          const geojson = hexToGeoJSON(hexLayer.data);
-          setLayerGeoJSON(layer.id, geojson);
-          addStaticHexLayer(map, hexLayer, geojson, visible);
+          // If Deck.gl is available, inline hex data is rendered by H3HexagonLayer in the overlay
+          // Otherwise fall back to Mapbox GL GeoJSON (no lineWidthMinPixels support)
+          if (!(window as any).deck) {
+            const geojson = hexToGeoJSON(hexLayer.data);
+            setLayerGeoJSON(layer.id, geojson);
+            addStaticHexLayer(map, hexLayer, geojson, visible);
+          }
         }
         break;
       }
@@ -124,10 +126,12 @@ export function addAllLayers(
     }
   }
 
-  // Set up Deck.gl overlay for hex tile layers (if any)
-  const hasHexTileLayers = layers.some(l => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl);
+  // Set up Deck.gl overlay for hex layers (tile or inline data)
+  const hasAnyDeckHexLayers = layers.some(l =>
+    l.layerType === 'hex' && ((l as any).isTileLayer && (l as any).tileUrl || (Array.isArray((l as any).data) && (l as any).data.length > 0))
+  );
   let deckOverlay: unknown = null;
-  if (hasHexTileLayers) {
+  if (hasAnyDeckHexLayers) {
     const state = createHexTileOverlay(map, layers, visibilityState, hexTileBeforeIds);
     deckOverlay = state?.overlay || null;
     if (deckOverlay && state) {
@@ -160,7 +164,7 @@ export function addSingleLayer(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (!hexLayer.isTileLayer && hexLayer.data?.length) {
+      if (!hexLayer.isTileLayer && hexLayer.data?.length && !(window as any).deck) {
         const geojson = hexToGeoJSON(hexLayer.data);
         setLayerGeoJSON(layer.id, geojson);
         addStaticHexLayer(map, hexLayer, geojson, visible);

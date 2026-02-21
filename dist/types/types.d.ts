@@ -207,9 +207,15 @@ export type WidgetSetting = WidgetPosition | false | {
     position: WidgetPosition;
     expanded?: boolean;
 };
+export type ScaleUnit = 'imperial' | 'metric' | 'nautical';
+export type ScaleWidgetSetting = WidgetPosition | false | {
+    position: WidgetPosition;
+    expanded?: boolean;
+    unit?: ScaleUnit;
+};
 export interface WidgetsConfig {
     controls?: WidgetSetting;
-    scale?: WidgetSetting;
+    scale?: ScaleWidgetSetting;
     basemap?: WidgetSetting;
     layers?: WidgetSetting;
     legend?: WidgetSetting;

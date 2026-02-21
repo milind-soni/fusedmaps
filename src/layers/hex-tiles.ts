@@ -932,6 +932,73 @@ function buildHexTileDeckLayers(
     });
 }
 
+/**
+ * Build Deck.gl H3HexagonLayers for inline (non-tile) hex data.
+ * Uses the same H3HexagonLayer as tile layers but with static data.
+ */
+function buildInlineHexDeckLayers(
+  layers: LayerConfig[],
+  visibility: Record<string, boolean>,
+  runtime: TileRuntime
+): any[] {
+  const deck = getDeck();
+  if (!deck) return [];
+
+  const H3HexagonLayer = deck.H3HexagonLayer || deck?.GeoLayers?.H3HexagonLayer;
+  if (!H3HexagonLayer) return [];
+
+  const inlineLayers = layers
+    .filter((l) => l.layerType === 'hex' && !(l as any).isTileLayer && Array.isArray((l as any).data) && (l as any).data.length > 0)
+    .map((l) => l as HexLayerConfig);
+
+  const visibleLayers = inlineLayers.filter((l) => visibility[l.id] !== false);
+
+  return visibleLayers.map((layer) => {
+    const rawHexCfg: any = layer.hexLayer || {};
+    const data = (layer as any).data || [];
+
+    const fillCfg: any = rawHexCfg.getFillColor;
+    const lineCfg: any = rawHexCfg.getLineColor;
+    const getFillColor = buildColorAccessor(runtime, layer, fillCfg);
+    const getLineColor = buildColorAccessor(runtime, layer, lineCfg);
+
+    const stroked = rawHexCfg.stroked !== false;
+    const filled = rawHexCfg.filled !== false;
+    const extruded = rawHexCfg.extruded === true;
+    const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
+    const lineWidthMinPixels = rawHexCfg.lineWidthMinPixels ?? 1;
+    const elevationScale = rawHexCfg.elevationScale ?? 1;
+    const coverage = rawHexCfg.coverage ?? 0.9;
+    const elevationProperty =
+      rawHexCfg.elevationProperty ||
+      (fillCfg && typeof fillCfg === 'object' ? (fillCfg as any).attr : null) ||
+      null;
+
+    const colorTrigger = JSON.stringify({ fill: fillCfg, line: lineCfg });
+
+    return new H3HexagonLayer({
+      id: `${layer.id}-inline-h3`,
+      data,
+      getHexagon: (d: any) => d.hex,
+      pickable: true,
+      stroked,
+      filled,
+      extruded,
+      opacity,
+      coverage,
+      lineWidthMinPixels,
+      elevationScale,
+      ...(extruded && elevationProperty ? { getElevation: (d: any) => Number(d?.[elevationProperty] ?? 0) } : {}),
+      ...(getFillColor ? { getFillColor } : {}),
+      ...(getLineColor ? { getLineColor } : {}),
+      updateTriggers: {
+        getFillColor: colorTrigger,
+        getLineColor: colorTrigger,
+      },
+    });
+  });
+}
+
 export function createHexTileOverlay(
   map: mapboxgl.Map,
   layers: LayerConfig[],
@@ -939,7 +1006,10 @@ export function createHexTileOverlay(
   beforeIds?: Record<string, string | undefined>
 ): DeckTileOverlayState | null {
   const deck = getDeck();
-  if (!deck?.MapboxOverlay || !deck?.TileLayer) return null;
+  if (!deck?.MapboxOverlay) return null;
+  // TileLayer is only required when there are actual tile layers
+  const hasTileLayers = layers.some((l) => l.layerType === 'hex' && (l as any).isTileLayer && (l as any).tileUrl);
+  if (hasTileLayers && !deck?.TileLayer) return null;
 
   const runtime = createTileRuntime();
   const onLoadingDelta = (delta: number) => {
@@ -948,7 +1018,10 @@ export function createHexTileOverlay(
 
   // Use a mutable ref so rebuild() can update visibility without stale closures
   const visibilityRef = { current: visibility };
-  const build = () => buildHexTileDeckLayers(layers, visibilityRef.current, runtime, onLoadingDelta, beforeIds);
+  const build = () => [
+    ...buildHexTileDeckLayers(layers, visibilityRef.current, runtime, onLoadingDelta, beforeIds),
+    ...buildInlineHexDeckLayers(layers, visibilityRef.current, runtime),
+  ];
 
   // Store last hovered info for tooltip access
   const hoverInfoRef = { current: null as any };

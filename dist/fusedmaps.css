@@ -778,15 +778,20 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 
 .color-legend .fm-dropdown-panel {
   min-width: 160px;
+  max-height: min(480px, 55vh);
   right: 0;
   left: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Legend content */
 #legend-content {
   padding: 10px 12px;
-  max-height: min(440px, 50vh);
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 /* Bottom-left control padding (zoom/home + scale bar) */

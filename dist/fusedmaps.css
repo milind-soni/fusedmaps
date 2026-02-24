@@ -785,7 +785,8 @@ html[data-theme="light"] .fm-dropdown-close:hover {
 /* Legend content */
 #legend-content {
   padding: 10px 12px;
-  overflow: visible;
+  max-height: min(440px, 50vh);
+  overflow-y: auto;
 }
 
 /* Bottom-left control padding (zoom/home + scale bar) */
@@ -837,26 +838,23 @@ html[data-theme="light"] .fm-dropdown-close:hover {
   flex-direction: column;
   gap: 4px;
   margin-top: 4px;
-  max-height: min(440px, 50vh);
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
-.legend-layer .legend-categories::-webkit-scrollbar {
+#legend-content::-webkit-scrollbar {
   width: 4px;
 }
 
-.legend-layer .legend-categories::-webkit-scrollbar-track {
+#legend-content::-webkit-scrollbar-track {
   background: var(--ui-scroll-track);
   border-radius: 2px;
 }
 
-.legend-layer .legend-categories::-webkit-scrollbar-thumb {
+#legend-content::-webkit-scrollbar-thumb {
   background: var(--ui-scroll-thumb);
   border-radius: 2px;
 }
 
-.legend-layer .legend-categories::-webkit-scrollbar-thumb:hover {
+#legend-content::-webkit-scrollbar-thumb:hover {
   background: var(--ui-muted-2);
 }
 

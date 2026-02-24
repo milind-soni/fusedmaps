@@ -104,7 +104,7 @@ export function normalizeLayerConfig(config: LayerConfig): LayerConfig {
     default:
       result = config;
   }
-  if ((config as any).customLegend) {
+  if ((config as any).customLegend !== undefined) {
     result.customLegend = (config as any).customLegend;
   }
   return result;

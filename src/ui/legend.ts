@@ -193,6 +193,58 @@ export function updateLegend(
 }
 
 /**
+ * Build custom legend HTML from user-provided config
+ */
+function buildCustomLegend(layerName: string, cfg: any): string {
+  const title = cfg.title || layerName;
+  if (cfg.type === 'categorical' && Array.isArray(cfg.items) && cfg.items.length) {
+    return `
+      <div class="legend-layer">
+        <div class="legend-title">${title}</div>
+        <div class="legend-categories">
+          ${cfg.items.map((item: any) => {
+            const color = Array.isArray(item.color)
+              ? (item.color.length >= 4
+                ? `rgba(${item.color[0]},${item.color[1]},${item.color[2]},${item.color[3] / 255})`
+                : `rgb(${item.color[0]},${item.color[1]},${item.color[2]})`)
+              : (item.color || '#888');
+            return `
+              <div class="legend-cat-item">
+                <div class="legend-cat-swatch" style="background:${color};"></div>
+                <span class="legend-cat-label" title="${item.label}">${item.label}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+  if (cfg.type === 'continuous') {
+    const domain = cfg.domain || [0, 1];
+    const [d0, d1] = domain;
+    const steps = cfg.steps || 7;
+    const paletteName = cfg.palette || cfg.colors || 'TealGrn';
+    let colors = getPaletteColors(paletteName, steps);
+    if (!colors?.length) colors = FALLBACK_CONTINUOUS_COLORS;
+    if (cfg.reverse) colors = [...colors].reverse();
+    const gradient = `linear-gradient(to right, ${colors.map((c, i) =>
+      `${c} ${i / (colors!.length - 1) * 100}%`
+    ).join(', ')})`;
+    return `
+      <div class="legend-layer">
+        <div class="legend-title">${title}</div>
+        <div class="legend-gradient" style="background:${gradient};"></div>
+        <div class="legend-labels">
+          <span>${Number(d0).toFixed(1)}</span>
+          <span>${Number(d1).toFixed(1)}</span>
+        </div>
+      </div>
+    `;
+  }
+  return '';
+}
+
+/**
  * Build legend HTML for a single layer
  */
 function buildLayerLegend(
@@ -200,6 +252,12 @@ function buildLayerLegend(
   geojsons: Record<string, GeoJSON.FeatureCollection>,
   tileData?: Map<string, any[]>
 ): string {
+  // If layer has a custom legend definition, use it directly
+  const custom = (layer as any).customLegend;
+  if (custom) {
+    return buildCustomLegend(layer.name, custom);
+  }
+
   let colorCfg: any = null;
 
   if (layer.layerType === 'hex') {

@@ -84,20 +84,30 @@ export function normalizeColor(color: ColorValue | undefined): ColorConfig | und
  * Normalize a layer config to internal format
  */
 export function normalizeLayerConfig(config: LayerConfig): LayerConfig {
+  let result: any;
   switch (config.layerType) {
     case 'hex':
-      return normalizeHexLayer(config);
+      result = normalizeHexLayer(config);
+      break;
     case 'vector':
-      return normalizeVectorLayer(config);
+      result = normalizeVectorLayer(config);
+      break;
     case 'mvt':
-      return normalizeMVTLayer(config);
+      result = normalizeMVTLayer(config);
+      break;
     case 'raster':
-      return normalizeRasterLayer(config);
+      result = normalizeRasterLayer(config);
+      break;
     case 'pmtiles':
-      return normalizePMTilesLayer(config);
+      result = normalizePMTilesLayer(config);
+      break;
     default:
-      return config;
+      result = config;
   }
+  if ((config as any).customLegend) {
+    result.customLegend = (config as any).customLegend;
+  }
+  return result;
 }
 
 function normalizeHexLayer(layer: HexLayer): any {

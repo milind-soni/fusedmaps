@@ -255,8 +255,8 @@ function buildLayerLegend(
   // If legend is explicitly disabled for this layer, skip it
   const custom = (layer as any).customLegend;
   if (custom === false) return '';
-  // If layer has a custom legend definition, use it directly
-  if (custom) {
+  // If layer has a custom legend definition (must be an object), use it directly
+  if (custom && typeof custom === 'object') {
     return buildCustomLegend(layer.name, custom);
   }
 

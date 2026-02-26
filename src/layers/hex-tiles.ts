@@ -752,7 +752,7 @@ function buildHexTileDeckLayers(
       const filled = rawHexCfg.filled !== false;
       const extruded = rawHexCfg.extruded === true;
       const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
-      const lineWidthMinPixels = rawHexCfg.lineWidthMinPixels ?? 1;
+      const lineWidthMinPixels = rawHexCfg.lineWidth ?? rawHexCfg.lineWidthMinPixels ?? 1;
       const elevationScale = rawHexCfg.elevationScale ?? 1;
       const coverage = rawHexCfg.coverage ?? 0.9;
       const elevationProperty =
@@ -966,7 +966,7 @@ function buildInlineHexDeckLayers(
     const filled = rawHexCfg.filled !== false;
     const extruded = rawHexCfg.extruded === true;
     const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
-    const lineWidthMinPixels = rawHexCfg.lineWidthMinPixels ?? 1;
+    const lineWidthMinPixels = rawHexCfg.lineWidth ?? rawHexCfg.lineWidthMinPixels ?? 1;
     const elevationScale = rawHexCfg.elevationScale ?? 1;
     const coverage = rawHexCfg.coverage ?? 0.9;
     const elevationProperty =

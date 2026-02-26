@@ -158,7 +158,7 @@ export function addStaticHexLayer(
       source: layer.id,
       paint: {
         'line-color': lineColor,
-        'line-width': cfg.lineWidthMinPixels || 0.5
+        'line-width': cfg.lineWidth || cfg.lineWidthMinPixels || 0.5
       },
       layout: { visibility: visible ? 'visible' : 'none' }
     });

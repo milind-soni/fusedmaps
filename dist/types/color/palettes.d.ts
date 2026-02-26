@@ -16,7 +16,3 @@ export declare function toRgba(arr: number[] | unknown, defaultAlpha?: number): 
  */
 export declare const FALLBACK_CONTINUOUS_COLORS: string[];
 export declare const FALLBACK_CATEGORICAL_COLORS: string[];
-/**
- * Known CartoColor palettes
- */
-export declare const KNOWN_PALETTES: Set<string>;

@@ -47,20 +47,4 @@ export const FALLBACK_CATEGORICAL_COLORS = [
   '#80BA5A', '#E68310', '#008695', '#CF1C90', '#f97b72'
 ];
 
-/**
- * Known CartoColor palettes
- */
-export const KNOWN_PALETTES = new Set([
-  'ArmyRose', 'Antique', 'BluGrn', 'BluYl', 'Bold', 'BrwnYl', 'Burg', 'BurgYl',
-  'DarkMint', 'Earth', 'Emrld', 'Fall', 'Geyser', 'Magenta', 'Mint', 'OrYel',
-  'Pastel', 'Peach', 'PinkYl', 'Prism', 'Purp', 'PurpOr', 'RedOr', 'Safe',
-  'Sunset', 'SunsetDark', 'Teal', 'TealGrn', 'TealRose', 'Temps', 'Tropic',
-  'Vivid', 'ag_GrnYl', 'ag_Sunset', 'cb_Accent', 'cb_Blues', 'cb_BrBG',
-  'cb_BuGn', 'cb_BuPu', 'cb_Dark2', 'cb_GnBu', 'cb_Greens', 'cb_Greys',
-  'cb_OrRd', 'cb_Oranges', 'cb_PRGn', 'cb_Paired', 'cb_Pastel1', 'cb_Pastel2',
-  'cb_PiYG', 'cb_PuBu', 'cb_PuBuGn', 'cb_PuOr', 'cb_PuRd', 'cb_Purples',
-  'cb_RdBu', 'cb_RdGy', 'cb_RdPu', 'cb_RdYlBu', 'cb_RdYlGn', 'cb_Reds',
-  'cb_Set1', 'cb_Set2', 'cb_Set3', 'cb_Spectral', 'cb_YlGn', 'cb_YlGnBu',
-  'cb_YlOrBr', 'cb_YlOrRd'
-]);
 

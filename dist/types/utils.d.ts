@@ -6,10 +6,6 @@
  */
 export declare function clamp(v: number, lo: number, hi: number): number;
 /**
- * Safely execute a function, swallowing errors
- */
-export declare function safe(fn: () => void): void;
-/**
  * Parse hex color string to RGB array
  * @param hex - Color string like "#ff0000"
  * @param alpha - Optional alpha value (0-255)

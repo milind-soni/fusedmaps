@@ -20,7 +20,3 @@ export declare function updatePMTilesVisibility(map: mapboxgl.Map, layerId: stri
  * Remove PMTiles layers from the map
  */
 export declare function removePMTilesLayers(map: mapboxgl.Map, layerId: string): void;
-/**
- * Check if PMTiles layers exist for a given layer ID
- */
-export declare function hasPMTilesLayers(map: mapboxgl.Map, layerId: string): boolean;

@@ -284,20 +284,3 @@ export function isNewFormat(config: any): boolean {
   return 'style' in config || 'tile' in config || 'tooltip' in config;
 }
 
-/**
- * Normalize all layers in a config
- */
-export function normalizeConfig(config: any): any {
-  if (!config?.layers) return config;
-
-  return {
-    ...config,
-    layers: config.layers.map((layer: any) => {
-      // Only normalize if using new format
-      if (isNewFormat(layer)) {
-        return normalizeLayerConfig(layer);
-      }
-      return layer;
-    }),
-  };
-}

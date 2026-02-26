@@ -4,4 +4,4 @@
  * Converts new clean user-facing format to internal format.
  */
 
-export { normalizeColor, normalizeLayerConfig, normalizeConfig, isNewFormat } from './normalize';
+export { normalizeColor, normalizeLayerConfig, isNewFormat } from './normalize';

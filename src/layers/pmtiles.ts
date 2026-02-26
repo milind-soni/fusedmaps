@@ -472,14 +472,3 @@ export function removePMTilesLayers(map: mapboxgl.Map, layerId: string): void {
   }
 }
 
-/**
- * Check if PMTiles layers exist for a given layer ID
- */
-export function hasPMTilesLayers(map: mapboxgl.Map, layerId: string): boolean {
-  const prefix = `${layerId}-`;
-  const styleLayers = (map.getStyle()?.layers || []) as any[];
-  return styleLayers.some(l => {
-    const id = l?.id as string | undefined;
-    return !!(id && id.startsWith(prefix));
-  });
-}

@@ -20,7 +20,3 @@ export declare function normalizeLayerConfig(config: LayerConfig): LayerConfig;
  * Check if a layer config uses the new format (has `style` key)
  */
 export declare function isNewFormat(config: any): boolean;
-/**
- * Normalize all layers in a config
- */
-export declare function normalizeConfig(config: any): any;

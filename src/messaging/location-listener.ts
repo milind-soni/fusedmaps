@@ -72,8 +72,6 @@ export function enableLocationListener(
 
       const selectionType = (msg as any).selectionType;
 
-      console.log('[LocationListener] Received message:', { type, selectionType, hasProperties: !!properties, field: properties?.field });
-
       // Skip highlighting for feature_click messages from this map's click-broadcast
       // (the highlight handler already handles map clicks directly)
       const source = (msg as any).fromComponent || '';
@@ -140,7 +138,6 @@ export function enableLocationListener(
           properties: { 'Field Name': fieldName },
           bounds: bounds
         };
-        console.log('[LocationListener] Re-broadcasting field selection:', rebroadcast);
         try {
           bus.send(rebroadcast);
         } catch (e) {

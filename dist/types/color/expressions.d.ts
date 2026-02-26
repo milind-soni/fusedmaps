@@ -14,8 +14,4 @@ export declare function getUniqueCategories(data: Array<Record<string, unknown>>
  * Build a Mapbox GL color expression from a color config
  */
 export declare function buildColorExpr(cfg: ColorConfig | undefined, data?: Array<Record<string, unknown>>): unknown | null;
-/**
- * Check if a color config uses a dynamic function
- */
-export declare function isDynamicColorConfig(cfg: ColorConfig | undefined): boolean;
 export {};

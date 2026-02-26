@@ -185,12 +185,4 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
   ];
 }
 
-/**
- * Check if a color config uses a dynamic function
- */
-export function isDynamicColorConfig(cfg: ColorConfig | undefined): boolean {
-  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return false;
-  const fn = (cfg as any)['@@function'];
-  return fn === 'colorContinuous' || fn === 'colorCategories';
-}
 

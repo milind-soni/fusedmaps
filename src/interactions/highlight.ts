@@ -44,7 +44,6 @@ export interface HighlightConfig {
  * This allows highlight to use full geometries instead of tile-clipped fragments
  */
 export function registerOriginalGeoJSON(layerId: string, geojson: GeoJSON.FeatureCollection): void {
-  console.log('[Highlight] Registering original GeoJSON for source:', layerId, 'with', geojson?.features?.length, 'features');
   originalGeoJSONStore.set(layerId, geojson);
 }
 
@@ -116,12 +115,6 @@ function findOriginalFeature(layerId: string, props: Record<string, any>): GeoJS
   }
 
   if (bestMatch) {
-    const matchedName = (bestMatch.properties as any)?.['Field Name'] ||
-                        (bestMatch.properties as any)?.field_name ||
-                        (bestMatch.properties as any)?.name || 'unknown';
-    const searchedName = props['Field Name'] || props.field_name || props.name || 'unknown';
-    console.log('[Highlight] findOriginalFeature: searched for', searchedName, '-> matched', matchedName,
-                '(score:', bestScore, 'priority:', bestPriority, ')');
     return bestMatch;
   }
 
@@ -176,7 +169,6 @@ export function setupHighlight(
 
   // Expose highlight functions globally for location-listener
   (window as any).__fusedHighlightByProperties = (props: Record<string, any>, matchAll?: boolean) => {
-    console.log('[Highlight] __fusedHighlightByProperties called with:', props);
     highlightByProperties(map, layers, props, matchAll);
   };
   (window as any).__fusedHighlightClear = () => {
@@ -184,21 +176,13 @@ export function setupHighlight(
   };
   map.on('click', (e: any) => {
     const queryLayers = getQueryableLayers(map, layers);
-    console.log('[Highlight] Click - queryLayers:', queryLayers);
-    if (!queryLayers.length) {
-      console.log('[Highlight] No queryable layers, skipping');
-      return;
-    }
+    if (!queryLayers.length) return;
 
     let features: any[] = [];
     try {
       features = map.queryRenderedFeatures(e.point, { layers: queryLayers }) || [];
-      console.log('[Highlight] queryRenderedFeatures returned:', features.length, 'features');
-      if (features.length > 0) {
-        console.log('[Highlight] First feature:', features[0].layer?.id, features[0].properties);
-      }
     } catch (err) {
-      console.warn('[Highlight] queryRenderedFeatures error:', err);
+      // queryRenderedFeatures can fail if layers are being removed
     }
 
     if (features.length > 0) {
@@ -253,13 +237,6 @@ function getQueryableLayers(map: mapboxgl.Map, layers: LayerConfig[]): string[] 
  * Highlight a feature on the map
  */
 function highlightFeature(map: mapboxgl.Map, feature: any): void {
-  console.log('[Highlight] highlightFeature called with:', feature ? {
-    layer: feature.layer?.id,
-    source: feature.source,
-    hasGeometry: !!feature.geometry,
-    props: feature.properties
-  } : 'null (clearing)');
-
   let geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
   if (feature) {
@@ -284,18 +261,14 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
     // For vector features, look up the FULL geometry from original GeoJSON
     // (queryRenderedFeatures returns tile-clipped geometry which causes cut-off highlights)
     else if (feature.source && originalGeoJSONStore.has(feature.source)) {
-      console.log('[Highlight] Looking up original geometry for source:', feature.source);
       const originalFeature = findOriginalFeature(feature.source, props);
       if (originalFeature?.geometry) {
-        console.log('[Highlight] Found original geometry');
         geojson.features.push({
           type: 'Feature',
           geometry: originalFeature.geometry,
           properties: props
         });
       } else if (feature.geometry) {
-        console.log('[Highlight] Original not found, using clipped geometry');
-        // Fallback to clipped geometry if original not found
         geojson.features.push({
           type: 'Feature',
           geometry: feature.geometry,
@@ -338,7 +311,6 @@ function highlightFeature(map: mapboxgl.Map, feature: any): void {
     (map.getSource('feature-hl') as any).setData(geojson);
   }
 
-  console.log('[Highlight] Set highlight data with', geojson.features.length, 'features');
   selectedFeature = feature;
 }
 

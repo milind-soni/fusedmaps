@@ -35,11 +35,12 @@ export function createBus(channel: string): {
    * Send a message to all possible targets
    */
   function send(obj: BusMessage): void {
-    const s = JSON.stringify(obj);
+    const payload = { __fmChannel: channel, ...obj };
+    const s = JSON.stringify(payload);
     
     // BroadcastChannel
     try {
-      if (bc) bc.postMessage(obj);
+      if (bc) bc.postMessage(payload);
     } catch (e) {}
     
     // Parent frame
@@ -95,6 +96,9 @@ export function createBus(channel: string): {
     } catch {
       return;
     }
+
+    // Filter by channel — ignore messages from other channels
+    if (data && (data as any).__fmChannel && (data as any).__fmChannel !== channel) return;
     
     messageCallback(data);
   }

@@ -125,11 +125,11 @@ export function addVectorLayer(
       type: 'circle',
       source: layer.id,
       paint: {
-        'circle-radius': layer.pointRadius || 6,
+        'circle-radius': Math.max(layer.pointRadius || 6, 1),
         'circle-color': fillColorExpr as any,
-        'circle-stroke-color': 'rgba(0,0,0,0.5)',
-        'circle-stroke-width': 1,
-        'circle-opacity': 0.9
+        'circle-stroke-color': lineColorExpr as any,
+        'circle-stroke-width': layer.isStroked !== false ? lineW : 0,
+        'circle-opacity': layerOpacity
       },
       filter: ['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']],
       layout: { visibility: visible ? 'visible' : 'none' }

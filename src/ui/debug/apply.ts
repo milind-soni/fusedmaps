@@ -73,6 +73,7 @@ export interface DebugApplyElements {
   lineDomainMaxEl: HTMLInputElement;
   lineStaticEl: HTMLInputElement;
   lineWidthEl: HTMLInputElement;
+  pointRadiusEl: HTMLInputElement;
 }
 
 export interface ApplyDebugUIOpts {
@@ -254,8 +255,14 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
     hexCfg.lineWidthMinPixels = lwClamped;
   } else if (isVector || isPmtiles) {
     layer.lineWidth = lwClamped;
+    const pr = parseFloat(els.pointRadiusEl?.value || '6');
+    const prClamped = Number.isFinite(pr) ? clamp(pr, 1, 100) : 6;
+    layer.pointRadius = prClamped;
     try {
-      if (layer.vectorLayer) layer.vectorLayer.lineWidthMinPixels = lwClamped;
+      if (layer.vectorLayer) {
+        layer.vectorLayer.lineWidthMinPixels = lwClamped;
+        layer.vectorLayer.pointRadiusMinPixels = prClamped;
+      }
     } catch (_) {}
   }
 
@@ -292,6 +299,9 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
         'fill-color': fillExpr, 'fill-opacity': fillOpacity,
         'line-color': lineExpr, 'line-width': lwClamped, 'line-opacity': lineOpacity,
       });
+      const pr = parseFloat(els.pointRadiusEl?.value || '6');
+      const prVal = Number.isFinite(pr) ? clamp(pr, 1, 100) : 6;
+      setPaintSafe(map, `${v.id}-circle`, 'circle-radius', prVal);
       setPaintSafe(map, `${v.id}-circle`, 'circle-color', fillExpr);
       setPaintSafe(map, `${v.id}-circle`, 'circle-opacity', fillOpacity);
       setPaintSafe(map, `${v.id}-circle`, 'circle-stroke-color', lineExpr);

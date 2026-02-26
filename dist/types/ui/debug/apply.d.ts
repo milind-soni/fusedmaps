@@ -29,6 +29,7 @@ export interface DebugApplyElements {
     lineDomainMaxEl: HTMLInputElement;
     lineStaticEl: HTMLInputElement;
     lineWidthEl: HTMLInputElement;
+    pointRadiusEl: HTMLInputElement;
 }
 export interface ApplyDebugUIOpts {
     map: mapboxgl.Map;

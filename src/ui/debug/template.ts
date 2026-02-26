@@ -176,6 +176,15 @@ export function getDebugShellHtml(): string {
             </div>
           </div>
 
+          <div class="debug-section" id="dbg-point-section" style="display:none;">
+            <div class="debug-section-title">Point</div>
+            <div class="debug-row">
+              <span class="debug-label">Radius</span>
+              <input type="range" class="debug-slider" id="dbg-point-radius-slider" min="1" max="50" step="1" value="6" />
+              <input type="number" class="debug-input debug-input-sm" id="dbg-point-radius" step="1" min="1" max="100" value="6" />
+            </div>
+          </div>
+
           <div class="debug-section" id="dbg-viewstate-section">
             <div class="debug-section-title">View State</div>
             <div class="debug-row">
@@ -315,6 +324,10 @@ export interface DebugElements {
   lineWidthSliderEl: HTMLInputElement;
   lineWidthEl: HTMLInputElement;
 
+  pointSection: HTMLElement;
+  pointRadiusSliderEl: HTMLInputElement;
+  pointRadiusEl: HTMLInputElement;
+
   lngEl: HTMLInputElement;
   latEl: HTMLInputElement;
   zoomEl: HTMLInputElement;
@@ -384,6 +397,9 @@ const elementIds: Record<keyof DebugElements, string> = {
   lineStaticLabel: 'dbg-line-static-label',
   lineWidthSliderEl: 'dbg-line-width-slider',
   lineWidthEl: 'dbg-line-width',
+  pointSection: 'dbg-point-section',
+  pointRadiusSliderEl: 'dbg-point-radius-slider',
+  pointRadiusEl: 'dbg-point-radius',
   lngEl: 'dbg-lng',
   latEl: 'dbg-lat',
   zoomEl: 'dbg-zoom',

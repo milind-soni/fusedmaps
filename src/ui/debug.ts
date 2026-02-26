@@ -195,6 +195,9 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     lineStaticLabel,
     lineWidthSliderEl,
     lineWidthEl,
+    pointSection,
+    pointRadiusSliderEl,
+    pointRadiusEl,
     lngEl,
     latEl,
     zoomEl,
@@ -830,6 +833,17 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     lineWidthSliderEl.value = String(lw);
     lineWidthEl.value = String(lw);
 
+    // Point radius (vector/pmtiles only, when data has Point geometry)
+    const hasPoints = isVector && (layer as any).geojson?.features?.some(
+      (f: any) => f.geometry?.type === 'Point' || f.geometry?.type === 'MultiPoint'
+    );
+    pointSection.style.display = hasPoints ? 'block' : 'none';
+    if (hasPoints) {
+      const pr = (layer as any).pointRadius ?? (layer as any).pointRadiusMinPixels ?? 6;
+      pointRadiusSliderEl.value = String(pr);
+      pointRadiusEl.value = String(pr);
+    }
+
     updateFillFnOptions();
     updateLineFnOptions();
     updateLayerOutput();
@@ -871,6 +885,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         lineDomainMaxEl,
         lineStaticEl,
         lineWidthEl,
+        pointRadiusEl,
       },
       updateLayerOutput,
       findDeckOverlayOnMap,
@@ -1050,6 +1065,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   lineStaticEl.addEventListener('input', () => { lineStaticLabel.textContent = lineStaticEl.value; applyUIToLayer(); });
   lineWidthSliderEl.addEventListener('input', () => { lineWidthEl.value = lineWidthSliderEl.value; applyUIToLayer(); });
   lineWidthEl.addEventListener('change', () => { lineWidthSliderEl.value = lineWidthEl.value; applyUIToLayer(); });
+  pointRadiusSliderEl.addEventListener('input', () => { pointRadiusEl.value = pointRadiusSliderEl.value; applyUIToLayer(); });
+  pointRadiusEl.addEventListener('change', () => { pointRadiusSliderEl.value = pointRadiusEl.value; applyUIToLayer(); });
 
   // Update viewstate only on "stop"
   try {

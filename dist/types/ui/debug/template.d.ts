@@ -64,6 +64,9 @@ export interface DebugElements {
     lineStaticLabel: HTMLElement;
     lineWidthSliderEl: HTMLInputElement;
     lineWidthEl: HTMLInputElement;
+    pointSection: HTMLElement;
+    pointRadiusSliderEl: HTMLInputElement;
+    pointRadiusEl: HTMLInputElement;
     lngEl: HTMLInputElement;
     latEl: HTMLInputElement;
     zoomEl: HTMLInputElement;

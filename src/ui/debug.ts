@@ -272,7 +272,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     tabSqlBtn?.addEventListener('click', onTabClick as any);
   } catch (_) {}
 
-  setActiveTab(hasSqlLayers ? 'sql' : 'ui', false);
+  setActiveTab('ui', false);
 
   const initial: ViewState = config.initialViewState;
 

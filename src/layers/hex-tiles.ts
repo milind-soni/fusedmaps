@@ -73,11 +73,16 @@ function finestNoOverlap(allTiles: Tile2DHeader[]) {
     }
   }
 
-  // For any tile we have selected and loaded, hide all of its ancestors
-  // We don't show the ancestor over a selected tile because it could have overlap
+  // For any tile we have selected and loaded WITH DATA, hide all of its ancestors.
+  // Empty tiles (0 rows) should NOT hide ancestors — keeps parent data visible
+  // when the backend returns no data for certain zoom levels.
   for (const tile of finestSortedTiles) {
     if (tile.isSelected && (tile.isLoaded || tile.content)) {
-      hideAncestors(tile);
+      const c = tile.content;
+      const hasData = Array.isArray(c) ? c.length > 0 : !!c;
+      if (hasData) {
+        hideAncestors(tile);
+      }
     }
   }
 

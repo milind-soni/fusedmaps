@@ -102,13 +102,18 @@ function finestNoOverlap(allTiles: Tile2DHeader[]) {
   }
 }
 
-// Walk up the tree until we find one ancestor that is loaded
+// Walk up the tree until we find one ancestor that has actual data.
+// Skip empty tiles so the walk continues to a real placeholder.
 function getPlaceholderInAncestors(startTile: Tile2DHeader): boolean {
   let tile: Tile2DHeader | null = startTile;
   while (tile) {
     if (tile.isLoaded || tile.content) {
-      tile.state |= TILE_STATE_VISIBLE;
-      return true;
+      const c = tile.content;
+      const hasData = Array.isArray(c) ? c.length > 0 : !!c;
+      if (hasData) {
+        tile.state |= TILE_STATE_VISIBLE;
+        return true;
+      }
     }
     tile = tile.parent;
   }
@@ -125,12 +130,18 @@ function hideAncestors(tile: Tile2DHeader) {
   }
 }
 
-// Recursively set children as placeholder
+// Recursively set children as placeholder (only if they have actual data)
 function getPlaceholderInChildren(tile: Tile2DHeader) {
   if (!tile.children) return;
   for (const child of tile.children) {
     if (child.isLoaded || child.content) {
-      child.state |= TILE_STATE_VISIBLE;
+      const c = child.content;
+      const hasData = Array.isArray(c) ? c.length > 0 : !!c;
+      if (hasData) {
+        child.state |= TILE_STATE_VISIBLE;
+      } else {
+        getPlaceholderInChildren(child);
+      }
     } else {
       getPlaceholderInChildren(child);
     }

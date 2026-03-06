@@ -562,8 +562,11 @@ export function setLayerVisibility(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (hexLayer.isTileLayer) {
-        // Rebuild deck overlay layers with current visibility state to avoid stale closure
+      const isInlineDeck = !hexLayer.isTileLayer
+        && Array.isArray((hexLayer as any).data)
+        && (hexLayer as any).data.length > 0;
+      if (hexLayer.isTileLayer || isInlineDeck) {
+        // Both tile and inline-data hex layers use the Deck.gl overlay — rebuild it
         const state = (deckOverlay as any)?.__fused_hex_tiles__;
         try {
           state?.rebuild?.(visibilityState);

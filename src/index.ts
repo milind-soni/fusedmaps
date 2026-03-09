@@ -207,9 +207,16 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   let filterHandle: { destroy: () => void } | null = null;
   if (filterInfos.length > 0 && layersPos !== false) {
     filterHandle = setupFilterPanel((layerId, range) => {
+      console.warn('[filter] setRange:', layerId, range);
       setLayerFilterRange(layerId, range);
-      const state = (overlayRef.current as any)?.__fused_hex_tiles__;
-      try { state?.rebuild?.(store.getVisibilityState()); } catch {}
+      const ov = overlayRef.current;
+      const state = (ov as any)?.__fused_hex_tiles__;
+      console.warn('[filter] overlay:', !!ov, 'state:', !!state, 'rebuild:', typeof state?.rebuild);
+      try {
+        state?.rebuild?.(store.getVisibilityState());
+      } catch (e) {
+        console.error('[filter] rebuild error:', e);
+      }
     }, layersPos as any);
   }
 

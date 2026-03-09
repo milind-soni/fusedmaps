@@ -751,7 +751,6 @@ function buildHexTileDeckLayers(
 
       // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
       const filterAttr = (fillCfgEffective && typeof fillCfgEffective === 'object') ? fillCfgEffective.attr : null;
-      let _tileFilterLogCount = 0;
       const getFillColor = baseFillColor && filterAttr
         ? (obj: any) => {
             const fr = layerFilterRanges[layer.id];
@@ -759,10 +758,6 @@ function buildHexTileDeckLayers(
               const p = obj?.properties || obj || {};
               const raw = p[filterAttr];
               const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
-              if (_tileFilterLogCount < 3) {
-                _tileFilterLogCount++;
-                console.warn('[filter-tile] attr:', filterAttr, 'raw:', raw, 'v:', v, 'range:', fr, 'filtered:', Number.isFinite(v) && (v < fr[0] || v > fr[1]));
-              }
               if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
             }
             const c = baseFillColor(obj);
@@ -1002,7 +997,6 @@ function buildInlineHexDeckLayers(
 
     // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
     const filterAttr = (fillCfg && typeof fillCfg === 'object') ? fillCfg.attr : null;
-    let _inlineFilterLogCount = 0;
     const getFillColor = baseFillColor && filterAttr
       ? (obj: any) => {
           const fr = layerFilterRanges[layer.id];
@@ -1010,10 +1004,6 @@ function buildInlineHexDeckLayers(
             const p = obj?.properties || obj || {};
             const raw = p[filterAttr];
             const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
-            if (_inlineFilterLogCount < 3) {
-              _inlineFilterLogCount++;
-              console.warn('[filter-inline] attr:', filterAttr, 'raw:', raw, 'v:', v, 'range:', fr, 'filtered:', Number.isFinite(v) && (v < fr[0] || v > fr[1]));
-            }
             if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
           }
           const c = baseFillColor(obj);

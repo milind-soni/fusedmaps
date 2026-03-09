@@ -8,7 +8,7 @@
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
-import { setLayerFilterRange, binHistogram, getFilterableLayerInfos } from './layers/hex-tiles';
+import { setLayerFilterRange, binHistogram, binHistogramInline, getFilterableLayerInfos } from './layers/hex-tiles';
 import { setupFilterPanel, updateFilterHistograms } from './ui/filter-panel';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
@@ -252,14 +252,22 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         histTimer = setTimeout(() => {
           const tileState = (overlayRef.current as any)?.__fused_hex_tiles__;
           const runtime = tileState?.getTileData?.();
-          if (!runtime) return;
-          updateFilterHistograms(filterInfos, (tileUrl, attr) =>
-            binHistogram({ cache: runtime }, tileUrl, attr)
-          );
+          updateFilterHistograms(filterInfos, (tileUrl, attr, info) => {
+            if (info?.isInline) {
+              const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
+              const data = (layerCfg as any)?.data;
+              if (Array.isArray(data) && data.length > 0) return binHistogramInline(data, attr);
+              return null;
+            }
+            if (!runtime) return null;
+            return binHistogram({ cache: runtime }, tileUrl, attr);
+          });
         }, 250);
       };
       window.addEventListener('fusedmaps:legend:update', refreshHistograms);
       map.on('moveend', refreshHistograms);
+      // Initial histogram compute for inline layers (data already available)
+      setTimeout(refreshHistograms, 500);
     }
 
     // Setup tooltip (needs deckOverlay for tile layers)

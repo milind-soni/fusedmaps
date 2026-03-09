@@ -42,5 +42,12 @@ export interface FilterableLayerInfo {
     layerName: string;
     attr: string;
     tileUrl: string;
+    isInline?: boolean;
 }
 export declare function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[];
+export declare function binHistogramInline(data: any[], attr: string, numBins?: number): {
+    bins: HistogramBin[];
+    dataMin: number;
+    dataMax: number;
+    total: number;
+} | null;

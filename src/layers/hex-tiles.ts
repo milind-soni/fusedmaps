@@ -991,8 +991,23 @@ function buildInlineHexDeckLayers(
 
     const fillCfg: any = rawHexCfg.getFillColor;
     const lineCfg: any = rawHexCfg.getLineColor;
-    const getFillColor = buildColorAccessor(runtime, layer, fillCfg);
+    const baseFillColor = buildColorAccessor(runtime, layer, fillCfg) as ((obj: any) => any) | null;
     const getLineColor = buildColorAccessor(runtime, layer, lineCfg);
+
+    // Wrap fill color accessor with filter range check (same pattern as tile layers)
+    const filterAttr = (fillCfg && typeof fillCfg === 'object') ? fillCfg.attr : null;
+    const getFillColor = baseFillColor && filterAttr
+      ? (obj: any) => {
+          const fr = layerFilterRanges[layer.id];
+          if (fr) {
+            const p = obj?.properties || obj || {};
+            const raw = p[filterAttr];
+            const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
+            if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
+          }
+          return baseFillColor(obj);
+        }
+      : baseFillColor;
 
     const stroked = rawHexCfg.stroked !== false;
     const filled = rawHexCfg.filled !== false;
@@ -1025,7 +1040,7 @@ function buildInlineHexDeckLayers(
       ...(getFillColor ? { getFillColor } : {}),
       ...(getLineColor ? { getLineColor } : {}),
       updateTriggers: {
-        getFillColor: colorTrigger,
+        getFillColor: [colorTrigger, JSON.stringify(layerFilterRanges[layer.id] ?? null)],
         getLineColor: colorTrigger,
       },
     });
@@ -1241,6 +1256,7 @@ export interface FilterableLayerInfo {
   layerName: string;
   attr: string;
   tileUrl: string;
+  isInline?: boolean;
 }
 
 export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[] {
@@ -1248,13 +1264,59 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
   for (const l of layers) {
     if (l.layerType !== 'hex') continue;
     const hex = l as HexLayerConfig;
-    if (!hex.isTileLayer || !hex.tileUrl) continue;
     const fc: any = hex.hexLayer?.getFillColor;
     if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
     if (fc['@@function'] !== 'colorContinuous') continue;
     const attr = fc.attr;
     if (!attr) continue;
-    result.push({ layerId: l.id, layerName: l.name, attr, tileUrl: hex.tileUrl });
+
+    const isTile = hex.isTileLayer && hex.tileUrl;
+    const isInline = !hex.isTileLayer && Array.isArray((hex as any).data) && (hex as any).data.length > 0;
+    if (!isTile && !isInline) continue;
+
+    result.push({
+      layerId: l.id,
+      layerName: l.name,
+      attr,
+      tileUrl: hex.tileUrl || '',
+      isInline: !!isInline,
+    });
   }
   return result;
+}
+
+export function binHistogramInline(
+  data: any[],
+  attr: string,
+  numBins: number = 24
+): { bins: HistogramBin[]; dataMin: number; dataMax: number; total: number } | null {
+  const values: number[] = [];
+  for (const row of data) {
+    const p = row?.properties || row;
+    if (!p) continue;
+    const raw = p[attr];
+    const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
+    if (Number.isFinite(v)) values.push(v);
+  }
+  if (values.length < 2) return null;
+
+  let dataMin = values[0], dataMax = values[0];
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] < dataMin) dataMin = values[i];
+    if (values[i] > dataMax) dataMax = values[i];
+  }
+  if (dataMin === dataMax) { dataMin -= 1; dataMax += 1; }
+
+  const binWidth = (dataMax - dataMin) / numBins;
+  const bins: HistogramBin[] = [];
+  for (let i = 0; i < numBins; i++) {
+    bins.push({ min: dataMin + i * binWidth, max: dataMin + (i + 1) * binWidth, count: 0 });
+  }
+  for (const v of values) {
+    let idx = Math.floor((v - dataMin) / binWidth);
+    if (idx >= numBins) idx = numBins - 1;
+    if (idx < 0) idx = 0;
+    bins[idx].count++;
+  }
+  return { bins, dataMin, dataMax, total: values.length };
 }

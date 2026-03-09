@@ -12,5 +12,5 @@ export declare function setupFilterPanel(onFilterChange: FilterCallback, positio
  * Refresh histogram data for all filterable layers.
  * Call this on tile load events and map move.
  */
-export declare function updateFilterHistograms(infos: FilterableLayerInfo[], binFn: (tileUrl: string, attr: string) => ReturnType<typeof import('../layers/hex-tiles').binHistogram>): void;
+export declare function updateFilterHistograms(infos: FilterableLayerInfo[], binFn: (tileUrl: string, attr: string, info?: FilterableLayerInfo) => ReturnType<typeof import('../layers/hex-tiles').binHistogram>): void;
 export {};

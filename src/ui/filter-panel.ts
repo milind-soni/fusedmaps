@@ -178,7 +178,7 @@ function renderFilterPanel(infos: FilterableLayerInfo[]): void {
 export function setupFilterPanel(
   onFilterChange: FilterCallback,
   position: WidgetPosition = 'top-right',
-  expanded: boolean = false
+  expanded: boolean = true
 ): { destroy: () => void } {
   filterCallback = onFilterChange;
 
@@ -251,12 +251,12 @@ export function setupFilterPanel(
  */
 export function updateFilterHistograms(
   infos: FilterableLayerInfo[],
-  binFn: (tileUrl: string, attr: string) => ReturnType<typeof import('../layers/hex-tiles').binHistogram>
+  binFn: (tileUrl: string, attr: string, info?: FilterableLayerInfo) => ReturnType<typeof import('../layers/hex-tiles').binHistogram>
 ): void {
   let anyNew = false;
 
   for (const info of infos) {
-    const result = binFn(info.tileUrl, info.attr);
+    const result = binFn(info.tileUrl, info.attr, info);
     if (!result) continue;
 
     const existing = filterStates[info.layerId];

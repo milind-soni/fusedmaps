@@ -88,7 +88,7 @@ export function addStaticHexLayer(
     if (src && typeof src.setData === 'function') {
       src.setData(geojson);
     } else if (!src) {
-      map.addSource(layer.id, { type: 'geojson', data: geojson });
+      map.addSource(layer.id, { type: 'geojson', data: geojson, tolerance: 0 } as any);
     }
   } catch (_) {
     // If we can't access the source (style not ready / race), we still try to proceed.
@@ -214,7 +214,7 @@ export function updateStaticHexLayer(
     if (src && typeof src.setData === 'function') {
       src.setData(geojson);
     } else {
-      map.addSource(layer.id, { type: 'geojson', data: geojson });
+      map.addSource(layer.id, { type: 'geojson', data: geojson, tolerance: 0 } as any);
     }
   } catch (_) {
     // If addSource fails due to race, we still try to proceed with layer rebuild.

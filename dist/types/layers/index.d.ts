@@ -44,6 +44,10 @@ export declare function updateLayerStyleInPlace(map: mapboxgl.Map, before: Layer
  * Set visibility for a single layer
  */
 export declare function setLayerVisibility(map: mapboxgl.Map, layerId: string, visible: boolean, layers: LayerConfig[], deckOverlay: unknown, visibilityState?: Record<string, boolean>): void;
+/**
+ * Set opacity for a single layer across all its sublayers
+ */
+export declare function setLayerOpacity(map: mapboxgl.Map, layerId: string, opacity: number, layers: LayerConfig[], deckOverlay: unknown, visibilityState?: Record<string, boolean>): void;
 export * from './hex';
 export * from './vector';
 export * from './raster';

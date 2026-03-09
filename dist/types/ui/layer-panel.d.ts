@@ -7,10 +7,11 @@
 import type { LayerConfig, WidgetPosition } from '../types';
 import type { LayerStore } from '../state';
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
+type OpacityCallback = (layerId: string, opacity: number) => void;
 /**
  * Setup the layer panel
  */
-export declare function setupLayerPanel(layers: LayerConfig[], visibilityState: Record<string, boolean>, onVisibilityChange: VisibilityCallback, store?: LayerStore, position?: WidgetPosition, expanded?: boolean): {
+export declare function setupLayerPanel(layers: LayerConfig[], visibilityState: Record<string, boolean>, onVisibilityChange: VisibilityCallback, store?: LayerStore, position?: WidgetPosition, expanded?: boolean, onOpacityChange?: OpacityCallback): {
     destroy: () => void;
 };
 /**

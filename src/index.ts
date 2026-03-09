@@ -7,7 +7,7 @@
 
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
-import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
+import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
@@ -195,7 +195,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   if (config.ui?.layerPanel !== false && layersPos !== false) {
     setupLayerPanel(store.getAllConfigs(), getVisibilityState(), (layerId, visible) => {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
-    }, store, layersPos as any, layersCfg.expanded);
+    }, store, layersPos as any, layersCfg.expanded, (layerId, opacity) => {
+      setLayerOpacity(map, layerId, opacity, store.getAllConfigs(), overlayRef.current, store.getVisibilityState());
+    });
   }
   
   // Track tile loading cleanup function

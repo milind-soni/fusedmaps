@@ -1220,3 +1220,69 @@ html[data-theme="light"] .layer-group-header:hover {
   left: auto;
   right: 10px;
 }
+
+/* Opacity button icon in layer item */
+.layer-item .layer-opacity-btn {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-muted);
+  flex-shrink: 0;
+  order: 2;
+  transition: color 0.15s;
+}
+.layer-item .layer-opacity-btn:hover {
+  color: var(--ui-text);
+}
+.layer-item .layer-eye {
+  order: 3;
+}
+
+/* Opacity slider row */
+.layer-opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 8px 16px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.layer-opacity-row.hidden {
+  display: none;
+}
+.layer-opacity-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--ui-border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.layer-opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ui-text);
+  cursor: pointer;
+  border: none;
+}
+.layer-opacity-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ui-text);
+  cursor: pointer;
+  border: none;
+}
+.layer-opacity-value {
+  font-size: 11px;
+  color: var(--ui-muted);
+  min-width: 32px;
+  text-align: right;
+}

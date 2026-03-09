@@ -12,14 +12,17 @@ import type { LayerStore } from '../state';
 import { getWidgetContainer } from './widget-container';
 
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
+type OpacityCallback = (layerId: string, opacity: number) => void;
 
 let visibilityCallback: VisibilityCallback | null = null;
+let opacityCallback: OpacityCallback | null = null;
 let unsubscribeStore: (() => void) | null = null;
 let installedListeners = false;
 let clickHandlerInstalled = false;
 let activeStore: LayerStore | null = null;
 let activeVisibilityState: Record<string, boolean> = {};
 let panelEl: HTMLElement | null = null;
+const layerOpacityState: Record<string, number> = {};
 
 function getCurrentVisible(layerId: string): boolean {
   if (activeStore) return activeStore.get(layerId)?.visible !== false;
@@ -68,6 +71,22 @@ function handlePanelClick(e: MouseEvent): void {
     return;
   }
 
+  // Handle opacity icon click (toggle slider row)
+  const opacityBtn = target.closest?.('.layer-opacity-btn') as HTMLElement | null;
+  if (opacityBtn) {
+    const item = opacityBtn.closest('.layer-item') as HTMLElement | null;
+    const layerId = item?.getAttribute('data-layer-id') || '';
+    if (layerId) {
+      const sliderRow = item?.nextElementSibling as HTMLElement | null;
+      if (sliderRow?.classList.contains('layer-opacity-row')) {
+        sliderRow.classList.toggle('hidden');
+      }
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   // Handle regular layer item click
   const item = target.closest?.('.layer-item') as HTMLElement | null;
   if (!item) return;
@@ -81,8 +100,24 @@ function handlePanelClick(e: MouseEvent): void {
     const current = getCurrentVisible(layerId);
     visibilityCallback?.(layerId, !current);
     e.preventDefault();
-    e.stopPropagation(); // Prevent dropdown from closing
+    e.stopPropagation();
   }
+}
+
+function handlePanelInput(e: Event): void {
+  const target = e.target as HTMLInputElement | null;
+  if (!target?.classList.contains('layer-opacity-slider')) return;
+  const layerId = target.getAttribute('data-layer-id') || '';
+  if (!layerId) return;
+
+  const pct = parseInt(target.value, 10);
+  const opacity = Math.max(0, Math.min(1, pct / 100));
+  layerOpacityState[layerId] = opacity;
+
+  const label = target.nextElementSibling as HTMLElement | null;
+  if (label) label.textContent = `${pct}%`;
+
+  opacityCallback?.(layerId, opacity);
 }
 
 // Eye icon SVGs
@@ -92,6 +127,7 @@ const LAYERS_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="c
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 const CHEVRON_DOWN_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
 const CHEVRON_RIGHT_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>';
+const OPACITY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="12" r="6" opacity="0.9"/><circle cx="15" cy="12" r="6" opacity="0.35" stroke="currentColor" stroke-width="1" fill="none"/><path d="M 15 6 A 6 6 0 0 1 15 18" fill="currentColor" opacity="0.35"/></svg>';
 
 // Track group expanded states (default to expanded)
 const groupExpandedState: Record<string, boolean> = {};
@@ -105,9 +141,11 @@ export function setupLayerPanel(
   onVisibilityChange: VisibilityCallback,
   store?: LayerStore,
   position: WidgetPosition = 'top-right',
-  expanded: boolean = false
+  expanded: boolean = false,
+  onOpacityChange?: OpacityCallback
 ): { destroy: () => void } {
   visibilityCallback = onVisibilityChange;
+  opacityCallback = onOpacityChange || null;
   const _store = store;
   activeStore = _store || null;
   activeVisibilityState = visibilityState || {};
@@ -175,6 +213,7 @@ export function setupLayerPanel(
   // One delegated click handler for the whole panel (no window globals, no inline onclick)
   if (!clickHandlerInstalled) {
     panel.addEventListener('click', handlePanelClick as any);
+    panel.addEventListener('input', handlePanelInput as any);
     clickHandlerInstalled = true;
   }
 
@@ -222,6 +261,8 @@ function renderLayerItem(layer: LayerConfig, visible: boolean, order: number, gr
   const eyeIcon = visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
   const groupAttr = groupName ? ` data-group="${groupName}"` : '';
   const indentClass = groupName ? ' layer-item-grouped' : '';
+  const currentOpacity = layerOpacityState[layer.id] ?? 1;
+  const pct = Math.round(currentOpacity * 100);
 
   return `
     <div class="layer-item${indentClass} ${visible ? '' : 'disabled'}"
@@ -229,7 +270,12 @@ function renderLayerItem(layer: LayerConfig, visible: boolean, order: number, gr
          data-order="${order}"${groupAttr}
          style="--layer-strip: ${stripBg};">
       <span class="layer-name">${layer.name}</span>
+      <span class="layer-opacity-btn" title="Adjust opacity">${OPACITY_ICON_SVG}</span>
       <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
+    </div>
+    <div class="layer-opacity-row hidden" data-layer-id="${layer.id}">
+      <input type="range" class="layer-opacity-slider" min="0" max="100" value="${pct}" data-layer-id="${layer.id}">
+      <span class="layer-opacity-value">${pct}%</span>
     </div>
   `;
 }

@@ -589,6 +589,71 @@ export function setLayerVisibility(
   }
 }
 
+/**
+ * Set opacity for a single layer across all its sublayers
+ */
+export function setLayerOpacity(
+  map: mapboxgl.Map,
+  layerId: string,
+  opacity: number,
+  layers: LayerConfig[],
+  deckOverlay: unknown,
+  visibilityState?: Record<string, boolean>
+): void {
+  const layer = layers.find(l => l.id === layerId);
+  if (!layer) return;
+  const o = Math.max(0, Math.min(1, opacity));
+
+  switch (layer.layerType) {
+    case 'hex': {
+      const hexLayer = layer as HexLayerConfig;
+      if (hexLayer.hexLayer) hexLayer.hexLayer.opacity = o;
+      (hexLayer as any).opacity = o;
+
+      // Mapbox GL sublayers (static hex)
+      setPaintSafe(map, `${layerId}-fill`, 'fill-opacity', o);
+      setPaintSafe(map, `${layerId}-extrusion`, 'fill-extrusion-opacity', o);
+      setPaintSafe(map, `${layerId}-outline`, 'line-opacity', o);
+
+      // Deck.gl overlay (tiled / inline hex) – rebuild with updated config
+      const isInlineDeck = !hexLayer.isTileLayer
+        && Array.isArray((hexLayer as any).data)
+        && (hexLayer as any).data.length > 0;
+      if (hexLayer.isTileLayer || isInlineDeck) {
+        const state = (deckOverlay as any)?.__fused_hex_tiles__;
+        try { state?.rebuild?.(visibilityState); } catch {}
+      }
+      break;
+    }
+
+    case 'vector':
+    case 'mvt':
+      setPaintSafe(map, `${layerId}-fill`, 'fill-opacity', o);
+      setPaintSafe(map, `${layerId}-outline`, 'line-opacity', o);
+      setPaintSafe(map, `${layerId}-line`, 'line-opacity', o);
+      setPaintSafe(map, `${layerId}-circle`, 'circle-opacity', o);
+      setPaintSafe(map, `${layerId}-circle`, 'circle-stroke-opacity', o);
+      break;
+
+    case 'raster':
+      setPaintSafe(map, `${layerId}-raster`, 'raster-opacity', o);
+      break;
+
+    case 'pmtiles': {
+      const prefix = `${layerId}-`;
+      const styleLayers = (map.getStyle()?.layers || []) as any[];
+      for (const l of styleLayers) {
+        const lid = l?.id as string | undefined;
+        if (!lid || !lid.startsWith(prefix)) continue;
+        if (lid.endsWith('-fill')) setPaintSafe(map, lid, 'fill-opacity', o);
+        else if (lid.endsWith('-line')) setPaintSafe(map, lid, 'line-opacity', o);
+        else if (lid.endsWith('-circles')) setPaintSafe(map, lid, 'circle-opacity', o);
+      }
+      break;
+    }
+  }
+}
+
 // Re-export layer utilities
 export * from './hex';
 export * from './vector';

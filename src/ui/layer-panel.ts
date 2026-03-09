@@ -127,7 +127,7 @@ const LAYERS_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="c
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 const CHEVRON_DOWN_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
 const CHEVRON_RIGHT_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>';
-const OPACITY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="12" r="6" opacity="0.9"/><circle cx="15" cy="12" r="6" opacity="0.35" stroke="currentColor" stroke-width="1" fill="none"/><path d="M 15 6 A 6 6 0 0 1 15 18" fill="currentColor" opacity="0.35"/></svg>';
+const OPACITY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8v16z"/></svg>';
 
 // Track group expanded states (default to expanded)
 const groupExpandedState: Record<string, boolean> = {};

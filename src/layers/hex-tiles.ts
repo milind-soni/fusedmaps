@@ -798,11 +798,12 @@ function buildHexTileDeckLayers(
         maxZoom: tileCfg.maxZoom,
         zoomOffset: tileCfg.zoomOffset,
         maxRequests: tileCfg.maxRequests,
-        maxCacheSize: 200, // Match live-map behavior - don't cache too many tiles
+        maxCacheSize: 200,
         refinementStrategy: finestNoOverlap,
         pickable: true,
         autoHighlight: true,
         visible,
+        updateTriggers: { renderSubLayers: [colorTrigger, opacity] },
         ...(beforeId ? { beforeId } : {}),
 
         // Tile lifecycle callbacks (like live-map)

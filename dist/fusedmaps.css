@@ -1364,27 +1364,27 @@ html[data-theme="light"] .layer-group-header:hover {
 .filter-range-max::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--ui-text, #fff);
-  border: 2px solid var(--ui-accent, #4dabf7);
+  background: var(--ui-text, #ccc);
+  border: none;
   cursor: pointer;
   pointer-events: all;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
   position: relative;
   z-index: 3;
 }
 .filter-range-min::-moz-range-thumb,
 .filter-range-max::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--ui-text, #fff);
-  border: 2px solid var(--ui-accent, #4dabf7);
+  background: var(--ui-text, #ccc);
+  border: none;
   cursor: pointer;
   pointer-events: all;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
 
 .filter-range-min::-webkit-slider-runnable-track,

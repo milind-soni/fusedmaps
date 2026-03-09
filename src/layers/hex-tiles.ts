@@ -749,7 +749,7 @@ function buildHexTileDeckLayers(
       const baseFillColor = buildColorAccessor(runtime, layer, fillCfgEffective) as ((obj: any) => any) | null;
       const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
 
-      // Wrap fill color accessor with filter range check
+      // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
       const filterAttr = (fillCfgEffective && typeof fillCfgEffective === 'object') ? fillCfgEffective.attr : null;
       const getFillColor = baseFillColor && filterAttr
         ? (obj: any) => {
@@ -760,7 +760,8 @@ function buildHexTileDeckLayers(
               const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
               if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
             }
-            return baseFillColor(obj);
+            const c = baseFillColor(obj);
+            return Array.isArray(c) && c.length === 3 ? [c[0], c[1], c[2], 255] : c;
           }
         : baseFillColor;
 
@@ -994,7 +995,7 @@ function buildInlineHexDeckLayers(
     const baseFillColor = buildColorAccessor(runtime, layer, fillCfg) as ((obj: any) => any) | null;
     const getLineColor = buildColorAccessor(runtime, layer, lineCfg);
 
-    // Wrap fill color accessor with filter range check (same pattern as tile layers)
+    // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
     const filterAttr = (fillCfg && typeof fillCfg === 'object') ? fillCfg.attr : null;
     const getFillColor = baseFillColor && filterAttr
       ? (obj: any) => {
@@ -1005,7 +1006,8 @@ function buildInlineHexDeckLayers(
             const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
             if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
           }
-          return baseFillColor(obj);
+          const c = baseFillColor(obj);
+          return Array.isArray(c) && c.length === 3 ? [c[0], c[1], c[2], 255] : c;
         }
       : baseFillColor;
 

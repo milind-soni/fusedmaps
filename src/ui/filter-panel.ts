@@ -52,8 +52,8 @@ function renderHistogramSVG(bins: HistogramBin[], filterMin: number, filterMax: 
     const y = h - barH;
     const midVal = (bins[i].min + bins[i].max) / 2;
     const inRange = midVal >= filterMin && midVal <= filterMax;
-    const opacity = inRange ? '0.85' : '0.15';
-    bars += `<rect x="${x}" y="${y}" width="${barW - 0.5}" height="${barH}" rx="1" fill="var(--ui-accent, #4dabf7)" opacity="${opacity}"/>`;
+    const opacity = inRange ? '0.5' : '0.12';
+    bars += `<rect x="${x}" y="${y}" width="${barW - 0.5}" height="${barH}" rx="1" fill="var(--ui-muted, #aaa)" opacity="${opacity}"/>`;
   }
 
   return `<svg class="filter-histogram-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg>`;

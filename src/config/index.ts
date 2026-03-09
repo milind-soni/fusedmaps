@@ -1,7 +1,5 @@
 /**
- * Config module - handles normalization of layer configs
- *
- * Converts new clean user-facing format to internal format.
+ * Config module - layer configs pass through directly (no normalization needed).
  */
 
-export { normalizeColor, normalizeLayerConfig, isNewFormat } from './normalize';
+// No normalization needed - renderers read the `style` format directly.

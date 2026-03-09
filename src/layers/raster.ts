@@ -67,7 +67,7 @@ export function addRasterLayer(
   layer: RasterLayerConfig,
   visible: boolean
 ): void {
-  const opacity = layer.opacity ?? layer.rasterLayer?.opacity ?? 1.0;
+  const opacity = layer.opacity ?? (layer as any).style?.opacity ?? 1.0;
 
   const hasTileUrl = typeof layer.tileUrl === 'string' && layer.tileUrl.length > 0;
   const hasImage = typeof layer.imageUrl === 'string' && layer.imageUrl.length > 0

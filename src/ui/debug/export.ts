@@ -2,7 +2,6 @@
  * Debug panel export helpers
  *
  * Pure utilities used to generate "paste-back" Python snippets and compact config deltas.
- * Kept separate to reduce the size/coupling of `ui/debug.ts`.
  */
 
 function isPlainObject(x: any) {
@@ -10,19 +9,17 @@ function isPlainObject(x: any) {
 }
 
 /**
- * Convert legacy color config (@@function format) to new clean format
+ * Convert a color config to the new clean format (no-op if already new format)
  */
-export function legacyColorToNewFormat(color: any): any {
+export function colorToNewFormat(color: any): any {
   if (!color || typeof color !== 'object') return color;
   if (Array.isArray(color)) return color;
-
+  // Already new format
+  if (color.type === 'continuous' || color.type === 'categorical') return color;
+  // Legacy @@function format - convert
   const fn = color['@@function'];
   if (fn === 'colorContinuous') {
-    const result: any = {
-      type: 'continuous',
-      attr: color.attr,
-      palette: color.colors,
-    };
+    const result: any = { type: 'continuous', attr: color.attr, palette: color.palette || color.colors };
     if (color.domain) result.domain = color.domain;
     if (typeof color.steps === 'number') result.steps = color.steps;
     if (color.nullColor) result.nullColor = color.nullColor;
@@ -30,11 +27,8 @@ export function legacyColorToNewFormat(color: any): any {
     return result;
   }
   if (fn === 'colorCategories') {
-    const result: any = {
-      type: 'categorical',
-      attr: color.attr,
-    };
-    if (color.colors) result.palette = color.colors;
+    const result: any = { type: 'categorical', attr: color.attr };
+    if (color.palette || color.colors) result.palette = color.palette || color.colors;
     if (color.categories) result.categories = color.categories;
     if (color.labelAttr) result.labelAttr = color.labelAttr;
     if (color.nullColor) result.nullColor = color.nullColor;
@@ -44,40 +38,22 @@ export function legacyColorToNewFormat(color: any): any {
 }
 
 /**
- * Convert legacy hexLayer/vectorLayer to new style format
+ * Convert a style object to the clean output format
  */
-export function legacyStyleToNewFormat(legacy: any): any {
-  if (!legacy || typeof legacy !== 'object') return {};
-
-  const style: any = {};
-
-  // Color mappings
-  if (legacy.getFillColor !== undefined) {
-    style.fillColor = legacyColorToNewFormat(legacy.getFillColor);
-  }
-  if (legacy.getLineColor !== undefined) {
-    style.lineColor = legacyColorToNewFormat(legacy.getLineColor);
-  }
-
-  // Direct properties
-  if (typeof legacy.opacity === 'number') style.opacity = legacy.opacity;
-  if (typeof legacy.filled === 'boolean') style.filled = legacy.filled;
-  if (typeof legacy.stroked === 'boolean') style.stroked = legacy.stroked;
-  if (typeof legacy.extruded === 'boolean') style.extruded = legacy.extruded;
-
-  // Elevation
-  if (legacy.elevationProperty) style.elevationAttr = legacy.elevationProperty;
-  if (typeof legacy.elevationScale === 'number') style.elevationScale = legacy.elevationScale;
-
-  // Line width
-  if (typeof legacy.lineWidthMinPixels === 'number') style.lineWidth = legacy.lineWidthMinPixels;
-  else if (typeof legacy.getLineWidth === 'number') style.lineWidth = legacy.getLineWidth;
-
-  // Point radius
-  if (typeof legacy.pointRadiusMinPixels === 'number') style.pointRadius = legacy.pointRadiusMinPixels;
-  else if (typeof legacy.pointRadius === 'number') style.pointRadius = legacy.pointRadius;
-
-  return style;
+export function styleToNewFormat(style: any): any {
+  if (!style || typeof style !== 'object') return {};
+  const out: any = {};
+  if (style.fillColor !== undefined) out.fillColor = colorToNewFormat(style.fillColor);
+  if (style.lineColor !== undefined) out.lineColor = colorToNewFormat(style.lineColor);
+  if (typeof style.opacity === 'number') out.opacity = style.opacity;
+  if (typeof style.filled === 'boolean') out.filled = style.filled;
+  if (typeof style.stroked === 'boolean') out.stroked = style.stroked;
+  if (typeof style.extruded === 'boolean') out.extruded = style.extruded;
+  if (style.elevationAttr) out.elevationAttr = style.elevationAttr;
+  if (typeof style.elevationScale === 'number') out.elevationScale = style.elevationScale;
+  if (typeof style.lineWidth === 'number') out.lineWidth = style.lineWidth;
+  if (typeof style.pointRadius === 'number') out.pointRadius = style.pointRadius;
+  return out;
 }
 
 function deepEqual(a: any, b: any): boolean {
@@ -102,11 +78,9 @@ function deepEqual(a: any, b: any): boolean {
 }
 
 export function deepDelta(base: any, cur: any): any {
-  // Return only keys in `cur` that differ from `base`.
   if (deepEqual(base, cur)) return undefined;
   if (Array.isArray(cur)) return cur;
   if (!isPlainObject(cur)) return cur;
-
   const out: any = {};
   for (const k of Object.keys(cur)) {
     const d = deepDelta(base?.[k], cur[k]);
@@ -124,11 +98,8 @@ export function toPyLiteral(x: any, indent = 0): string {
   if (t === 'boolean') return x ? 'True' : 'False';
   if (t === 'number') return Number.isFinite(x) ? String(x) : 'None';
   if (t === 'string') {
-    // Special marker: allow embedding a raw Python symbol in the export, e.g. "@@py:df".
-    // This lets users get `data=df` in the paste-back snippet (the browser can't infer var names).
     if (x.startsWith('@@py:')) {
       const sym = x.slice('@@py:'.length).trim();
-      // Safety: only allow simple identifiers / dotted paths.
       if (/^[A-Za-z_][A-Za-z0-9_\\.]*$/.test(sym)) return sym;
     }
     return JSON.stringify(x);
@@ -144,12 +115,9 @@ export function toPyLiteral(x: any, indent = 0): string {
     const items = keys.map((k) => `${pad(next)}${JSON.stringify(k)}: ${toPyLiteral((x as any)[k], next)}`);
     return `{\n${items.join(',\n')}\n${pad(indent)}}`;
   }
-  // Fallback for anything else
   try {
     return JSON.stringify(String(x));
   } catch {
     return 'None';
   }
 }
-
-

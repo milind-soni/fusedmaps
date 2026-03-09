@@ -7,7 +7,7 @@
 
 import type { FusedMapsConfig, HexLayerConfig, VectorLayerConfig, ViewState } from '../types';
 import { getViewState } from '../core/map';
-import { deepDelta, toPyLiteral, legacyStyleToNewFormat } from './debug/export';
+import { deepDelta, toPyLiteral, styleToNewFormat, colorToNewFormat } from './debug/export';
 import { createPaletteDropdownManager, getPaletteNames, setPaletteOptions } from './debug/palettes';
 import { ensureDebugShell, queryDebugElements } from './debug/template';
 import { applyDebugUIToLayer } from './debug/apply';
@@ -32,9 +32,9 @@ function updateDebugTogglePosition(shell: HTMLElement, panel: HTMLElement, toggl
   } catch {}
 }
 
-function ensureColorContinuousCfg(obj: any) {
+function ensureContinuousColorCfg(obj: any) {
   if (!obj || typeof obj !== 'object') return null;
-  if (obj['@@function'] !== 'colorContinuous') return null;
+  if (obj.type !== 'continuous' && obj['@@function'] !== 'colorContinuous') return null;
   return obj;
 }
 
@@ -60,15 +60,13 @@ function getExpressionLabel(colorCfg: string): string {
 function getAttrCandidates(layer: HexLayerConfig): string[] {
   const out = new Set<string>();
   try {
-    const fc: any = (layer.hexLayer as any)?.getFillColor;
-    const lc: any = (layer.hexLayer as any)?.getLineColor;
+    const style: any = layer.style || {};
+    const fc: any = style.fillColor;
+    const lc: any = style.lineColor;
     if (fc?.attr) out.add(String(fc.attr));
     if (lc?.attr) out.add(String(lc.attr));
-    // Check tooltipColumns/tooltipAttrs at both layer and hexLayer level
-    const ttc: any = (layer as any).tooltipColumns || (layer.hexLayer as any)?.tooltipColumns;
-    const tta: any = (layer as any).tooltipAttrs || (layer.hexLayer as any)?.tooltipAttrs;
-    if (Array.isArray(ttc)) ttc.forEach((x: any) => { if (x && x !== 'hex') out.add(String(x)); });
-    if (Array.isArray(tta)) tta.forEach((x: any) => { if (x && x !== 'hex') out.add(String(x)); });
+    const tt: any = (layer as any).tooltip;
+    if (Array.isArray(tt)) tt.forEach((x: any) => { if (x && x !== 'hex') out.add(String(x)); });
   } catch (_) {}
   return [...out].filter(Boolean);
 }
@@ -89,20 +87,18 @@ function getVectorAttrCandidates(layer: VectorLayerConfig): string[] {
 const DEFAULT_HEX_STYLE: any = {
   filled: true,
   stroked: true,
-  pickable: true,
   extruded: false,
   elevationScale: 1,
   opacity: 1,
-  getHexagon: '@@=properties.hex',
-  getFillColor: {
-    '@@function': 'colorContinuous',
+  fillColor: {
+    type: 'continuous',
     attr: 'cnt',
     steps: 20,
-    colors: 'ArmyRose',
+    palette: 'ArmyRose',
     nullColor: [184, 184, 184]
   },
-  getLineColor: [255, 255, 255],
-  lineWidthMinPixels: 1
+  lineColor: [255, 255, 255],
+  lineWidth: 1
 };
 
 const DEFAULT_TILE_LAYER: any = {
@@ -114,15 +110,14 @@ const DEFAULT_TILE_LAYER: any = {
 const DEFAULT_VECTOR_STYLE: any = {
   filled: true,
   stroked: true,
-  pickable: true,
   opacity: 0.8,
-  lineWidthMinPixels: 0,
-  pointRadiusMinPixels: 10,
-  getFillColor: {
-    '@@function': 'colorContinuous',
+  lineWidth: 0,
+  pointRadius: 10,
+  fillColor: {
+    type: 'continuous',
     attr: 'house_age',
     domain: [0, 50],
-    colors: 'ArmyRose',
+    palette: 'ArmyRose',
     steps: 7,
     nullColor: [200, 200, 200, 180]
   }
@@ -343,29 +338,20 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const updateLayerOutput = () => {
     try {
-      // Paste-back config (short, combined):
-      // Emit a full `layers=[...]` list (map_utils style), where each layer's `config`
-      // is a delta against strong defaults.
       const MAX_STRINGIFY_CHARS = 200_000;
 
       const toLayerDef = (l: any) => {
-        const base: any = {
-          name: l.name
-        };
-        // Only include visibility when it's explicitly off (default True).
+        const base: any = { name: l.name };
         if (l.visible === false) base.visible = false;
 
-        // Hex (tile or static) - use new clean format
         if (l.layerType === 'hex') {
-          const hl = l.hexLayer || {};
-          const style = legacyStyleToNewFormat(hl);
+          base.type = 'hex';
           const cfg: any = {};
-          if (Object.keys(style).length) cfg.style = style;
+          if (l.style && Object.keys(l.style).length) cfg.style = styleToNewFormat(l.style);
 
           if (l.isTileLayer && l.tileUrl) {
-            base.type = 'hex';
             base.tile_url = l.tileUrl;
-            const tl = l.tileLayerConfig || l.tileLayer || null;
+            const tl = l.tile || l.tileLayerConfig || null;
             if (tl && typeof tl === 'object') {
               const tile: any = {};
               if (typeof tl.minZoom === 'number') tile.minZoom = tl.minZoom;
@@ -374,97 +360,59 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
               if (Object.keys(tile).length) cfg.tile = tile;
             }
           } else {
-            // Static hex data or DuckDB SQL-backed non-tile hex
-            base.type = 'hex';
             if (l.parquetUrl) base.parquetUrl = l.parquetUrl;
             if (l.sql) base.sql = l.sql;
-            // If this is not a parquet/sql-backed layer, keep an explicit data placeholder.
             if (!l.parquetUrl) {
-              // Don't inline huge data arrays in the paste-back snippet.
-              // Use a placeholder (data=None) or a python symbol (data=df) if dataRef was provided.
-              base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
+              base.data = l.dataRef ? `@@py:${String(l.dataRef)}` : null;
             }
           }
           if (Object.keys(cfg).length) base.config = cfg;
           return base;
         }
 
-        // Vector GeoJSON - use new clean format
         if (l.layerType === 'vector') {
           base.type = 'vector';
-          // Don't inline GeoJSON; keep paste-back snippet small and explicit.
-          base.data = (l as any).dataRef ? `@@py:${String((l as any).dataRef)}` : null;
-          const vl = l.vectorLayer || {};
-          const style = legacyStyleToNewFormat(vl);
-          if (Object.keys(style).length) base.config = { style };
+          base.data = l.dataRef ? `@@py:${String(l.dataRef)}` : null;
+          if (l.style && Object.keys(l.style).length) base.config = { style: styleToNewFormat(l.style) };
           return base;
         }
 
-        // MVT tiles - use new clean format
         if (l.layerType === 'mvt') {
           base.type = 'vector';
           base.tile_url = l.tileUrl;
           base.source_layer = l.sourceLayer || 'udf';
-          const style: any = {};
-          if (l.fillColorConfig) style.fillColor = legacyStyleToNewFormat({ getFillColor: l.fillColorConfig }).fillColor;
-          else if (l.fillColor) style.fillColor = l.fillColor;
-          if (l.lineColorConfig) style.lineColor = legacyStyleToNewFormat({ getLineColor: l.lineColorConfig }).lineColor;
-          else if (l.lineColor) style.lineColor = l.lineColor;
-          if (typeof l.lineWidth === 'number') style.lineWidth = l.lineWidth;
-          if (typeof l.fillOpacity === 'number') style.opacity = l.fillOpacity;
-          if (Object.keys(style).length) base.config = { style };
+          if (l.style && Object.keys(l.style).length) base.config = { style: styleToNewFormat(l.style) };
           return base;
         }
 
-        // PMTiles (Mapbox GL source via mapbox-pmtiles) - use new clean format
         if (l.layerType === 'pmtiles') {
           base.type = 'pmtiles';
-          // Prefer original path if available (cleaner paste-back). Otherwise fall back to URL.
-          if ((l as any).pmtilesPath) base.pmtiles_path = (l as any).pmtilesPath;
+          if (l.pmtilesPath) base.pmtiles_path = l.pmtilesPath;
           else base.pmtiles_url = l.pmtilesUrl;
           if (l.sourceLayer) base.source_layer = l.sourceLayer;
           if (typeof l.minzoom === 'number') base.minzoom = l.minzoom;
           if (typeof l.maxzoom === 'number') base.maxzoom = l.maxzoom;
-
-          // Build merged legacy format then convert to new format
-          const v: any = l.vectorLayer || {};
-          const vMerged: any = { ...v };
-          if (l.fillColorConfig) vMerged.getFillColor = l.fillColorConfig;
-          if (l.lineColorConfig) vMerged.getLineColor = l.lineColorConfig;
-          if (typeof l.fillOpacity === 'number') vMerged.opacity = l.fillOpacity;
-          if (typeof l.lineWidth === 'number') vMerged.lineWidthMinPixels = l.lineWidth;
-          if (typeof l.pointRadiusMinPixels === 'number') vMerged.pointRadiusMinPixels = l.pointRadiusMinPixels;
-          if (typeof l.isFilled === 'boolean') vMerged.filled = l.isFilled;
-          if (typeof l.isStroked === 'boolean') vMerged.stroked = l.isStroked;
-
-          const style = legacyStyleToNewFormat(vMerged);
-          if (Object.keys(style).length) base.config = { style };
+          if (l.style && Object.keys(l.style).length) base.config = { style: styleToNewFormat(l.style) };
           return base;
         }
 
-        // Raster tiles / static raster overlay - use new clean format
         if (l.layerType === 'raster') {
           base.type = 'raster';
           if (l.tileUrl) base.tile_url = l.tileUrl;
           if (l.imageUrl) base.image_url = l.imageUrl;
           if (l.imageBounds) base.bounds = l.imageBounds;
-          const op = l.opacity ?? l.rasterLayer?.opacity;
+          const op = l.style?.opacity;
           if (typeof op === 'number' && Number.isFinite(op) && op !== 1) {
             base.config = { style: { opacity: op } };
           }
           return base;
         }
 
-        // Unknown
         return base;
       };
 
       const layersOut = (config.layers || []).map(toLayerDef);
-      // Layer Config output should be paste-back friendly.
-      // For drawings, users expect the full FeatureCollection (geojson.io style).
       let s = `layers = ${toPyLiteral(layersOut, 0)}`;
-
-      // Keep truncation for general layer config
       if (s.length > MAX_STRINGIFY_CHARS) {
         s = s.slice(0, MAX_STRINGIFY_CHARS) + '\n... (truncated)\n';
       }
@@ -575,24 +523,16 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     const isHex = (layer as any).layerType === 'hex';
     const isVector = (layer as any).layerType === 'vector';
     const isPmtiles = (layer as any).layerType === 'pmtiles';
-    const hexCfg: any = isHex ? ((layer as any).hexLayer || {}) : {};
+    const layerStyle: any = (layer as any).style || {};
 
     // Toggle section visibility
     try { if (hexSection) hexSection.style.display = (isHex || isVector || isPmtiles) ? 'block' : 'none'; } catch (_) {}
-    // Fill/Line color sections are shown based on filled/stroked state (updated after setting checkboxes below)
     try { if (viewStateSection) viewStateSection.style.display = 'block'; } catch (_) {}
 
     // Basic toggles
-    if (isHex) {
-      filledEl.checked = hexCfg.filled !== false;
-      strokedEl.checked = hexCfg.stroked !== false;
-      extrudedEl.checked = hexCfg.extruded === true;
-    } else {
-      // vector/pmtiles: treat filled/stroked as on/off hints; extruded doesn't apply
-      filledEl.checked = (layer as any).isFilled !== false;
-      strokedEl.checked = (layer as any).isStroked !== false;
-      extrudedEl.checked = false;
-    }
+    filledEl.checked = layerStyle.filled !== false;
+    strokedEl.checked = layerStyle.stroked !== false;
+    extrudedEl.checked = isHex ? (layerStyle.extruded === true) : false;
 
     // Update fill/line color section visibility based on filled/stroked checkboxes
     updateFillSectionVisibility();
@@ -600,7 +540,6 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
     // Extrusion controls (hex only)
     try {
-      // Hide extruded checkbox for non-hex layers
       const extrudedLabel = extrudedEl?.parentElement;
       if (extrudedLabel) extrudedLabel.style.display = isHex ? '' : 'none';
       if (extrusionControls) extrusionControls.style.display = (isHex && extrudedEl.checked) ? 'block' : 'none';
@@ -610,34 +549,30 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         elevAttrEl.innerHTML = opts
           .map((a) => a ? `<option value="${a}">${a}</option>` : `<option value="">(use fill attr)</option>`)
           .join('');
-        elevAttrEl.value = String(hexCfg.elevationProperty || '');
+        elevAttrEl.value = String(layerStyle.elevationAttr || '');
       }
       if (isHex && elevScaleEl) {
         elevScaleEl.value = String(
-          (typeof hexCfg.elevationScale === 'number' && Number.isFinite(hexCfg.elevationScale))
-            ? hexCfg.elevationScale
+          (typeof layerStyle.elevationScale === 'number' && Number.isFinite(layerStyle.elevationScale))
+            ? layerStyle.elevationScale
             : 1
         );
       }
     } catch (_) {}
 
-    const op = isHex
-      ? (typeof hexCfg.opacity === 'number' ? hexCfg.opacity : 1)
-      : (typeof (layer as any).opacity === 'number' ? (layer as any).opacity : 0.9);
+    const op = (typeof layerStyle.opacity === 'number') ? layerStyle.opacity : (isHex ? 1 : 0.9);
     opacitySliderEl.value = String(op);
     opacityEl.value = String(op);
 
     // Fill
-    if (isHex) {
-      const fc: any = hexCfg.getFillColor;
+    {
+      const fc: any = layerStyle.fillColor;
 
-      // Check for expression first (e.g., "@@=[properties.r,properties.g,properties.b]")
       if (isColorExpression(fc)) {
         fillFnEl.value = 'expression';
         fillFnEl.disabled = true;
         fillExpressionLabel.textContent = getExpressionLabel(fc);
-        // Still populate attr dropdown for reference
-        const attrs = getAttrCandidates(layer as any);
+        const attrs = isHex ? getAttrCandidates(layer as any) : (isPmtiles ? [] : getVectorAttrCandidates(layer as any));
         if (attrs.length) {
           fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
         }
@@ -645,18 +580,32 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillFnEl.disabled = false;
       }
 
-      const cc = ensureColorContinuousCfg(fc);
+      // Populate attr dropdown
+      const attrs = (() => {
+        if (isHex) return getAttrCandidates(layer as any);
+        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
+        const s = new Set<string>();
+        if (fc?.attr) s.add(String(fc.attr));
+        const lc: any = layerStyle.lineColor;
+        if (lc?.attr) s.add(String(lc.attr));
+        s.add('value');
+        return [...s].filter(Boolean);
+      })();
+      if (attrs.length) {
+        fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+      }
+
+      const cc = ensureContinuousColorCfg(fc);
       if (!isColorExpression(fc) && cc) {
         fillFnEl.value = 'colorContinuous';
-        fillAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (cc.attr) fillAttrEl.value = String(cc.attr);
-        if (cc.colors) fillPaletteEl.value = String(cc.colors);
-        try { fillReverseEl.checked = !!(cc as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-      try { fillPal.refresh(); } catch (_) {}
+        const pal = cc.palette || cc.colors;
+        if (pal) fillPaletteEl.value = String(pal);
+        try { fillReverseEl.checked = !!cc.reverse; } catch (_) { fillReverseEl.checked = false; }
+        try { fillPal.refresh(); } catch (_) {}
         const dom = Array.isArray(cc.domain) ? cc.domain : [0, 1];
         fillDomainMinEl.value = fmt(Number(dom[0]), 2);
         fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
-        // Keep dual slider aligned with inputs (map_utils style)
         try {
           const dmin = Math.min(Number(dom[0]), Number(dom[1]));
           const dmax = Math.max(Number(dom[0]), Number(dom[1]));
@@ -682,102 +631,47 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const hex = rgbToHex(fc as number[]);
         fillStaticEl.value = hex;
         fillStaticLabel.textContent = hex;
-        // Still populate attr dropdown for when user switches to colorContinuous
-        const attrs = getAttrCandidates(layer as any);
-        if (attrs.length) {
-          fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-        }
       } else if (!isColorExpression(fc)) {
         fillFnEl.value = 'colorContinuous';
         try { fillReverseEl.checked = false; } catch (_) {}
-        // Populate attr dropdown from tooltipColumns
-        const attrs = getAttrCandidates(layer as any);
-        if (attrs.length) {
-          fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-        }
-      }
-    } else if (isVector || isPmtiles) {
-      const v = layer as any;
-      const fcCfg = v.fillColorConfig;
-      // PMTiles layers may not have inline data for attribute detection.
-      // IMPORTANT: Always include the configured attr in the dropdown options,
-      // otherwise the <select> will silently fall back to its default (often "value"),
-      // and the map will appear "wrong" until the user touches the controls.
-      const attrs = (() => {
-        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
-        const s = new Set<string>();
-        // Prefer explicit configured attrs
-        if (fcCfg?.attr) s.add(String(fcCfg.attr));
-        if (v.lineColorConfig?.attr) s.add(String(v.lineColorConfig.attr));
-        if (v.colorAttribute) s.add(String(v.colorAttribute));
-        // Safe default for many PMTiles datasets
-        s.add('value');
-        return [...s].filter(Boolean);
-      })();
-      fillAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-      if (fcCfg && typeof fcCfg === 'object' && fcCfg['@@function'] === 'colorContinuous') {
-        fillFnEl.value = 'colorContinuous';
-        if (fcCfg.attr) fillAttrEl.value = String(fcCfg.attr);
-        if (fcCfg.colors) fillPaletteEl.value = String(fcCfg.colors);
-        try { fillReverseEl.checked = !!(fcCfg as any).reverse; } catch (_) { fillReverseEl.checked = false; }
-      try { fillPal.refresh(); } catch (_) {}
-        const dom = Array.isArray(fcCfg.domain) ? fcCfg.domain : [0, 1];
-        fillDomainMinEl.value = fmt(Number(dom[0]), 2);
-        fillDomainMaxEl.value = fmt(Number(dom[1]), 2);
-        // Keep dual slider aligned with inputs (same behavior as hex)
-        try {
-          const dmin = Math.min(Number(dom[0]), Number(dom[1]));
-          const dmax = Math.max(Number(dom[0]), Number(dom[1]));
-          if (Number.isFinite(dmin) && Number.isFinite(dmax)) {
-            fillRangeMinEl.min = String(dmin);
-            fillRangeMinEl.max = String(dmax);
-            fillRangeMaxEl.min = String(dmin);
-            fillRangeMaxEl.max = String(dmax);
-            fillRangeMinEl.step = '0.1';
-            fillRangeMaxEl.step = '0.1';
-            fillRangeMinEl.value = String(Number(dom[0]));
-            fillRangeMaxEl.value = String(Number(dom[1]));
-          }
-        } catch (_) {}
-        fillStepsEl.value = String(fcCfg.steps ?? 7);
-        const nc = Array.isArray(fcCfg.nullColor) ? fcCfg.nullColor : [184, 184, 184];
-        const hex = rgbToHex(nc);
-        fillNullEl.value = hex;
-        fillNullLabel.textContent = hex;
-      } else {
-        fillFnEl.value = 'static';
-        try { fillReverseEl.checked = false; } catch (_) {}
-        // best-effort: derive picker from rgba if possible, else keep default
-        fillStaticEl.value = '#0090ff';
-        fillStaticLabel.textContent = fillStaticEl.value;
       }
     }
 
     // Line
-    if (isHex) {
-      const lc: any = hexCfg.getLineColor;
+    {
+      const lc: any = layerStyle.lineColor;
 
-      // Check for expression first
       if (isColorExpression(lc)) {
         lineFnEl.value = 'expression';
         lineFnEl.disabled = true;
         lineExpressionLabel.textContent = getExpressionLabel(lc);
-        const attrs = getAttrCandidates(layer as any);
-        if (attrs.length) {
-          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-        }
       } else {
         lineFnEl.disabled = false;
       }
 
-      const lcCC = ensureColorContinuousCfg(lc);
+      // Populate attr dropdown
+      const lineAttrs = (() => {
+        if (isHex) return getAttrCandidates(layer as any);
+        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
+        const s = new Set<string>();
+        if (lc?.attr) s.add(String(lc.attr));
+        const fc: any = layerStyle.fillColor;
+        if (fc?.attr) s.add(String(fc.attr));
+        s.add('value');
+        return [...s].filter(Boolean);
+      })();
+      if (lineAttrs.length) {
+        lineAttrEl.innerHTML = lineAttrs.map((a) => `<option value="${a}">${a}</option>`).join('');
+      }
+
+      const lcCC = ensureContinuousColorCfg(lc);
       if (!isColorExpression(lc) && lcCC) {
         lineFnEl.value = 'colorContinuous';
-        lineAttrEl.innerHTML = getAttrCandidates(layer as any).map((a) => `<option value="${a}">${a}</option>`).join('');
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
-        if (lcCC.colors) linePaletteEl.value = String(lcCC.colors);
-        try { lineReverseEl.checked = !!(lcCC as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-      try { linePal.refresh(); } catch (_) {}
+        const pal = lcCC.palette || lcCC.colors;
+        if (pal) linePaletteEl.value = String(pal);
+        try { lineReverseEl.checked = !!lcCC.reverse; } catch (_) { lineReverseEl.checked = false; }
+        try { linePal.refresh(); } catch (_) {}
         const dom = Array.isArray(lcCC.domain) ? lcCC.domain : [0, 1];
         lineDomainMinEl.value = fmt(Number(dom[0]), 2);
         lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
@@ -787,49 +681,13 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         const hex = rgbToHex(lc as number[]);
         lineStaticEl.value = hex;
         lineStaticLabel.textContent = hex;
-        // Still populate attr dropdown for when user switches to colorContinuous
-        const attrs = getAttrCandidates(layer as any);
-        if (attrs.length) {
-          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-        }
       } else if (!isColorExpression(lc)) {
         lineFnEl.value = 'static';
         try { lineReverseEl.checked = false; } catch {}
-        // Still populate attr dropdown for when user switches to colorContinuous
-        const attrs = getAttrCandidates(layer as any);
-        if (attrs.length) {
-          lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-        }
-      }
-    } else if (isVector || isPmtiles) {
-      const v = layer as any;
-      const lcCfg = v.lineColorConfig;
-      const attrs = (() => {
-        if (!isPmtiles) return getVectorAttrCandidates(layer as any);
-        const s = new Set<string>();
-        if (lcCfg?.attr) s.add(String(lcCfg.attr));
-        if (v.fillColorConfig?.attr) s.add(String(v.fillColorConfig.attr));
-        if (v.colorAttribute) s.add(String(v.colorAttribute));
-        s.add('value');
-        return [...s].filter(Boolean);
-      })();
-      lineAttrEl.innerHTML = attrs.map((a) => `<option value="${a}">${a}</option>`).join('');
-      if (lcCfg && typeof lcCfg === 'object' && lcCfg['@@function'] === 'colorContinuous') {
-        lineFnEl.value = 'colorContinuous';
-        if (lcCfg.attr) lineAttrEl.value = String(lcCfg.attr);
-        if (lcCfg.colors) linePaletteEl.value = String(lcCfg.colors);
-        try { lineReverseEl.checked = !!(lcCfg as any).reverse; } catch (_) { lineReverseEl.checked = false; }
-      try { linePal.refresh(); } catch (_) {}
-        const dom = Array.isArray(lcCfg.domain) ? lcCfg.domain : [0, 1];
-        lineDomainMinEl.value = fmt(Number(dom[0]), 2);
-        lineDomainMaxEl.value = fmt(Number(dom[1]), 2);
-      } else {
-        lineFnEl.value = 'static';
-        try { lineReverseEl.checked = false; } catch (_) {}
       }
     }
 
-    const lw = isHex ? (hexCfg.lineWidthMinPixels ?? 1) : ((layer as any).lineWidth ?? 1);
+    const lw = layerStyle.lineWidth ?? 1;
     lineWidthSliderEl.value = String(lw);
     lineWidthEl.value = String(lw);
 
@@ -839,7 +697,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
     );
     pointSection.style.display = hasPoints ? 'block' : 'none';
     if (hasPoints) {
-      const pr = (layer as any).pointRadius ?? (layer as any).pointRadiusMinPixels ?? 6;
+      const pr = layerStyle.pointRadius ?? 6;
       pointRadiusSliderEl.value = String(pr);
       pointRadiusEl.value = String(pr);
     }
@@ -915,19 +773,17 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   const markDomainFromUser = () => {
     const layer = getActiveLayer();
     if (!layer) return;
-    // This flag is checked by the tile autoDomain logic to avoid overwriting user edits.
     (layer as any).fillDomainFromUser = true;
-    // Only hex layers have autoDomain behavior (tile autoDomain + SQL legend stats).
     try {
       if ((layer as any).layerType !== 'hex') return;
-      const hc: any = (layer as any).hexLayer || {};
-      if (hc.getFillColor && typeof hc.getFillColor === 'object') {
-        hc.getFillColor.autoDomain = false;
-        try { delete hc.getFillColor._dynamicDomain; } catch (_) {}
+      const s: any = (layer as any).style || {};
+      if (s.fillColor && typeof s.fillColor === 'object' && !Array.isArray(s.fillColor)) {
+        s.fillColor.autoDomain = false;
+        try { delete s.fillColor._dynamicDomain; } catch (_) {}
       }
-      if (hc.getLineColor && typeof hc.getLineColor === 'object') {
-        hc.getLineColor.autoDomain = false;
-        try { delete hc.getLineColor._dynamicDomain; } catch (_) {}
+      if (s.lineColor && typeof s.lineColor === 'object' && !Array.isArray(s.lineColor)) {
+        s.lineColor.autoDomain = false;
+        try { delete s.lineColor._dynamicDomain; } catch (_) {}
       }
     } catch (_) {}
   };

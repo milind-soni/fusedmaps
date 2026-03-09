@@ -55,8 +55,8 @@ export function enableClickBroadcast(
         }
       } else if (layerDef.layerType === 'hex') {
         // Non-tile hex layers: extrusion or fill
-        const hexCfg = (layerDef as any).hexLayer || {};
-        const ids = hexCfg.extruded
+        const hexStyle = (layerDef as any).style || {};
+        const ids = hexStyle.extruded
           ? [`${layerDef.id}-extrusion`]
           : [`${layerDef.id}-fill`];
         for (const id of ids) {

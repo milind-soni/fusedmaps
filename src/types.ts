@@ -46,31 +46,8 @@ export type ColorValue =
   | [number, number, number, number]
   | string;
 
-// Legacy color format support (internal use)
-export interface LegacyColorContinuous {
-  '@@function': 'colorContinuous';
-  attr: string;
-  domain?: [number, number];
-  colors: string;
-  steps?: number;
-  nullColor?: [number, number, number, number?];
-  reverse?: boolean;
-  autoDomain?: boolean;
-  _dynamicDomain?: [number, number];
-}
-
-export interface LegacyColorCategories {
-  '@@function': 'colorCategories';
-  attr: string;
-  categories?: Array<string | { value: string | number; label: string }>;
-  labelAttr?: string;
-  colors?: string;
-  nullColor?: [number, number, number, number?];
-  _detectedCategories?: Array<{ value: string | number; label: string }>;
-}
-
-// Internal: normalized color config used by renderers
-export type ColorConfig = LegacyColorContinuous | LegacyColorCategories | [number, number, number, number?] | string;
+// Internal color config used by renderers (same as ColorValue)
+export type ColorConfig = ColorValue;
 
 // ============================================================
 // Style Configuration (Shared across layer types)
@@ -183,84 +160,17 @@ export interface PMTilesLayer extends BaseLayer {
 export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
 
 // ============================================================
-// Type Aliases (backwards compatibility for internal code)
+// Type Aliases (convenience for internal code)
 // ============================================================
 
-// Internal code uses normalized configs - these aliases point to any since
-// the normalizer outputs a mix of new and legacy properties
-export type HexLayerConfig = any;
-export type VectorLayerConfig = any;
-export type MVTLayerConfig = any;
-export type RasterLayerConfig = any;
-export type PMTilesLayerConfig = any;
+export type HexLayerConfig = HexLayer;
+export type VectorLayerConfig = VectorLayer;
+export type MVTLayerConfig = MVTLayer;
+export type RasterLayerConfig = RasterLayer;
+export type PMTilesLayerConfig = PMTilesLayer;
 export type TileLayerConfig = TileOptions;
-export type ColorContinuousConfig = LegacyColorContinuous;
-export type ColorCategoriesConfig = LegacyColorCategories;
-
-// ============================================================
-// Legacy Layer Types (for internal normalization)
-// ============================================================
-
-export interface HexLayerStyle {
-  '@@type'?: string;
-  filled?: boolean;
-  stroked?: boolean;
-  extruded?: boolean;
-  elevationProperty?: string;
-  elevationScale?: number;
-  opacity?: number;
-  pickable?: boolean;
-  getFillColor?: ColorConfig;
-  getLineColor?: ColorConfig;
-  lineWidthMinPixels?: number;
-  tooltipColumns?: string[];
-  tooltipAttrs?: string[];
-}
-
-export interface VectorLayerStyle {
-  '@@type'?: string;
-  filled?: boolean;
-  stroked?: boolean;
-  extruded?: boolean;
-  opacity?: number;
-  pickable?: boolean;
-  getFillColor?: ColorConfig;
-  getLineColor?: ColorConfig;
-  lineWidthMinPixels?: number;
-  getLineWidth?: number;
-  pointRadiusMinPixels?: number;
-  pointRadius?: number;
-  tooltipColumns?: string[];
-  tooltipAttrs?: string[];
-}
-
-// Legacy config shapes (accepted but normalized internally)
-export interface LegacyHexLayerConfig extends BaseLayer {
-  layerType: 'hex';
-  data?: Array<Record<string, unknown>>;
-  tileUrl?: string;
-  isTileLayer?: boolean;
-  hexLayer?: HexLayerStyle;
-  tileLayerConfig?: TileOptions;
-  parquetData?: string;
-  parquetUrl?: string;
-  sql?: string;
-}
-
-export interface LegacyVectorLayerConfig extends BaseLayer {
-  layerType: 'vector';
-  geojson?: FeatureCollection;
-  vectorLayer?: VectorLayerStyle;
-  fillColorConfig?: ColorConfig;
-  fillColorRgba?: string;
-  lineColorConfig?: ColorConfig;
-  lineColorRgba?: string;
-  lineWidth?: number;
-  pointRadius?: number;
-  isFilled?: boolean;
-  isStroked?: boolean;
-  opacity?: number;
-}
+export type ColorContinuousConfig = ContinuousColor;
+export type ColorCategoriesConfig = CategoricalColor;
 
 // ============================================================
 // UI Configuration

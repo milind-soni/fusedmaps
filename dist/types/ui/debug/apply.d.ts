@@ -1,8 +1,7 @@
 /**
  * Debug panel "apply UI -> layer config + map style updates"
  *
- * Extracted from `ui/debug.ts` to reduce file size and make behavior testable in isolation.
- * This module mutates the in-memory layer config objects (same as legacy behavior).
+ * Writes to `layer.style.*` in the clean config format (no legacy properties).
  */
 export interface DebugApplyElements {
     filledEl: HTMLInputElement;

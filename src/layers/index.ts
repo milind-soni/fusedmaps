@@ -67,7 +67,7 @@ export function addAllLayers(
           // Tile layers are handled by Deck.gl overlay
         } else if (hexLayer.data?.length) {
           if (!(window as any).deck) {
-            const geojson = hexToGeoJSON(hexLayer.data);
+            const geojson = hexToGeoJSON(hexLayer.data as any[]);
             setLayerGeoJSON(layer.id, geojson);
             addStaticHexLayer(map, hexLayer, geojson, visible);
           }
@@ -76,10 +76,10 @@ export function addAllLayers(
       }
 
       case 'vector': {
-        const vectorLayer = layer as VectorLayerConfig;
-        if (vectorLayer.geojson) {
-          setLayerGeoJSON(layer.id, vectorLayer.geojson);
-          addVectorLayer(map, vectorLayer, visible);
+        const vecLayer = layer as VectorLayerConfig;
+        if (vecLayer.geojson) {
+          setLayerGeoJSON(layer.id, vecLayer.geojson);
+          addVectorLayer(map, vecLayer, visible);
         }
         break;
       }
@@ -285,7 +285,7 @@ export function updateLayerStyleInPlace(
       JSON.stringify(b.imageBounds) !== JSON.stringify(a.imageBounds);
     if (structural) return false;
 
-    const opacity = a.opacity ?? a.rasterLayer?.opacity ?? 1.0;
+    const opacity = a.opacity ?? 1.0;
     setPaintSafe(map, `${id}-raster`, 'raster-opacity', Math.max(0, Math.min(1, opacity)));
     setRasterLayerVisibility(map, id, visible);
     return true;
@@ -298,53 +298,41 @@ export function updateLayerStyleInPlace(
     const b = before as VectorLayerConfig;
     const a = after as VectorLayerConfig;
 
-    // Structural toggles that affect which sublayers exist => rebuild
     const structural =
-      b.isFilled !== a.isFilled ||
-      b.isStroked !== a.isStroked ||
-      b.tileUrl !== a.tileUrl ||
-      b.sourceLayer !== a.sourceLayer;
+      (b.style?.filled !== a.style?.filled) ||
+      (b.style?.stroked !== a.style?.stroked);
     if (structural) return false;
 
-    // Update source data if provided
     if (a.geojson) {
       const ok = setGeoJSONSourceData(map, id, a.geojson as any);
-      // If source doesn't exist, can't do in-place
       if (!ok && !map.getSource(id)) return false;
     }
 
-    // Build expressions
+    const aStyle = a.style || {};
     const geojson = a.geojson;
     const vecData = geojson?.features?.map((f: any) => f.properties || {}) || [];
 
-    const fillColorExpr = (a.fillColorConfig as any)?.['@@function']
-      ? buildColorExpr(a.fillColorConfig as any, vecData)
-      : (a.fillColorRgba || 'rgba(0,144,255,0.6)');
+    const fillColorExpr = (aStyle.fillColor && typeof aStyle.fillColor === 'object' && !Array.isArray(aStyle.fillColor))
+      ? buildColorExpr(aStyle.fillColor, vecData)
+      : (aStyle.fillColor || 'rgba(0,144,255,0.6)');
 
-    const lineColorExpr = (a.lineColorConfig as any)?.['@@function']
-      ? buildColorExpr(a.lineColorConfig as any, vecData)
-      : (a.lineColorRgba || 'rgba(100,100,100,0.8)');
+    const lineColorExpr = (aStyle.lineColor && typeof aStyle.lineColor === 'object' && !Array.isArray(aStyle.lineColor))
+      ? buildColorExpr(aStyle.lineColor, vecData)
+      : (aStyle.lineColor || 'rgba(100,100,100,0.8)');
 
-    const lineW = (typeof a.lineWidth === 'number' && isFinite(a.lineWidth)) ? a.lineWidth : 1;
-    const layerOpacity = (typeof a.opacity === 'number' && isFinite(a.opacity))
-      ? Math.max(0, Math.min(1, a.opacity))
-      : 0.8;
+    const lineW = (typeof aStyle.lineWidth === 'number' && isFinite(aStyle.lineWidth)) ? aStyle.lineWidth : 1;
+    const layerOpacity = (typeof aStyle.opacity === 'number' && isFinite(aStyle.opacity))
+      ? Math.max(0, Math.min(1, aStyle.opacity)) : 0.8;
+    const pointRadius = (typeof aStyle.pointRadius === 'number' && isFinite(aStyle.pointRadius))
+      ? aStyle.pointRadius : 6;
 
-    const pointRadius = (typeof a.pointRadius === 'number' && isFinite(a.pointRadius))
-      ? a.pointRadius
-      : 6;
-
-    // Apply paint props (only if sublayers exist)
     setPaintSafe(map, `${id}-fill`, 'fill-color', fillColorExpr as any);
     setPaintSafe(map, `${id}-fill`, 'fill-opacity', layerOpacity);
-
     setPaintSafe(map, `${id}-outline`, 'line-color', lineColorExpr as any);
     setPaintSafe(map, `${id}-outline`, 'line-width', lineW);
-
     setPaintSafe(map, `${id}-line`, 'line-color', lineColorExpr as any);
     setPaintSafe(map, `${id}-line`, 'line-width', lineW);
     setPaintSafe(map, `${id}-line`, 'line-opacity', 1);
-
     setPaintSafe(map, `${id}-circle`, 'circle-radius', pointRadius);
     setPaintSafe(map, `${id}-circle`, 'circle-color', fillColorExpr as any);
     setPaintSafe(map, `${id}-circle`, 'circle-opacity', 0.9);
@@ -365,56 +353,46 @@ export function updateLayerStyleInPlace(
     // Tile-mode hex is Deck; not handled here
     if ((a as any).isTileLayer) return false;
 
-    // Structural toggles that affect sublayers => rebuild
     const structural =
-      (b.hexLayer as any)?.extruded !== (a.hexLayer as any)?.extruded ||
-      (b.hexLayer as any)?.filled !== (a.hexLayer as any)?.filled ||
-      (b.hexLayer as any)?.stroked !== (a.hexLayer as any)?.stroked;
+      (b.style?.extruded !== a.style?.extruded) ||
+      (b.style?.filled !== a.style?.filled) ||
+      (b.style?.stroked !== a.style?.stroked);
     if (structural) return false;
 
-    // Update source data if we can
-    const geojson = (a.data && Array.isArray(a.data)) ? hexToGeoJSON(a.data) : null;
+    const geojson = (a.data && Array.isArray(a.data)) ? hexToGeoJSON(a.data as any[]) : null;
     if (geojson) {
       const ok = setGeoJSONSourceData(map, id, geojson as any);
       if (!ok && !map.getSource(id)) return false;
     }
 
-    const cfg: any = a.hexLayer || {};
+    const aStyle = a.style || {};
     const data = a.data || [];
 
-    const fillColor = Array.isArray(cfg.getFillColor)
-      ? toRgba(cfg.getFillColor, 0.8)
-      : (buildColorExpr(cfg.getFillColor, data) || 'rgba(0,144,255,0.7)');
+    const fillColor = Array.isArray(aStyle.fillColor)
+      ? toRgba(aStyle.fillColor as number[], 0.8)
+      : (buildColorExpr(aStyle.fillColor, data as any[]) || 'rgba(0,144,255,0.7)');
 
-    const lineColor = cfg.getLineColor
-      ? (Array.isArray(cfg.getLineColor) ? toRgba(cfg.getLineColor, 1) : buildColorExpr(cfg.getLineColor, data))
+    const lineColor = aStyle.lineColor
+      ? (Array.isArray(aStyle.lineColor) ? toRgba(aStyle.lineColor as number[], 1) : buildColorExpr(aStyle.lineColor, data as any[]))
       : 'rgba(255,255,255,0.3)';
 
-    const layerOpacity = (typeof cfg.opacity === 'number' && isFinite(cfg.opacity))
-      ? Math.max(0, Math.min(1, cfg.opacity))
-      : 0.8;
+    const layerOpacity = (typeof aStyle.opacity === 'number' && isFinite(aStyle.opacity))
+      ? Math.max(0, Math.min(1, aStyle.opacity)) : 0.8;
 
-    // Flat fill
     setPaintSafe(map, `${id}-fill`, 'fill-color', fillColor);
     setPaintSafe(map, `${id}-fill`, 'fill-opacity', layerOpacity);
-
-    // Outline
     setPaintSafe(map, `${id}-outline`, 'line-color', lineColor);
-    setPaintSafe(map, `${id}-outline`, 'line-width', cfg.lineWidthMinPixels || 0.5);
+    setPaintSafe(map, `${id}-outline`, 'line-width', aStyle.lineWidth || 0.5);
 
-    // Extrusion (only if it exists)
-    const elevScale = cfg.elevationScale || 1;
-    const elevProp = cfg.elevationProperty || (cfg.getFillColor as any)?.attr || null;
+    const elevScale = aStyle.elevationScale || 1;
+    const elevProp = aStyle.elevationAttr ||
+      (aStyle.fillColor && typeof aStyle.fillColor === 'object' && !Array.isArray(aStyle.fillColor) ? (aStyle.fillColor as any).attr : null);
     setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-color', fillColor);
-    setPaintSafe(
-      map,
-      `${id}-extrusion`,
-      'fill-extrusion-height',
-      elevProp ? ['*', ['to-number', ['get', elevProp], 0], elevScale] : 100
-    );
+    setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-height',
+      elevProp ? ['*', ['to-number', ['get', elevProp], 0], elevScale] : 100);
     setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-opacity', layerOpacity);
 
-    setHexLayerVisibility(map, id, visible, cfg.extruded === true);
+    setHexLayerVisibility(map, id, visible, aStyle.extruded === true);
     return true;
   }
 
@@ -425,38 +403,35 @@ export function updateLayerStyleInPlace(
     const b = before as MVTLayerConfig;
     const a = after as MVTLayerConfig;
 
+    const aStyle = a.style || {};
+    const bStyle = b.style || {};
     const structural =
       b.tileUrl !== a.tileUrl ||
       b.sourceLayer !== a.sourceLayer ||
-      b.isExtruded !== a.isExtruded ||
-      b.isFilled !== a.isFilled;
+      bStyle.extruded !== aStyle.extruded ||
+      bStyle.filled !== aStyle.filled;
     if (structural) return false;
 
-    const fillColorExpr = (a.fillColorConfig as any)?.['@@function']
-      ? (buildColorExpr(a.fillColorConfig as any, undefined) as any)
-      : (a.fillColor || '#FFF5CC');
-    const lineColorExpr = (a.lineColorConfig as any)?.['@@function']
-      ? (buildColorExpr(a.lineColorConfig as any, undefined) as any)
-      : (a.lineColor || '#FFFFFF');
+    const fillColorExpr = (aStyle.fillColor && typeof aStyle.fillColor === 'object' && !Array.isArray(aStyle.fillColor))
+      ? (buildColorExpr(aStyle.fillColor as any, undefined) as any)
+      : (aStyle.fillColor || '#FFF5CC');
+    const lineColorExpr = (aStyle.lineColor && typeof aStyle.lineColor === 'object' && !Array.isArray(aStyle.lineColor))
+      ? (buildColorExpr(aStyle.lineColor as any, undefined) as any)
+      : (aStyle.lineColor || '#FFFFFF');
 
-    const fillOpacity = a.fillOpacity ?? 0.8;
-    const lineWidth = a.lineWidth ?? 1;
+    const fillOpacity = aStyle.opacity ?? 0.8;
+    const lineWidth = aStyle.lineWidth ?? 1;
 
     setPaintSafe(map, `${id}-fill`, 'fill-color', fillColorExpr);
     setPaintSafe(map, `${id}-fill`, 'fill-opacity', fillOpacity);
     setPaintSafe(map, `${id}-line`, 'line-color', lineColorExpr);
     setPaintSafe(map, `${id}-line`, 'line-width', lineWidth);
 
-    // Extrusion paint if present
     if (map.getLayer(`${id}-extrusion`)) {
       setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-color', fillColorExpr);
-      setPaintSafe(
-        map,
-        `${id}-extrusion`,
-        'fill-extrusion-height',
-        ['*', ['get', a.heightProperty || 'height'], a.heightMultiplier || 1]
-      );
-      setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-opacity', a.extrusionOpacity ?? 0.9);
+      setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-height',
+        ['*', ['get', aStyle.elevationAttr || 'height'], aStyle.elevationScale || 1]);
+      setPaintSafe(map, `${id}-extrusion`, 'fill-extrusion-opacity', 0.9);
     }
 
     setVectorLayerVisibility(map, id, visible);
@@ -474,25 +449,23 @@ export function updateLayerStyleInPlace(
       b.pmtilesUrl !== a.pmtilesUrl ||
       b.pmtilesPath !== a.pmtilesPath ||
       JSON.stringify(b.excludeSourceLayers || []) !== JSON.stringify(a.excludeSourceLayers || []) ||
-      b.sourceLayer !== a.sourceLayer ||
-      b.renderPoints !== a.renderPoints ||
-      b.renderLines !== a.renderLines ||
-      b.renderPolygons !== a.renderPolygons;
+      b.sourceLayer !== a.sourceLayer;
     if (structural) return false;
 
-    const vectorStyle: any = a.vectorLayer || {};
-    const opacity = a.fillOpacity ?? vectorStyle.opacity ?? 0.8;
-    const baseLineWidth = a.lineWidth ?? 1;
-    const pointRadius = a.pointRadiusMinPixels ?? 4;
+    const aStyle = a.style || {};
+    const opacity = aStyle.opacity ?? 0.8;
+    const baseLineWidth = aStyle.lineWidth ?? 1;
+    const pointRadius = aStyle.pointRadius ?? 4;
 
-    const isFilled = (a as any).isFilled !== false;
-    const isStroked = (a as any).isStroked !== false;
+    const isFilled = aStyle.filled !== false;
+    const isStroked = aStyle.stroked !== false;
     const effectiveLineWidth = isStroked ? baseLineWidth : 0;
     const effectiveFillOpacity = isFilled ? opacity : 0;
 
-    const attr = a.colorAttribute || 'value';
-    const fillColorExpr = buildPMTilesColorExpression(a.fillColorConfig || vectorStyle.getFillColor, attr, '#ff8c00');
-    const lineColorExpr = buildPMTilesColorExpression(a.lineColorConfig || vectorStyle.getLineColor, attr, '#ffffff');
+    const attr = (aStyle.fillColor && typeof aStyle.fillColor === 'object' && !Array.isArray(aStyle.fillColor))
+      ? (aStyle.fillColor as any).attr || 'value' : 'value';
+    const fillColorExpr = buildPMTilesColorExpression(aStyle.fillColor, attr, '#ff8c00');
+    const lineColorExpr = buildPMTilesColorExpression(aStyle.lineColor, attr, '#ffffff');
 
     const prefix = `${id}-`;
     const styleLayers = (map.getStyle()?.layers || []) as any[];
@@ -569,7 +542,7 @@ export function setLayerVisibility(
           state?.rebuild?.(visibilityState);
         } catch (e) {}
       } else {
-        setHexLayerVisibility(map, layerId, visible, hexLayer.hexLayer?.extruded === true);
+        setHexLayerVisibility(map, layerId, visible, hexLayer.style?.extruded === true);
       }
       break;
     }
@@ -607,8 +580,7 @@ export function setLayerOpacity(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (hexLayer.hexLayer) hexLayer.hexLayer.opacity = o;
-      (hexLayer as any).opacity = o;
+      if (hexLayer.style) hexLayer.style.opacity = o;
 
       // Mapbox GL sublayers (static hex)
       setPaintSafe(map, `${layerId}-fill`, 'fill-opacity', o);

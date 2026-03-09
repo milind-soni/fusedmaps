@@ -17,11 +17,9 @@ export function toH3(hex: unknown): string | null {
   try {
     if (typeof hex === 'string') {
       const s = hex.startsWith('0x') ? hex.slice(2) : hex;
-      // If it's all digits, convert from BigInt
       if (/^\d+$/.test(s)) {
         return BigInt(s).toString(16);
       }
-      // Check if it contains hex letters
       return /[a-f]/i.test(s) ? s.toLowerCase() : s.toLowerCase();
     }
     
@@ -52,7 +50,7 @@ export function hexToGeoJSON(data: Array<Record<string, unknown>>): GeoJSON.Feat
     try {
       const boundary = window.h3.cellToBoundary(hexId);
       const coords = boundary.map(([lat, lng]) => [lng, lat]);
-      coords.push(coords[0]); // Close the polygon
+      coords.push(coords[0]);
       
       features.push({
         type: 'Feature',
@@ -79,10 +77,9 @@ export function addStaticHexLayer(
   geojson: GeoJSON.FeatureCollection,
   visible: boolean
 ): void {
-  const cfg = layer.hexLayer || {};
+  const style = layer.style || {};
   const data = layer.data || [];
   
-  // Add or update source (debug panel may call this repeatedly)
   try {
     const src: any = map.getSource(layer.id) as any;
     if (src && typeof src.setData === 'function') {
@@ -90,36 +87,28 @@ export function addStaticHexLayer(
     } else if (!src) {
       map.addSource(layer.id, { type: 'geojson', data: geojson, tolerance: 0 } as any);
     }
-  } catch (_) {
-    // If we can't access the source (style not ready / race), we still try to proceed.
-    // Mapbox will throw again on addLayer if source truly doesn't exist, but this avoids
-    // the common "Source already exists" crash on debug edits.
-  }
+  } catch (_) {}
   
-  // Build fill color expression
-  const fillColor = Array.isArray(cfg.getFillColor)
-    ? toRgba(cfg.getFillColor, 0.8)
-    : buildColorExpr(cfg.getFillColor, data) || 'rgba(0,144,255,0.7)';
+  const fillColor = Array.isArray(style.fillColor)
+    ? toRgba(style.fillColor as number[], 0.8)
+    : buildColorExpr(style.fillColor, data) || 'rgba(0,144,255,0.7)';
   
-  // Build line color expression
-  const lineColor = cfg.getLineColor
-    ? (Array.isArray(cfg.getLineColor) 
-        ? toRgba(cfg.getLineColor, 1) 
-        : buildColorExpr(cfg.getLineColor, data))
+  const lineColor = style.lineColor
+    ? (Array.isArray(style.lineColor)
+        ? toRgba(style.lineColor as number[], 1)
+        : buildColorExpr(style.lineColor, data))
     : 'rgba(255,255,255,0.3)';
   
-  // Layer opacity
-  const layerOpacity = (typeof cfg.opacity === 'number' && isFinite(cfg.opacity))
-    ? Math.max(0, Math.min(1, cfg.opacity))
+  const layerOpacity = (typeof style.opacity === 'number' && isFinite(style.opacity))
+    ? Math.max(0, Math.min(1, style.opacity))
     : 0.8;
   
-  // Handle extruded (3D) vs flat rendering
-  if (cfg.extruded) {
-    const elevScale = cfg.elevationScale || 1;
+  if (style.extruded) {
+    const elevScale = style.elevationScale || 1;
     const elevProp =
-      (cfg as any).elevationProperty ||
-      (cfg.getFillColor as any)?.attr ||
-      null;
+      style.elevationAttr ||
+      (style.fillColor && typeof style.fillColor === 'object' && !Array.isArray(style.fillColor)
+        ? (style.fillColor as any).attr : null);
     map.addLayer({
       id: `${layer.id}-extrusion`,
       type: 'fill-extrusion',
@@ -135,8 +124,7 @@ export function addStaticHexLayer(
       layout: { visibility: visible ? 'visible' : 'none' }
     });
   } else {
-    // Flat fill layer
-    if (cfg.filled !== false) {
+    if (style.filled !== false) {
       map.addLayer({
         id: `${layer.id}-fill`,
         type: 'fill',
@@ -150,15 +138,14 @@ export function addStaticHexLayer(
     }
   }
   
-  // Outline layer (honor stroked flag)
-  if (cfg.stroked !== false) {
+  if (style.stroked !== false) {
     map.addLayer({
       id: `${layer.id}-outline`,
       type: 'line',
       source: layer.id,
       paint: {
         'line-color': lineColor,
-        'line-width': cfg.lineWidth || cfg.lineWidthMinPixels || 0.5
+        'line-width': style.lineWidth || 0.5
       },
       layout: { visibility: visible ? 'visible' : 'none' }
     });
@@ -183,9 +170,7 @@ export function setHexLayerVisibility(
       if (map.getLayer(id)) {
         map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
       }
-    } catch (e) {
-      // Ignore errors
-    }
+    } catch (e) {}
   });
 }
 
@@ -200,7 +185,6 @@ function removeStaticHexSublayers(map: mapboxgl.Map, layerId: string): void {
 
 /**
  * Re-apply a static hex layer's structure + style (Mapbox GL).
- * This is used by the debug panel (filled/stroked/extruded toggles, color changes).
  */
 export function updateStaticHexLayer(
   map: mapboxgl.Map,
@@ -208,7 +192,6 @@ export function updateStaticHexLayer(
   geojson: GeoJSON.FeatureCollection,
   visible: boolean
 ): void {
-  // Ensure source exists and data is current
   try {
     const src: any = map.getSource(layer.id) as any;
     if (src && typeof src.setData === 'function') {
@@ -216,12 +199,8 @@ export function updateStaticHexLayer(
     } else {
       map.addSource(layer.id, { type: 'geojson', data: geojson, tolerance: 0 } as any);
     }
-  } catch (_) {
-    // If addSource fails due to race, we still try to proceed with layer rebuild.
-  }
+  } catch (_) {}
 
-  // Rebuild sublayers so structural toggles (extruded/filled/stroked) take effect
   removeStaticHexSublayers(map, layer.id);
   addStaticHexLayer(map, layer, geojson, visible);
 }
-

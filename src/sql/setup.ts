@@ -71,30 +71,29 @@ function safeSetGeoJsonSource(map: mapboxgl.Map, sourceId: string, geojson: Feat
 }
 
 function updateHexPaint(map: mapboxgl.Map, layer: HexLayerConfig): void {
-  const cfg: any = layer.hexLayer || {};
+  const style = layer.style || {};
   const data = layer.data || [];
 
-  const fillColor = Array.isArray(cfg.getFillColor)
-    ? toRgba(cfg.getFillColor, 0.8)
-    : buildColorExpr(cfg.getFillColor, data) || 'rgba(0,144,255,0.7)';
+  const fillColor = Array.isArray(style.fillColor)
+    ? toRgba(style.fillColor as number[], 0.8)
+    : buildColorExpr(style.fillColor, data as any[]) || 'rgba(0,144,255,0.7)';
 
-  const lineColor = cfg.getLineColor
-    ? (Array.isArray(cfg.getLineColor) ? toRgba(cfg.getLineColor, 1) : buildColorExpr(cfg.getLineColor, data))
+  const lineColor = style.lineColor
+    ? (Array.isArray(style.lineColor) ? toRgba(style.lineColor as number[], 1) : buildColorExpr(style.lineColor, data as any[]))
     : 'rgba(255,255,255,0.3)';
 
-  const layerOpacity = (typeof cfg.opacity === 'number' && isFinite(cfg.opacity))
-    ? Math.max(0, Math.min(1, cfg.opacity))
-    : 0.8;
+  const layerOpacity = (typeof style.opacity === 'number' && isFinite(style.opacity))
+    ? Math.max(0, Math.min(1, style.opacity)) : 0.8;
 
   try {
-    if (cfg.extruded && map.getLayer(`${layer.id}-extrusion`)) {
+    if (style.extruded && map.getLayer(`${layer.id}-extrusion`)) {
       map.setPaintProperty(`${layer.id}-extrusion`, 'fill-extrusion-color', fillColor as any);
       map.setPaintProperty(`${layer.id}-extrusion`, 'fill-extrusion-opacity', layerOpacity as any);
     }
   } catch (_) {}
 
   try {
-    if (!cfg.extruded && map.getLayer(`${layer.id}-fill`)) {
+    if (!style.extruded && map.getLayer(`${layer.id}-fill`)) {
       map.setPaintProperty(`${layer.id}-fill`, 'fill-color', fillColor as any);
       map.setPaintProperty(`${layer.id}-fill`, 'fill-opacity', layerOpacity as any);
     }
@@ -103,7 +102,7 @@ function updateHexPaint(map: mapboxgl.Map, layer: HexLayerConfig): void {
   try {
     if (map.getLayer(`${layer.id}-outline`)) {
       map.setPaintProperty(`${layer.id}-outline`, 'line-color', lineColor as any);
-      map.setPaintProperty(`${layer.id}-outline`, 'line-width', (cfg.lineWidthMinPixels || 0.5) as any);
+      map.setPaintProperty(`${layer.id}-outline`, 'line-width', (style.lineWidth || 0.5) as any);
     }
   } catch (_) {}
 }
@@ -150,15 +149,14 @@ export function setupDuckDbSql(
       await runtime.init();
       if (destroyed) return;
 
-      // If autoDomain is enabled and user has not overridden, initialize domain to dataset extent (full table)
       try {
-        const fc: any = layer.hexLayer?.getFillColor;
+        const fc: any = layer.style?.fillColor;
         const attr = fc && typeof fc === 'object' && !Array.isArray(fc) ? fc.attr : null;
         const wantsAuto = fc && typeof fc === 'object' && !Array.isArray(fc) && (fc.autoDomain === true || !Array.isArray(fc.domain));
         if (attr && wantsAuto && (layer as any).fillDomainFromUser !== true) {
           const mm = await runtime.getMinMax(layer, String(attr));
-          if (mm && layer.hexLayer && typeof layer.hexLayer.getFillColor === 'object' && !Array.isArray(layer.hexLayer.getFillColor)) {
-            (layer.hexLayer.getFillColor as any).domain = [mm.min, mm.max];
+          if (mm && layer.style?.fillColor && typeof layer.style.fillColor === 'object' && !Array.isArray(layer.style.fillColor)) {
+            (layer.style.fillColor as any).domain = [mm.min, mm.max];
           }
         }
       } catch (_) {}
@@ -172,8 +170,8 @@ export function setupDuckDbSql(
         const sqlForStats = layer.sql || 'SELECT * FROM data';
         const domainFromUser = (layer as any).fillDomainFromUser === true;
 
-        const fc: any = layer.hexLayer?.getFillColor;
-        if (!domainFromUser && fc && typeof fc === 'object' && !Array.isArray(fc) && fc['@@function'] === 'colorContinuous') {
+        const fc: any = layer.style?.fillColor;
+        if (!domainFromUser && fc && typeof fc === 'object' && !Array.isArray(fc) && fc.type === 'continuous') {
           const attr = String(fc.attr || '');
           if (attr && fc.autoDomain === true) {
             const mm = await runtime.getMinMaxFromQuery(layer, attr, sqlForStats);
@@ -181,8 +179,8 @@ export function setupDuckDbSql(
           }
         }
 
-        const lc: any = layer.hexLayer?.getLineColor;
-        if (!domainFromUser && lc && typeof lc === 'object' && !Array.isArray(lc) && lc['@@function'] === 'colorContinuous') {
+        const lc: any = layer.style?.lineColor;
+        if (!domainFromUser && lc && typeof lc === 'object' && !Array.isArray(lc) && lc.type === 'continuous') {
           const attr = String(lc.attr || '');
           if (attr && lc.autoDomain === true) {
             const mm = await runtime.getMinMaxFromQuery(layer, attr, sqlForStats);

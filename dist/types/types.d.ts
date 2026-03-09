@@ -31,33 +31,7 @@ export interface CategoricalColor {
 }
 /** Color can be: config object, RGB array, or CSS string */
 export type ColorValue = ContinuousColor | CategoricalColor | [number, number, number] | [number, number, number, number] | string;
-export interface LegacyColorContinuous {
-    '@@function': 'colorContinuous';
-    attr: string;
-    domain?: [number, number];
-    colors: string;
-    steps?: number;
-    nullColor?: [number, number, number, number?];
-    reverse?: boolean;
-    autoDomain?: boolean;
-    _dynamicDomain?: [number, number];
-}
-export interface LegacyColorCategories {
-    '@@function': 'colorCategories';
-    attr: string;
-    categories?: Array<string | {
-        value: string | number;
-        label: string;
-    }>;
-    labelAttr?: string;
-    colors?: string;
-    nullColor?: [number, number, number, number?];
-    _detectedCategories?: Array<{
-        value: string | number;
-        label: string;
-    }>;
-}
-export type ColorConfig = LegacyColorContinuous | LegacyColorCategories | [number, number, number, number?] | string;
+export type ColorConfig = ColorValue;
 export interface LayerStyle {
     fillColor?: ColorValue;
     lineColor?: ColorValue;
@@ -130,70 +104,14 @@ export interface PMTilesLayer extends BaseLayer {
     tile?: TileOptions;
 }
 export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
-export type HexLayerConfig = any;
-export type VectorLayerConfig = any;
-export type MVTLayerConfig = any;
-export type RasterLayerConfig = any;
-export type PMTilesLayerConfig = any;
+export type HexLayerConfig = HexLayer;
+export type VectorLayerConfig = VectorLayer;
+export type MVTLayerConfig = MVTLayer;
+export type RasterLayerConfig = RasterLayer;
+export type PMTilesLayerConfig = PMTilesLayer;
 export type TileLayerConfig = TileOptions;
-export type ColorContinuousConfig = LegacyColorContinuous;
-export type ColorCategoriesConfig = LegacyColorCategories;
-export interface HexLayerStyle {
-    '@@type'?: string;
-    filled?: boolean;
-    stroked?: boolean;
-    extruded?: boolean;
-    elevationProperty?: string;
-    elevationScale?: number;
-    opacity?: number;
-    pickable?: boolean;
-    getFillColor?: ColorConfig;
-    getLineColor?: ColorConfig;
-    lineWidthMinPixels?: number;
-    tooltipColumns?: string[];
-    tooltipAttrs?: string[];
-}
-export interface VectorLayerStyle {
-    '@@type'?: string;
-    filled?: boolean;
-    stroked?: boolean;
-    extruded?: boolean;
-    opacity?: number;
-    pickable?: boolean;
-    getFillColor?: ColorConfig;
-    getLineColor?: ColorConfig;
-    lineWidthMinPixels?: number;
-    getLineWidth?: number;
-    pointRadiusMinPixels?: number;
-    pointRadius?: number;
-    tooltipColumns?: string[];
-    tooltipAttrs?: string[];
-}
-export interface LegacyHexLayerConfig extends BaseLayer {
-    layerType: 'hex';
-    data?: Array<Record<string, unknown>>;
-    tileUrl?: string;
-    isTileLayer?: boolean;
-    hexLayer?: HexLayerStyle;
-    tileLayerConfig?: TileOptions;
-    parquetData?: string;
-    parquetUrl?: string;
-    sql?: string;
-}
-export interface LegacyVectorLayerConfig extends BaseLayer {
-    layerType: 'vector';
-    geojson?: FeatureCollection;
-    vectorLayer?: VectorLayerStyle;
-    fillColorConfig?: ColorConfig;
-    fillColorRgba?: string;
-    lineColorConfig?: ColorConfig;
-    lineColorRgba?: string;
-    lineWidth?: number;
-    pointRadius?: number;
-    isFilled?: boolean;
-    isStroked?: boolean;
-    opacity?: number;
-}
+export type ColorContinuousConfig = ContinuousColor;
+export type ColorCategoriesConfig = CategoricalColor;
 export interface UIConfig {
     tooltip?: boolean;
     legend?: boolean;

@@ -112,7 +112,7 @@ export function getMapboxLayerIds(
       // Skip tile layers - they use Deck.gl, not Mapbox layers
       if ((hexLayer as any).isTileLayer) return ids;
 
-      const isExtruded = (hexLayer as any).hexLayer?.extruded === true;
+      const isExtruded = (hexLayer as any).style?.extruded === true;
       if (includeAll) {
         ids.push(`${layer.id}${LAYER_ID_SUFFIXES.hex.fill}`);
         ids.push(`${layer.id}${LAYER_ID_SUFFIXES.hex.extrusion}`);
@@ -199,7 +199,7 @@ export function getFirstMapboxLayerId(layer: LayerConfig): string | null {
         for (const f of geojson.features) {
           const t = f.geometry?.type;
           if (t === 'Polygon' || t === 'MultiPolygon') {
-            return (vec as any).isFilled !== false
+            return (vec as any).style?.filled !== false
               ? `${layer.id}${LAYER_ID_SUFFIXES.vector.fill}`
               : `${layer.id}${LAYER_ID_SUFFIXES.vector.outline}`;
           }
@@ -222,7 +222,7 @@ export function getFirstMapboxLayerId(layer: LayerConfig): string | null {
 
     case 'hex': {
       const hex = layer as HexLayerConfig;
-      const isExtruded = (hex as any).hexLayer?.extruded === true;
+      const isExtruded = (hex as any).style?.extruded === true;
       return isExtruded
         ? `${layer.id}${LAYER_ID_SUFFIXES.hex.extrusion}`
         : `${layer.id}${LAYER_ID_SUFFIXES.hex.fill}`;

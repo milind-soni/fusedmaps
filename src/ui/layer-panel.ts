@@ -467,53 +467,20 @@ function getLayerStripGradient(layer: LayerConfig): string {
     return `linear-gradient(to bottom, ${stops})`;
   };
   
-  if (layer.layerType === 'hex') {
-    const hexLayer = layer as HexLayerConfig;
-    const cfg = hexLayer.hexLayer || {};
-    const colorCfg = (cfg.filled === false && cfg.getLineColor) 
-      ? cfg.getLineColor 
-      : cfg.getFillColor;
-    
+  const style: any = (layer as any).style || {};
+
+  if (layer.layerType === 'hex' || layer.layerType === 'vector' || layer.layerType === 'mvt' || layer.layerType === 'pmtiles') {
+    const isFillTransparent = (style.opacity ?? 1) < 0.1 || style.filled === false;
+    const colorCfg: any = (isFillTransparent && style.lineColor) ? style.lineColor : (style.fillColor || style.lineColor);
+
     if (Array.isArray(colorCfg)) {
       const rgba = toRgba(colorCfg, 1);
       if (rgba) stripBg = rgba;
     } else if (colorCfg && typeof colorCfg === 'object') {
-      const fn = (colorCfg as any)['@@function'];
-      if (fn === 'colorContinuous' || fn === 'colorCategories') {
-        const paletteName = (colorCfg as any).colors || (fn === 'colorCategories' ? 'Bold' : 'TealGrn');
-        let cols = getPaletteColors(paletteName, (colorCfg as any).steps || 7);
-        if (cols?.length) {
-          // Handle domain reversal
-          const dom = (colorCfg as any).domain;
-          const domainReversed = Array.isArray(dom) && dom.length >= 2 && dom[0] > dom[dom.length - 1];
-          const wantsReverse = !!(colorCfg as any).reverse;
-          const shouldReverse = domainReversed ? !wantsReverse : wantsReverse;
-          if (shouldReverse) cols = [...cols].reverse();
-          stripBg = toGradient(cols) || stripBg;
-        }
-      }
-    }
-  } else if (layer.layerType === 'vector') {
-    const vecLayer = layer as VectorLayerConfig;
-    // Check if fill is transparent - prefer line color in that case
-    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? (vecLayer as any).opacity ?? 1;
-    const isFillTransparent = fillOpacity < 0.1 || !vecLayer.isFilled;
-
-    // Determine which color config to use (same logic as legend.ts)
-    let colorCfg: any = null;
-    if (isFillTransparent && vecLayer.lineColorConfig) {
-      colorCfg = vecLayer.lineColorConfig;
-    } else if (vecLayer.fillColorConfig) {
-      colorCfg = vecLayer.fillColorConfig;
-    } else if (vecLayer.lineColorConfig) {
-      colorCfg = vecLayer.lineColorConfig;
-    }
-
-    // Handle color config (continuous or categorical)
-    if (colorCfg && typeof colorCfg === 'object') {
-      const fn = colorCfg['@@function'];
-      if (fn === 'colorContinuous' || fn === 'colorCategories') {
-        const paletteName = colorCfg.colors || (fn === 'colorCategories' ? 'Bold' : 'TealGrn');
+      const fn = colorCfg.type || colorCfg['@@function'];
+      if (fn === 'continuous' || fn === 'colorContinuous' || fn === 'categorical' || fn === 'colorCategories') {
+        const isCat = fn === 'categorical' || fn === 'colorCategories';
+        const paletteName = colorCfg.palette || colorCfg.colors || (isCat ? 'Bold' : 'TealGrn');
         let cols = getPaletteColors(paletteName, colorCfg.steps || 7);
         if (cols?.length) {
           const dom = colorCfg.domain;
@@ -524,23 +491,8 @@ function getLayerStripGradient(layer: LayerConfig): string {
           stripBg = toGradient(cols) || stripBg;
         }
       }
-    } else if (isFillTransparent && vecLayer.lineColorRgba) {
-      stripBg = vecLayer.lineColorRgba;
-    } else if (vecLayer.fillColorRgba) {
-      stripBg = vecLayer.fillColorRgba;
-    }
-  } else if (layer.layerType === 'pmtiles') {
-    const pmLayer = layer as PMTilesLayerConfig;
-    if (pmLayer.fillColorConfig && typeof pmLayer.fillColorConfig === 'object') {
-      const paletteName = (pmLayer.fillColorConfig as any).colors;
-      if (paletteName) {
-        let cols = getPaletteColors(paletteName, 7);
-        if (cols?.length) {
-          const wantsReverse = !!(pmLayer.fillColorConfig as any).reverse;
-          if (wantsReverse) cols = [...cols].reverse();
-          stripBg = toGradient(cols) || stripBg;
-        }
-      }
+    } else if (typeof colorCfg === 'string') {
+      stripBg = colorCfg;
     }
   } else if (layer.layerType === 'raster') {
     stripBg = 'linear-gradient(to bottom, #888, #444)';

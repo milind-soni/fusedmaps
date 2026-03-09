@@ -166,21 +166,7 @@ export function setupTooltip(
  * Get tooltip columns for a layer
  */
 function getTooltipColumns(layer: LayerConfig): string[] {
-  const anyLayer = layer as any;
-
-  if (layer.layerType === 'hex') {
-    const hexLayer = layer as HexLayerConfig;
-    return hexLayer.hexLayer?.tooltipColumns || hexLayer.hexLayer?.tooltipAttrs ||
-           hexLayer.tooltipColumns || anyLayer.tooltip || [];
-  } else if (layer.layerType === 'vector') {
-    const vecLayer = layer as VectorLayerConfig;
-    return vecLayer.vectorLayer?.tooltipColumns || vecLayer.vectorLayer?.tooltipAttrs ||
-           vecLayer.tooltipColumns || anyLayer.tooltip || [];
-  } else if (layer.layerType === 'pmtiles') {
-    return anyLayer.vectorLayer?.tooltipColumns || anyLayer.vectorLayer?.tooltipAttrs ||
-           anyLayer.tooltipColumns || anyLayer.tooltip || [];
-  }
-  return anyLayer.tooltipColumns || anyLayer.tooltip || [];
+  return (layer as any).tooltip || [];
 }
 
 /**
@@ -223,8 +209,9 @@ function buildTooltipLines(props: Record<string, unknown>, cols: string[], layer
   // For hex tile layers with no cols specified, show the color attribute (like legacy)
   if (layerDef?.layerType === 'hex') {
     const hexLayer = layerDef as HexLayerConfig;
-    const colorAttr = (hexLayer.hexLayer as any)?.getFillColor?.attr || 'metric';
-    if ((props as any)[colorAttr] != null) {
+    const fc = hexLayer.style?.fillColor;
+    const colorAttr = (fc && typeof fc === 'object' && !Array.isArray(fc)) ? (fc as any).attr : 'metric';
+    if (colorAttr && (props as any)[colorAttr] != null) {
       const val = (props as any)[colorAttr];
       const formatted = typeof val === 'number' ? formatNumber(val) : String(val);
       lines.push(`<span class="tt-row"><span class="tt-key">${colorAttr}</span><span class="tt-val">${formatted}</span></span>`);

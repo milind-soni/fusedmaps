@@ -162,16 +162,15 @@ export function buildPMTilesColorExpression(
   if (typeof colorConfig === 'string') return colorConfig;
   if (Array.isArray(colorConfig)) return colorConfig;
   
-  const fn = colorConfig['@@function'];
+  const fn = colorConfig.type || colorConfig['@@function'];
   const attr = colorConfig.attr || attribute;
   
-  if (fn === 'colorContinuous') {
+  if (fn === 'continuous' || fn === 'colorContinuous') {
     const domain = colorConfig.domain || [0, 100];
     const steps = colorConfig.steps || 7;
     const reverse = !!colorConfig.reverse;
     
-    // Resolve palette name to colors array
-    let colors = colorConfig.colors;
+    let colors = colorConfig.palette || colorConfig.colors;
     if (typeof colors === 'string') {
       colors = resolvePalette(colors, steps);
     }
@@ -207,7 +206,7 @@ export function buildPMTilesColorExpression(
     ];
   }
   
-  if (fn === 'colorCategories') {
+  if (fn === 'categorical' || fn === 'colorCategories') {
     const categories = colorConfig.categories || {};
     const fallback = colorConfig.othersColor || '#888888';
     
@@ -276,10 +275,7 @@ export async function addPMTilesLayers(
       // - otherwise render the single requested/detected layer
       // Optional exclusion list (useful when PMTiles contains helper layers like vertex/corner points)
       const exclude = new Set<string>([
-        ...(((layer as any).excludeSourceLayers as string[]) || []),
-        ...(((layer as any).exclude_source_layers as string[]) || []),
-        ...(((layer.vectorLayer as any)?.excludeSourceLayers as string[]) || []),
-        ...(((layer.vectorLayer as any)?.exclude_source_layers as string[]) || []),
+        ...((layer.excludeSourceLayers as string[]) || []),
       ].filter(Boolean));
 
       const filterExcluded = (names: string[]) => names.filter((n) => !exclude.has(n));
@@ -315,30 +311,21 @@ export async function addPMTilesLayers(
         } as any);
       }
       
-      // Get styling config
-      const vectorStyle = layer.vectorLayer || {};
-      const opacity = layer.fillOpacity ?? vectorStyle.opacity ?? 0.8;
-      const baseLineWidth = layer.lineWidth ?? 1;
-      const pointRadius = layer.pointRadiusMinPixels ?? 4;
+      // Get styling config from style object
+      const style = layer.style || {};
+      const opacity = style.opacity ?? 0.8;
+      const baseLineWidth = style.lineWidth ?? 1;
+      const pointRadius = style.pointRadius ?? 4;
       
-      // Check filled/stroked booleans
-      const isFilled = (layer as any).isFilled !== false;
-      const isStroked = (layer as any).isStroked !== false;
+      const isFilled = style.filled !== false;
+      const isStroked = style.stroked !== false;
       const effectiveLineWidth = isStroked ? baseLineWidth : 0;
       const effectiveFillOpacity = isFilled ? opacity : 0;
 
-      // Determine colors
-      const fillColorExpr = buildPMTilesColorExpression(
-        layer.fillColorConfig || vectorStyle.getFillColor,
-        layer.colorAttribute || 'value',
-        '#ff8c00'
-      );
-      
-      const lineColorExpr = buildPMTilesColorExpression(
-        layer.lineColorConfig || vectorStyle.getLineColor,
-        layer.colorAttribute || 'value',
-        '#ffffff'
-      );
+      const colorAttr = (style.fillColor && typeof style.fillColor === 'object' && 'attr' in style.fillColor)
+        ? (style.fillColor as any).attr : 'value';
+      const fillColorExpr = buildPMTilesColorExpression(style.fillColor, colorAttr, '#ff8c00');
+      const lineColorExpr = buildPMTilesColorExpression(style.lineColor, colorAttr, '#ffffff');
       
       const slugify = (s: string) => s.replace(/[^a-zA-Z0-9_-]+/g, '-');
 
@@ -346,8 +333,8 @@ export async function addPMTilesLayers(
       for (const sl of sourceLayerNamesToRender) {
         const slSlug = slugify(sl || 'default');
         const layerZoomProps: any = {};
-        if (typeof layer.minzoom === 'number') layerZoomProps.minzoom = layer.minzoom;
-        if (typeof layer.maxzoom === 'number') layerZoomProps.maxzoom = layer.maxzoom;
+        if (typeof (layer as any).minzoom === 'number') layerZoomProps.minzoom = (layer as any).minzoom;
+        if (typeof (layer as any).maxzoom === 'number') layerZoomProps.maxzoom = (layer as any).maxzoom;
 
         // Circle layer - only renders Point geometries
         const circleLayerId = `${layer.id}-${slSlug}-circles`;

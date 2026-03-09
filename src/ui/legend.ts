@@ -9,13 +9,9 @@ import { getWidgetContainer } from './widget-container';
 
 type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
-// Legend icon (horizontal bars representing a legend)
 const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="4" height="3" rx="0.5"/><rect x="9" y="5" width="12" height="3" rx="0.5"/><rect x="3" y="10.5" width="4" height="3" rx="0.5"/><rect x="9" y="10.5" width="9" height="3" rx="0.5"/><rect x="3" y="16" width="4" height="3" rx="0.5"/><rect x="9" y="16" width="6" height="3" rx="0.5"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
-/**
- * Check if a color config is an RGB accessor (e.g., "@@=[properties.r,properties.g,properties.b]")
- */
 function isRgbAccessor(colorCfg: any): boolean {
   if (typeof colorCfg !== 'string') return false;
   if (!colorCfg.startsWith('@@=')) return false;
@@ -25,9 +21,6 @@ function isRgbAccessor(colorCfg: any): boolean {
   return hasR && hasG && hasB;
 }
 
-/**
- * Build RGB categorical legend by scanning tile data
- */
 function buildRgbCategoryLegend(
   layerName: string,
   tileData: Map<string, any[]>,
@@ -36,9 +29,7 @@ function buildRgbCategoryLegend(
 ): string {
   try {
     if (!tileData || tileData.size === 0) return '';
-
-    const seen = new Map<string, number[]>(); // label -> [r,g,b]
-
+    const seen = new Map<string, number[]>();
     for (const rows of tileData.values()) {
       if (!Array.isArray(rows)) continue;
       for (const row of rows) {
@@ -47,24 +38,17 @@ function buildRgbCategoryLegend(
         if (label == null || label === '' || label === 'null') continue;
         const key = String(label);
         if (seen.has(key)) continue;
-
-        const r = Number(props.r);
-        const g = Number(props.g);
-        const b = Number(props.b);
+        const r = Number(props.r), g = Number(props.g), b = Number(props.b);
         if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) continue;
-
         const clamp = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
         seen.set(key, [clamp(r), clamp(g), clamp(b)]);
         if (seen.size >= maxCats) break;
       }
       if (seen.size >= maxCats) break;
     }
-
     if (seen.size === 0) return '';
-
     const labels = [...seen.keys()].sort((a, b) => a.localeCompare(b));
     const cats = labels.map(lbl => ({ label: lbl, rgb: seen.get(lbl)! }));
-
     return `
       <div class="legend-layer">
         <div class="legend-title">${layerName}</div>
@@ -83,9 +67,6 @@ function buildRgbCategoryLegend(
   }
 }
 
-/**
- * Setup the legend container
- */
 export function setupLegend(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
@@ -94,15 +75,12 @@ export function setupLegend(
   tileData?: Map<string, any[]>,
   expanded: boolean = false
 ): void {
-  // Get widget container for proper stacking
   const widgetContainer = getWidgetContainer(position);
-
-  // Create legend container if it doesn't exist
   let legend = document.getElementById('color-legend');
   if (!legend) {
     legend = document.createElement('div');
     legend.id = 'color-legend';
-    legend.className = expanded ? 'color-legend fm-dropdown-widget' : 'color-legend fm-dropdown-widget collapsed'; // Start expanded or collapsed based on config
+    legend.className = expanded ? 'color-legend fm-dropdown-widget' : 'color-legend fm-dropdown-widget collapsed';
     legend.style.display = 'none';
     legend.innerHTML = `
       <button id="legend-toggle" class="fm-dropdown-toggle" title="Legend">
@@ -118,42 +96,31 @@ export function setupLegend(
       </div>
     `;
     widgetContainer.appendChild(legend);
-
-    // Add toggle click handler
     const toggleBtn = document.getElementById('legend-toggle');
     toggleBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       const willOpen = legend?.classList.contains('collapsed');
       if (willOpen) {
-        // Close other dropdowns (only one open at a time)
         document.querySelectorAll('.fm-dropdown-widget:not(#color-legend)').forEach(el => {
           el.classList.add('collapsed');
         });
       }
       legend?.classList.toggle('collapsed');
     });
-
-    // Add close button handler
     const closeBtn = document.getElementById('legend-close');
     closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       legend?.classList.add('collapsed');
     });
-
-    // Close when clicking outside
     document.addEventListener('click', (e) => {
       if (!legend?.contains(e.target as Node)) {
         legend?.classList.add('collapsed');
       }
     });
   }
-
   updateLegend(layers, visibilityState, geojsons, tileData);
 }
 
-/**
- * Update the legend based on visible layers
- */
 export function updateLegend(
   layers: LayerConfig[],
   visibilityState: Record<string, boolean>,
@@ -171,30 +138,20 @@ export function updateLegend(
   }
 
   let html = '';
-
   visibleLayers.forEach(layer => {
     const legendHtml = buildLayerLegend(layer, geojsons, tileData);
-    if (legendHtml) {
-      html += legendHtml;
-    }
+    if (legendHtml) html += legendHtml;
   });
 
   if (html) {
-    // Put content in legend-content div if it exists, otherwise fallback to legend
-    if (legendContent) {
-      legendContent.innerHTML = html;
-    } else {
-      legend.innerHTML = html;
-    }
+    if (legendContent) legendContent.innerHTML = html;
+    else legend.innerHTML = html;
     legend.style.display = 'block';
   } else {
     legend.style.display = 'none';
   }
 }
 
-/**
- * Build custom legend HTML from user-provided config
- */
 function buildCustomLegend(layerName: string, cfg: any): string {
   const title = cfg.title || layerName;
   if (cfg.type === 'categorical' && Array.isArray(cfg.items) && cfg.items.length) {
@@ -244,18 +201,13 @@ function buildCustomLegend(layerName: string, cfg: any): string {
   return '';
 }
 
-/**
- * Build legend HTML for a single layer
- */
 function buildLayerLegend(
   layer: LayerConfig,
   geojsons: Record<string, GeoJSON.FeatureCollection>,
   tileData?: Map<string, any[]>
 ): string {
-  // If legend is explicitly disabled for this layer, skip it
   const custom = (layer as any).customLegend;
   if (custom === false) return '';
-  // If layer has a custom legend definition (must be an object), use it directly
   if (custom && typeof custom === 'object') {
     return buildCustomLegend(layer.name, custom);
   }
@@ -264,50 +216,38 @@ function buildLayerLegend(
 
   if (layer.layerType === 'hex') {
     const hexLayer = layer as HexLayerConfig;
-    const cfg: any = hexLayer.hexLayer || {};
-    colorCfg = (cfg.filled === false && cfg.getLineColor)
-      ? cfg.getLineColor
-      : cfg.getFillColor;
+    const style = hexLayer.style || {};
+    colorCfg = (style.filled === false && style.lineColor)
+      ? style.lineColor
+      : style.fillColor;
 
-    // Special case: RGB accessor for tile layers (e.g., soil type with @@=[properties.r,properties.g,properties.b])
-    if ((hexLayer as any).isTileLayer && isRgbAccessor(colorCfg) && tileData && tileData.size > 0) {
-      // Get legend attribute from config or default to first tooltip attr
-      const legendAttr = cfg.legendAttr ||
-        (Array.isArray(cfg.tooltipColumns) ? cfg.tooltipColumns[0] : null) ||
-        (Array.isArray((hexLayer as any).tooltipColumns) ? (hexLayer as any).tooltipColumns[0] : null) ||
-        'taxsubgrp';
-      const maxCats = Number.isFinite(cfg.legendMaxCategories) ? cfg.legendMaxCategories : 40;
-      return buildRgbCategoryLegend(layer.name, tileData, legendAttr, maxCats);
+    // RGB accessor for tile layers
+    if (hexLayer.isTileLayer && isRgbAccessor(colorCfg) && tileData && tileData.size > 0) {
+      const legendAttr = (Array.isArray(hexLayer.tooltip) ? hexLayer.tooltip[0] : null) || 'taxsubgrp';
+      return buildRgbCategoryLegend(layer.name, tileData, legendAttr, 40);
     }
   } else if (layer.layerType === 'vector' || layer.layerType === 'mvt' || layer.layerType === 'pmtiles') {
-    const vecLayer = layer as VectorLayerConfig;
+    const style = (layer as any).style || {};
 
-    // Check if fill is transparent/disabled - if so, prefer line color config
-    const fillOpacity = (vecLayer as any).vectorLayer?.opacity ?? (vecLayer as any).style?.opacity ?? 1;
-    const isFillTransparent = fillOpacity < 0.1 || (vecLayer as any).vectorLayer?.filled === false || (vecLayer as any).style?.filled === false;
+    const fillOpacity = style.opacity ?? 1;
+    const isFillTransparent = fillOpacity < 0.1 || style.filled === false;
 
-    // Helper to check if a color config has a color function (old or new format)
-    const hasColorFn = (cfg: any) => cfg?.['@@function'] || cfg?.type === 'continuous' || cfg?.type === 'categorical';
+    const hasColorFn = (cfg: any) => cfg?.type === 'continuous' || cfg?.type === 'categorical';
 
-    // Check both legacy format (fillColorConfig) and new format (style.fillColor)
-    const fillColorCfg = vecLayer.fillColorConfig || (vecLayer as any).style?.fillColor;
-    const lineColorCfg = vecLayer.lineColorConfig || (vecLayer as any).style?.lineColor;
-
-    if (isFillTransparent && hasColorFn(lineColorCfg)) {
-      colorCfg = lineColorCfg;
-    } else if (hasColorFn(fillColorCfg)) {
-      colorCfg = fillColorCfg;
-    } else if (hasColorFn(lineColorCfg)) {
-      // Fallback to lineColor if fillColor has no color function
-      colorCfg = lineColorCfg;
+    if (isFillTransparent && hasColorFn(style.lineColor)) {
+      colorCfg = style.lineColor;
+    } else if (hasColorFn(style.fillColor)) {
+      colorCfg = style.fillColor;
+    } else if (hasColorFn(style.lineColor)) {
+      colorCfg = style.lineColor;
     }
 
-    // Show simple line legend for stroke-only vector layers (no color function)
-    if (!hasColorFn(colorCfg) && vecLayer.lineColorRgba && !vecLayer.isFilled) {
+    // Simple line legend for stroke-only layers
+    if (!hasColorFn(colorCfg) && style.lineColor && typeof style.lineColor === 'string' && style.filled === false) {
       return `
         <div class="legend-layer">
           <div class="legend-title">
-            <span class="legend-line" style="background:${vecLayer.lineColorRgba};"></span>
+            <span class="legend-line" style="background:${style.lineColor};"></span>
             ${layer.name}
           </div>
         </div>
@@ -315,77 +255,56 @@ function buildLayerLegend(
     }
   }
 
-  // Only show legend for layers with explicit color functions
-  // Support both old format (@@function) and new format (type)
-  const fnType = colorCfg?.['@@function'] ||
-    (colorCfg?.type === 'continuous' ? 'colorContinuous' :
-     colorCfg?.type === 'categorical' ? 'colorCategories' : null);
+  const fnType = colorCfg?.type;
   if (!fnType || !colorCfg?.attr) return '';
-  if (fnType !== 'colorContinuous' && fnType !== 'colorCategories') return '';
+  if (fnType !== 'continuous' && fnType !== 'categorical') return '';
   
-  const paletteName = colorCfg.colors || colorCfg.palette || (fnType === 'colorCategories' ? 'Bold' : 'TealGrn');
+  const paletteName = colorCfg.palette || (fnType === 'categorical' ? 'Bold' : 'TealGrn');
   
-  // Handle categorical legend
-  if (fnType === 'colorCategories') {
-    // Auto-detect categories if they weren't provided and haven't been detected yet.
-    // This fixes cases where a categorical style exists but the rendering path didn't
-    // populate `_detectedCategories` (e.g., some tile flows).
+  if (fnType === 'categorical') {
     try {
       const cc = colorCfg as any;
       const hasCats =
-        Array.isArray(cc._detectedCategories) && cc._detectedCategories.length
-          ? true
-          : Array.isArray(cc.categories) && cc.categories.length
-            ? true
-            : false;
+        (Array.isArray(cc._detectedCategories) && cc._detectedCategories.length) ||
+        (Array.isArray(cc.categories) && cc.categories.length);
       if (!hasCats && cc.attr) {
         let rows: Array<Record<string, unknown>> = [];
-        // Prefer cached GeoJSON for the layer (includes SQL hex outputs).
         const gj = geojsons?.[(layer as any).id];
         if (gj?.features?.length) {
           rows = gj.features.map((f: any) => (f?.properties || {}));
-        } else if ((layer as any).layerType === 'hex') {
+        } else if (layer.layerType === 'hex') {
           rows = (((layer as any).data || []) as any[]);
-        } else if ((layer as any).layerType === 'vector') {
+        } else if (layer.layerType === 'vector') {
           const vgj = (layer as any).geojson;
           if (vgj?.features?.length) rows = vgj.features.map((f: any) => (f?.properties || {}));
         }
         const pairs = getUniqueCategories(rows, cc.attr, cc.labelAttr);
-        // cap for UI sanity
         cc._detectedCategories = pairs.slice(0, 50);
       }
     } catch (_) {}
     return buildCategoricalLegend(layer.name, colorCfg, paletteName);
   }
   
-  // Handle continuous legend
-  if (fnType === 'colorContinuous') {
+  if (fnType === 'continuous') {
     return buildContinuousLegend(layer.name, colorCfg, paletteName);
   }
   
   return '';
 }
 
-/**
- * Build categorical legend HTML
- */
 function buildCategoricalLegend(
   layerName: string,
   colorCfg: ColorCategoriesConfig,
   paletteName: string
 ): string {
-  // Use detected categories or provided ones
-  let catPairs = colorCfg._detectedCategories || colorCfg.categories || [];
+  let catPairs = (colorCfg as any)._detectedCategories || colorCfg.categories || [];
   catPairs = catPairs.map((c: any) => 
     typeof c === 'object' && c.label ? c : { value: c, label: c }
   );
-  
   if (!catPairs.length) return '';
   
   let colors = getPaletteColors(paletteName, Math.max(catPairs.length, 3));
-  if (!colors?.length) {
-    colors = FALLBACK_CATEGORICAL_COLORS;
-  }
+  if (!colors?.length) colors = FALLBACK_CATEGORICAL_COLORS;
   
   return `
     <div class="legend-layer">
@@ -402,15 +321,11 @@ function buildCategoricalLegend(
   `;
 }
 
-/**
- * Build continuous legend HTML
- */
 function buildContinuousLegend(
   layerName: string,
   colorCfg: ColorContinuousConfig,
   paletteName: string
 ): string {
-  // Prefer dynamic domain (autoDomain) when present
   const domain: any = (colorCfg as any)._dynamicDomain || colorCfg.domain;
   if (!domain?.length) return '';
   
@@ -419,9 +334,7 @@ function buildContinuousLegend(
   const steps = colorCfg.steps || 7;
   
   let colors = getPaletteColors(paletteName, steps);
-  if (!colors?.length) {
-    colors = FALLBACK_CONTINUOUS_COLORS;
-  }
+  if (!colors?.length) colors = FALLBACK_CONTINUOUS_COLORS;
   if (isReversed) colors = [...colors].reverse();
   
   const gradient = `linear-gradient(to right, ${colors.map((c, i) => 
@@ -439,4 +352,3 @@ function buildContinuousLegend(
     </div>
   `;
 }
-

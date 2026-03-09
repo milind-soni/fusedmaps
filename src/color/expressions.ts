@@ -60,19 +60,17 @@ export function buildColorExpr(
     return cfg;
   }
   
-  // Handle color functions
-  const fnType = (cfg as any)['@@function'];
+  // Handle color functions - support both new format (type) and legacy (@@function)
+  const fnType = (cfg as any).type || (cfg as any)['@@function'];
   const attr = (cfg as any).attr;
   
   if (!fnType || !attr) return null;
   
-  // Handle colorCategories
-  if (fnType === 'colorCategories') {
+  if (fnType === 'categorical' || fnType === 'colorCategories') {
     return buildCategoricalExpr(cfg as ColorCategoriesConfig, data);
   }
   
-  // Handle colorContinuous
-  if (fnType === 'colorContinuous') {
+  if (fnType === 'continuous' || fnType === 'colorContinuous') {
     return buildContinuousExpr(cfg as ColorContinuousConfig);
   }
   
@@ -86,26 +84,20 @@ function buildCategoricalExpr(
   cfg: ColorCategoriesConfig,
   data?: Array<Record<string, unknown>>
 ): unknown {
-  // Get categories - either from config or auto-detect from data
-  const domainCats: any[] = Array.isArray((cfg as any).domain) ? (cfg as any).domain : [];
   let catPairs: CategoryPair[] = cfg.categories
     ? cfg.categories.map(c =>
         typeof c === 'object' ? c : { value: c, label: String(c) }
       )
-    : domainCats.length
-      ? domainCats.map((c) => ({ value: c as any, label: String((c as any)?.label ?? c) }))
-      : getUniqueCategories(data, cfg.attr, cfg.labelAttr);
+    : getUniqueCategories(data, cfg.attr, cfg.labelAttr);
   
   if (!catPairs.length) return 'rgba(128,128,128,0.5)';
   
-  // Get palette colors
-  const paletteName = cfg.colors || 'Bold';
+  const paletteName = cfg.palette || 'Bold';
   let colors = getPaletteColors(paletteName, Math.max(catPairs.length, 3));
   if (!colors || !colors.length) {
     colors = FALLBACK_CATEGORICAL_COLORS;
   }
   
-  // Fallback color for null values
   const fallback = cfg.nullColor 
     ? `rgb(${cfg.nullColor.slice(0, 3).join(',')})` 
     : 'rgba(128,128,128,0.5)';
@@ -134,8 +126,6 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
   const isReversed = d0 > d1;
   let domain = isReversed ? [d1, d0] : [d0, d1];
 
-  // Handle edge case where domain min equals max (single value or all same values)
-  // Expand domain slightly so interpolation works
   if (domain[0] === domain[1]) {
     const val = domain[0];
     const epsilon = Math.abs(val) > 0 ? Math.abs(val) * 0.1 : 1;
@@ -144,16 +134,14 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
   const wantsReverse = !!(cfg as any).reverse;
 
   const steps = cfg.steps || 7;
-  const paletteName = cfg.colors || 'TealGrn';
+  const paletteName = cfg.palette || 'TealGrn';
 
-  // Null color - default to gray
   const nullColor = cfg.nullColor
     ? `rgb(${cfg.nullColor.slice(0, 3).join(',')})`
     : 'rgb(184,184,184)';
 
   let colors = getPaletteColors(paletteName, steps);
   if (!colors || !colors.length) {
-    // Fallback gradient with null handling
     return [
       'case',
       ['==', ['get', cfg.attr], null], nullColor,
@@ -164,12 +152,9 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
     ];
   }
 
-  // `reverse` flips palette direction (low↔high). If the domain itself is reversed,
-  // we already normalize it, so we invert the meaning of `reverse`.
   const shouldReverse = isReversed ? !wantsReverse : wantsReverse;
   if (shouldReverse) colors = [...colors].reverse();
 
-  // Build interpolate expression
   const interpolateExpr: unknown[] = ['interpolate', ['linear'], ['get', cfg.attr]];
   colors.forEach((c, i) => {
     const value = domain[0] + (domain[1] - domain[0]) * i / (colors!.length - 1);
@@ -177,12 +162,9 @@ function buildContinuousExpr(cfg: ColorContinuousConfig): unknown {
     interpolateExpr.push(c);
   });
 
-  // Wrap with case expression to handle null values
   return [
     'case',
     ['==', ['get', cfg.attr], null], nullColor,
     interpolateExpr
   ];
 }
-
-

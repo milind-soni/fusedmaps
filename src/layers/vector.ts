@@ -18,11 +18,8 @@ export function addVectorLayer(
   const geojson = layer.geojson;
   if (!geojson?.features?.length) return;
   
-  // Add source
   const src: any = { type: 'geojson', data: geojson };
-  // Optional: control geojson-vt tiling/simplification.
-  // For very small polygons (e.g., H3 res11), default tolerance can simplify them away at low zoom.
-  const opts = (layer as any).geojsonSource;
+  const opts = layer.source;
   if (opts && typeof opts === 'object') {
     if (typeof opts.tolerance === 'number') src.tolerance = opts.tolerance;
     if (typeof opts.buffer === 'number') src.buffer = opts.buffer;
@@ -30,30 +27,29 @@ export function addVectorLayer(
   }
   map.addSource(layer.id, src);
 
-  // Register original GeoJSON for highlight lookup (avoids tile-clipped geometries)
   registerOriginalGeoJSON(layer.id, geojson);
   
-  // Extract layer properties
+  const style = layer.style || {};
   const vecData = geojson.features.map((f: any) => f.properties || {});
   
-  // Build color expressions
-  const fillColorExpr = (layer.fillColorConfig as any)?.['@@function']
-    ? buildColorExpr(layer.fillColorConfig, vecData)
-    : (layer.fillColorRgba || 'rgba(0,144,255,0.6)');
+  const fillColorExpr = (style.fillColor && typeof style.fillColor === 'object' && !Array.isArray(style.fillColor))
+    ? buildColorExpr(style.fillColor, vecData)
+    : (style.fillColor
+        ? (Array.isArray(style.fillColor) ? toRgba(style.fillColor as number[], 0.6) : (style.fillColor as string))
+        : 'rgba(0,144,255,0.6)');
   
-  const lineColorExpr = (layer.lineColorConfig as any)?.['@@function']
-    ? buildColorExpr(layer.lineColorConfig, vecData)
-    : (layer.lineColorRgba || 'rgba(100,100,100,0.8)');
+  const lineColorExpr = (style.lineColor && typeof style.lineColor === 'object' && !Array.isArray(style.lineColor))
+    ? buildColorExpr(style.lineColor, vecData)
+    : (style.lineColor
+        ? (Array.isArray(style.lineColor) ? toRgba(style.lineColor as number[], 0.8) : (style.lineColor as string))
+        : 'rgba(100,100,100,0.8)');
   
-  const lineW = (typeof layer.lineWidth === 'number' && isFinite(layer.lineWidth))
-    ? layer.lineWidth
-    : 1;
+  const lineW = (typeof style.lineWidth === 'number' && isFinite(style.lineWidth))
+    ? style.lineWidth : 1;
   
-  const layerOpacity = (typeof layer.opacity === 'number' && isFinite(layer.opacity))
-    ? Math.max(0, Math.min(1, layer.opacity))
-    : 0.8;
+  const layerOpacity = (typeof style.opacity === 'number' && isFinite(style.opacity))
+    ? Math.max(0, Math.min(1, style.opacity)) : 0.8;
   
-  // Detect geometry types
   let hasPoly = false, hasPoint = false, hasLine = false;
   for (const f of geojson.features) {
     const t = f.geometry?.type;
@@ -62,11 +58,8 @@ export function addVectorLayer(
     if (t === 'LineString' || t === 'MultiLineString') hasLine = true;
   }
   
-  // Add polygon layers
   if (hasPoly) {
-    // Always create fill layer so it can be toggled from debug panel
-    // Use opacity 0 when not filled
-    const fillOpacity = layer.isFilled === false ? 0 : layerOpacity;
+    const fillOpacity = style.filled === false ? 0 : layerOpacity;
     map.addLayer({
       id: `${layer.id}-fill`,
       type: 'fill',
@@ -79,7 +72,7 @@ export function addVectorLayer(
       layout: { visibility: visible ? 'visible' : 'none' }
     });
 
-    if (layer.isStroked !== false) {
+    if (style.stroked !== false) {
       map.addLayer({
         id: `${layer.id}-outline`,
         type: 'line',
@@ -98,7 +91,6 @@ export function addVectorLayer(
     }
   }
   
-  // Add line layers
   if (hasLine) {
     map.addLayer({
       id: `${layer.id}-line`,
@@ -118,17 +110,16 @@ export function addVectorLayer(
     });
   }
   
-  // Add point layers
   if (hasPoint) {
     map.addLayer({
       id: `${layer.id}-circle`,
       type: 'circle',
       source: layer.id,
       paint: {
-        'circle-radius': Math.max(layer.pointRadius || 6, 1),
+        'circle-radius': Math.max(style.pointRadius || 6, 1),
         'circle-color': fillColorExpr as any,
         'circle-stroke-color': lineColorExpr as any,
-        'circle-stroke-width': layer.isStroked !== false ? lineW : 0,
+        'circle-stroke-width': style.stroked !== false ? lineW : 0,
         'circle-opacity': layerOpacity
       },
       filter: ['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']],
@@ -146,28 +137,31 @@ export function addMVTLayer(
   visible: boolean
 ): void {
   const sourceLayer = layer.sourceLayer || 'udf';
+  const style = layer.style || {};
+  const tile = layer.tile || {};
   
-  // Add vector tile source
   map.addSource(layer.id, {
     type: 'vector',
     tiles: [layer.tileUrl],
-    minzoom: layer.minzoom || 0,
-    maxzoom: layer.maxzoom || 22
+    minzoom: tile.minZoom || 0,
+    maxzoom: tile.maxZoom || 22
   });
   
-  // Dynamic color expressions are supported for MVT since Mapbox evaluates them per-feature.
-  const fillColorExpr = (layer.fillColorConfig as any)?.['@@function']
-    ? (buildColorExpr(layer.fillColorConfig as any, undefined) as any)
-    : (layer.fillColor || '#FFF5CC');
-  const lineColorExpr = (layer.lineColorConfig as any)?.['@@function']
-    ? (buildColorExpr(layer.lineColorConfig as any, undefined) as any)
-    : (layer.lineColor || '#FFFFFF');
+  const fillColorExpr = (style.fillColor && typeof style.fillColor === 'object' && !Array.isArray(style.fillColor))
+    ? (buildColorExpr(style.fillColor as any, undefined) as any)
+    : (style.fillColor
+        ? (Array.isArray(style.fillColor) ? toRgba(style.fillColor as number[], 0.8) : (style.fillColor as string))
+        : '#FFF5CC');
+  const lineColorExpr = (style.lineColor && typeof style.lineColor === 'object' && !Array.isArray(style.lineColor))
+    ? (buildColorExpr(style.lineColor as any, undefined) as any)
+    : (style.lineColor
+        ? (Array.isArray(style.lineColor) ? toRgba(style.lineColor as number[], 1) : (style.lineColor as string))
+        : '#FFFFFF');
 
-  const fillOpacity = layer.fillOpacity ?? 0.8;
-  const lineWidth = layer.lineWidth ?? 1;
+  const fillOpacity = style.opacity ?? 0.8;
+  const lineWidth = style.lineWidth ?? 1;
   
-  // Fill layer
-  if (layer.isFilled !== false) {
+  if (style.filled !== false) {
     map.addLayer({
       id: `${layer.id}-fill`,
       type: 'fill',
@@ -181,7 +175,6 @@ export function addMVTLayer(
     });
   }
   
-  // Line layer
   map.addLayer({
     id: `${layer.id}-line`,
     type: 'line',
@@ -194,8 +187,7 @@ export function addMVTLayer(
     layout: { visibility: visible ? 'visible' : 'none' }
   });
   
-  // Extrusion layer (if enabled)
-  if (layer.isExtruded) {
+  if (style.extruded) {
     map.addLayer({
       id: `${layer.id}-extrusion`,
       type: 'fill-extrusion',
@@ -203,9 +195,9 @@ export function addMVTLayer(
       'source-layer': sourceLayer,
       paint: {
         'fill-extrusion-color': fillColorExpr as any,
-        'fill-extrusion-height': ['*', ['get', layer.heightProperty || 'height'], layer.heightMultiplier || 1],
+        'fill-extrusion-height': ['*', ['get', style.elevationAttr || 'height'], style.elevationScale || 1],
         'fill-extrusion-base': 0,
-        'fill-extrusion-opacity': layer.extrusionOpacity ?? 0.9
+        'fill-extrusion-opacity': 0.9
       },
       layout: { visibility: visible ? 'visible' : 'none' }
     });
@@ -233,12 +225,6 @@ export function setVectorLayerVisibility(
       if (map.getLayer(id)) {
         map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
       }
-    } catch (e) {
-      // Ignore errors
-    }
+    } catch (e) {}
   });
 }
-
-
-
-

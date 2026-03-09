@@ -271,14 +271,13 @@ function buildColorAccessor(
     };
   }
 
-  // colorContinuous / colorCategories
-  if (typeof colorCfg === 'object' && colorCfg['@@function']) {
-    const fnType = colorCfg['@@function'];
+  // continuous / categorical color configs
+  if (typeof colorCfg === 'object' && (colorCfg.type || colorCfg['@@function'])) {
+    const fnType = colorCfg.type || colorCfg['@@function'];
     const attr = colorCfg.attr;
     if (!attr) return null;
 
-    if (fnType === 'colorContinuous') {
-      // Expect domain [min, max] (numbers). If omitted, just return null.
+    if (fnType === 'continuous' || fnType === 'colorContinuous') {
       const dom = colorCfg.domain;
       if (!Array.isArray(dom) || dom.length < 2) return null;
       const d0 = Number(dom[0]);
@@ -286,7 +285,7 @@ function buildColorAccessor(
       if (!Number.isFinite(d0) || !Number.isFinite(d1) || d0 === d1) return null;
 
       const steps = Math.max(2, Number(colorCfg.steps ?? 7));
-      const paletteName = colorCfg.colors || 'ArmyRose';
+      const paletteName = colorCfg.palette || colorCfg.colors || 'ArmyRose';
       const cols0 = getPaletteColors(paletteName, steps) || null;
       if (!cols0?.length) return null;
 
@@ -337,14 +336,12 @@ function buildColorAccessor(
       };
     }
 
-    if (fnType === 'colorCategories') {
+    if (fnType === 'categorical' || fnType === 'colorCategories') {
       const categories: any[] = Array.isArray(colorCfg.categories)
         ? colorCfg.categories
-        : Array.isArray(colorCfg.domain)
-          ? colorCfg.domain
-          : [];
+        : [];
 
-      const paletteName = colorCfg.colors || 'Bold';
+      const paletteName = colorCfg.palette || colorCfg.colors || 'Bold';
       const nullColor = Array.isArray(colorCfg.nullColor) ? colorCfg.nullColor : [184, 184, 184];
 
       // If categories are provided, use a fixed lookup.
@@ -462,12 +459,11 @@ function boundsIntersect(a: any, b: any) {
 }
 
 function wantsAutoDomain(layer: HexLayerConfig): { enabled: boolean; attr: string | null } {
-  const fc: any = (layer.hexLayer as any)?.getFillColor;
+  const fc: any = layer.style?.fillColor;
   if (!fc || typeof fc !== 'object' || Array.isArray(fc)) return { enabled: false, attr: null };
-  if (fc['@@function'] !== 'colorContinuous') return { enabled: false, attr: null };
+  if (fc.type !== 'continuous') return { enabled: false, attr: null };
   const attr = fc.attr || null;
   if (!attr) return { enabled: false, attr: null };
-  // If the user explicitly set a domain (e.g. via debug UI), never override it.
   if ((layer as any).fillDomainFromUser === true || (fc as any).fillDomainFromUser === true) {
     return { enabled: false, attr };
   }
@@ -668,7 +664,7 @@ function calculateDomainFromTiles(
 }
 
 function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number]): boolean {
-  const fc: any = (layer.hexLayer as any)?.getFillColor;
+  const fc: any = layer.style?.fillColor;
   if (!fc || typeof fc !== 'object') return false;
   const old: any = fc._dynamicDomain;
 
@@ -690,7 +686,7 @@ function maybeUpdateDynamicDomain(layer: HexLayerConfig, next: [number, number])
 function getTileConfig(
   layer: HexLayerConfig
 ): Required<TileLayerConfig> & { maxRequests: number; zoomOffset: number } {
-  const cfg = layer.tileLayerConfig || {};
+  const cfg = layer.tile || {};
   return {
     tileSize: cfg.tileSize ?? 256,
     minZoom: cfg.minZoom ?? 0,
@@ -731,16 +727,16 @@ function buildHexTileDeckLayers(
       const visible = true;
       const tileUrl = layer.tileUrl!;
       const tileCfg = getTileConfig(layer);
-      const rawHexCfg: any = layer.hexLayer || {};
+      const style: any = layer.style || {};
 
       // Prefer dynamic domain (autoDomain) when present (without mutating config object)
-      const fillCfg: any = rawHexCfg.getFillColor;
+      const fillCfg: any = style.fillColor;
       const fillCfgEffective =
         fillCfg && typeof fillCfg === 'object' && !Array.isArray(fillCfg) && Array.isArray(fillCfg._dynamicDomain)
           ? { ...fillCfg, domain: fillCfg._dynamicDomain }
           : fillCfg;
 
-      const lineCfg: any = rawHexCfg.getLineColor;
+      const lineCfg: any = style.lineColor;
       const lineCfgEffective =
         lineCfg && typeof lineCfg === 'object' && !Array.isArray(lineCfg) && Array.isArray(lineCfg._dynamicDomain)
           ? { ...lineCfg, domain: lineCfg._dynamicDomain }
@@ -780,15 +776,15 @@ function buildHexTileDeckLayers(
       };
       const idHash = hashStr(domKey);
 
-      const stroked = rawHexCfg.stroked !== false;
-      const filled = rawHexCfg.filled !== false;
-      const extruded = rawHexCfg.extruded === true;
-      const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
-      const lineWidthMinPixels = rawHexCfg.lineWidth ?? rawHexCfg.lineWidthMinPixels ?? 1;
-      const elevationScale = rawHexCfg.elevationScale ?? 1;
-      const coverage = rawHexCfg.coverage ?? 0.9;
+      const stroked = style.stroked !== false;
+      const filled = style.filled !== false;
+      const extruded = style.extruded === true;
+      const opacity = typeof style.opacity === 'number' ? style.opacity : 0.8;
+      const lineWidthMinPixels = style.lineWidth ?? 1;
+      const elevationScale = style.elevationScale ?? 1;
+      const coverage = 0.9;
       const elevationProperty =
-        rawHexCfg.elevationProperty ||
+        style.elevationAttr ||
         (fillCfgEffective && typeof fillCfgEffective === 'object' ? (fillCfgEffective as any).attr : null) ||
         null;
 
@@ -987,15 +983,14 @@ function buildInlineHexDeckLayers(
   const visibleLayers = inlineLayers.filter((l) => visibility[l.id] !== false);
 
   return visibleLayers.map((layer) => {
-    const rawHexCfg: any = layer.hexLayer || {};
+    const style: any = layer.style || {};
     const data = (layer as any).data || [];
 
-    const fillCfg: any = rawHexCfg.getFillColor;
-    const lineCfg: any = rawHexCfg.getLineColor;
+    const fillCfg: any = style.fillColor;
+    const lineCfg: any = style.lineColor;
     const baseFillColor = buildColorAccessor(runtime, layer, fillCfg) as ((obj: any) => any) | null;
     const getLineColor = buildColorAccessor(runtime, layer, lineCfg);
 
-    // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
     const filterAttr = (fillCfg && typeof fillCfg === 'object') ? fillCfg.attr : null;
     const getFillColor = baseFillColor && filterAttr
       ? (obj: any) => {
@@ -1011,15 +1006,15 @@ function buildInlineHexDeckLayers(
         }
       : baseFillColor;
 
-    const stroked = rawHexCfg.stroked !== false;
-    const filled = rawHexCfg.filled !== false;
-    const extruded = rawHexCfg.extruded === true;
-    const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
-    const lineWidthMinPixels = rawHexCfg.lineWidth ?? rawHexCfg.lineWidthMinPixels ?? 1;
-    const elevationScale = rawHexCfg.elevationScale ?? 1;
-    const coverage = rawHexCfg.coverage ?? 0.9;
+    const stroked = style.stroked !== false;
+    const filled = style.filled !== false;
+    const extruded = style.extruded === true;
+    const opacity = typeof style.opacity === 'number' ? style.opacity : 0.8;
+    const lineWidthMinPixels = style.lineWidth ?? 1;
+    const elevationScale = style.elevationScale ?? 1;
+    const coverage = 0.9;
     const elevationProperty =
-      rawHexCfg.elevationProperty ||
+      style.elevationAttr ||
       (fillCfg && typeof fillCfg === 'object' ? (fillCfg as any).attr : null) ||
       null;
 
@@ -1266,9 +1261,9 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
   for (const l of layers) {
     if (l.layerType !== 'hex') continue;
     const hex = l as HexLayerConfig;
-    const fc: any = hex.hexLayer?.getFillColor;
+    const fc: any = hex.style?.fillColor;
     if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
-    if (fc['@@function'] !== 'colorContinuous') continue;
+    if (fc.type !== 'continuous') continue;
     const attr = fc.attr;
     if (!attr) continue;
 

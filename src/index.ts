@@ -20,7 +20,7 @@ import { setupHighlight } from './interactions/highlight';
 import { setupMessaging } from './messaging';
 import { setupDuckDbSql } from './sql/setup';
 import { createLayerStore, LayerStore } from './state';
-import { normalizeLayerConfig, isNewFormat } from './config';
+// Config is used directly - no normalization needed
 import { trackMapboxTileLoading } from './ui/tile-loader';
 
 const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
@@ -50,20 +50,12 @@ export type { LayerEvent, LayerEventType, LayerEventCallback } from './state';
 export function init(config: FusedMapsConfig): FusedMapsInstance {
   const containerId = config.containerId || 'map';
 
-  // Normalize layer configs (convert new format to internal format)
-  const normalizedLayers = config.layers.map((layer) =>
-    isNewFormat(layer) ? normalizeLayerConfig(layer) : layer
-  );
+  // Layers are used directly - no normalization needed
+  const normalizedConfig = config;
 
-  // Create normalized config for internal use
-  const normalizedConfig: FusedMapsConfig = {
-    ...config,
-    layers: normalizedLayers,
-  };
-
-  // Initialize layer store with normalized layers
+  // Initialize layer store with layers
   const store = createLayerStore();
-  store.init(normalizedLayers);
+  store.init(config.layers);
 
   // Theme (match map_utils.py: <html data-theme="dark|light">)
   const theme = config.ui?.theme === 'light' ? 'light' : 'dark';
@@ -371,12 +363,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     const layers: LayerSummary[] = store.getAll().map((s) => {
       const cfg = s.config as any;
       const tooltipColumns: string[] | undefined =
-        (Array.isArray(cfg.tooltipColumns) ? cfg.tooltipColumns :
-         Array.isArray(cfg.hexLayer?.tooltipColumns) ? cfg.hexLayer.tooltipColumns :
-         Array.isArray(cfg.hexLayer?.tooltipAttrs) ? cfg.hexLayer.tooltipAttrs :
-         Array.isArray(cfg.vectorLayer?.tooltipColumns) ? cfg.vectorLayer.tooltipColumns :
-         Array.isArray(cfg.vectorLayer?.tooltipAttrs) ? cfg.vectorLayer.tooltipAttrs :
-         undefined);
+        Array.isArray(cfg.tooltip) ? cfg.tooltip : undefined;
 
       let propertyKeys: string[] | undefined = undefined;
       try {
@@ -494,11 +481,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         console.warn('[FusedMaps] addLayer:', validation.error);
         return null;
       }
-      // Normalize if using new format
-      const normalizedLayerConfig = isNewFormat(layerConfig)
-        ? normalizeLayerConfig(layerConfig)
-        : layerConfig;
-      const state = store.add(normalizedLayerConfig, options);
+      const state = store.add(layerConfig, options);
       // Incremental render
       try {
         addSingleLayer(map, state.config, state.visible, normalizedConfig);

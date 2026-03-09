@@ -194,15 +194,17 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     });
   }
   
-  // Filter panel (data range filter with histogram)
+  // Filter panel (data range filter with histogram) - only when explicitly enabled via widgets.filter
+  const filterCfg = parseWidgetConfig(widgetCfg.filter, false);
+  const filterPos = filterCfg.position;
   const filterInfos = getFilterableLayerInfos(store.getAllConfigs());
   let filterHandle: { destroy: () => void } | null = null;
-  if (filterInfos.length > 0 && layersPos !== false) {
+  if (filterInfos.length > 0 && filterPos !== false) {
     filterHandle = setupFilterPanel((layerId, range) => {
       setLayerFilterRange(layerId, range);
       const state = (overlayRef.current as any)?.__fused_hex_tiles__;
       try { state?.rebuild?.(store.getVisibilityState()); } catch {}
-    }, layersPos as any);
+    }, filterPos as any, filterCfg.expanded);
   }
 
   // Track tile loading cleanup function

@@ -40,19 +40,22 @@ function renderLayerFilter(info: FilterableLayerInfo): string {
   const minPct = ((filterMin - dataMin) / (dataMax - dataMin)) * 100;
   const maxPct = ((filterMax - dataMin) / (dataMax - dataMin)) * 100;
 
+  const trackLeft = minPct;
+  const trackRight = 100 - maxPct;
+
   return `
     <div class="filter-layer-section" data-filter-layer="${info.layerId}">
       <div class="filter-layer-header">
         <span class="filter-layer-name">${info.layerName}</span>
         <span class="filter-attr-label">${info.attr}</span>
       </div>
-      <div class="filter-slider-wrap">
+      <div class="filter-dual-range">
+        <div class="filter-track"></div>
+        <div class="filter-track-fill" style="left:${trackLeft}%;right:${trackRight}%"></div>
         <input type="range" class="filter-range-min" data-layer="${info.layerId}"
-          min="0" max="1000" value="${Math.round(minPct * 10)}"
-          step="1">
+          min="0" max="1000" value="${Math.round(minPct * 10)}" step="1">
         <input type="range" class="filter-range-max" data-layer="${info.layerId}"
-          min="0" max="1000" value="${Math.round(maxPct * 10)}"
-          step="1">
+          min="0" max="1000" value="${Math.round(maxPct * 10)}" step="1">
       </div>
       <div class="filter-range-labels">
         <span class="filter-val-min">${fmtNum(filterMin)}</span>
@@ -99,6 +102,15 @@ function handlePanelInput(e: Event): void {
   const maxLabel = section?.querySelector('.filter-val-max');
   if (minLabel) minLabel.textContent = fmtNum(state.filterMin);
   if (maxLabel) maxLabel.textContent = fmtNum(state.filterMax);
+
+  const span = state.dataMax - state.dataMin;
+  const fill = section?.querySelector('.filter-track-fill') as HTMLElement | null;
+  if (fill && span > 0) {
+    const lPct = ((state.filterMin - state.dataMin) / span) * 100;
+    const rPct = 100 - ((state.filterMax - state.dataMin) / span) * 100;
+    fill.style.left = lPct + '%';
+    fill.style.right = rPct + '%';
+  }
 
   filterCallback?.(layerId, [state.filterMin, state.filterMax]);
 }

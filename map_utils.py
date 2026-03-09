@@ -56,7 +56,7 @@ DEFAULT_RASTER_STYLE = {
 # You can override this per-run via `deckgl_layers(..., fusedmaps_ref=...)`.
 #
 
-FUSEDMAPS_CDN_REF_DEFAULT = "c849505"
+FUSEDMAPS_CDN_REF_DEFAULT = "d7283d7"
 
 def _fusedmaps_cdn_urls(ref: typing.Optional[str] = None) -> tuple[str, str]:
     """Return (js_url, css_url) for a given fusedmaps git ref (commit/tag/branch)."""
@@ -145,7 +145,8 @@ def udf(
 
 def deckgl_layers(
     layers: list,
-    mapbox_token: str = "",
+    mapbox_token = fused.secrets["mapbox_token"],
+
     basemap: str = "dark",
     initialViewState: typing.Optional[dict] = None,
     theme: str = "dark",

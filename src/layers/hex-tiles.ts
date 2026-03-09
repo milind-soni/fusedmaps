@@ -949,71 +949,17 @@ function buildHexTileDeckLayers(
 }
 
 /**
- * Build Deck.gl H3HexagonLayers for inline (non-tile) hex data.
- * Uses the same H3HexagonLayer as tile layers but with static data.
+ * Inline (non-tile) hex data is now rendered via Mapbox GL (addStaticHexLayer)
+ * for reliable visibility at all zoom levels. This function returns an empty
+ * array — kept as a stub so callers don't need changes.
  */
 function buildInlineHexDeckLayers(
-  layers: LayerConfig[],
-  visibility: Record<string, boolean>,
-  runtime: TileRuntime
+  _layers: LayerConfig[],
+  _visibility: Record<string, boolean>,
+  _runtime: TileRuntime
 ): any[] {
-  const deck = getDeck();
-  if (!deck) return [];
-
-  const H3HexagonLayer = deck.H3HexagonLayer || deck?.GeoLayers?.H3HexagonLayer;
-  if (!H3HexagonLayer) return [];
-
-  const inlineLayers = layers
-    .filter((l) => l.layerType === 'hex' && !(l as any).isTileLayer && Array.isArray((l as any).data) && (l as any).data.length > 0)
-    .map((l) => l as HexLayerConfig);
-
-  const visibleLayers = inlineLayers.filter((l) => visibility[l.id] !== false);
-
-  return visibleLayers.map((layer) => {
-    const rawHexCfg: any = layer.hexLayer || {};
-    const data = (layer as any).data || [];
-
-    const fillCfg: any = rawHexCfg.getFillColor;
-    const lineCfg: any = rawHexCfg.getLineColor;
-    const getFillColor = buildColorAccessor(runtime, layer, fillCfg);
-    const getLineColor = buildColorAccessor(runtime, layer, lineCfg);
-
-    const stroked = rawHexCfg.stroked !== false;
-    const filled = rawHexCfg.filled !== false;
-    const extruded = rawHexCfg.extruded === true;
-    const opacity = typeof rawHexCfg.opacity === 'number' ? rawHexCfg.opacity : 0.8;
-    const lineWidthMinPixels = rawHexCfg.lineWidth ?? rawHexCfg.lineWidthMinPixels ?? 1;
+  return [];
     const elevationScale = rawHexCfg.elevationScale ?? 1;
-    const coverage = rawHexCfg.coverage ?? 0.9;
-    const elevationProperty =
-      rawHexCfg.elevationProperty ||
-      (fillCfg && typeof fillCfg === 'object' ? (fillCfg as any).attr : null) ||
-      null;
-
-    const colorTrigger = JSON.stringify({ fill: fillCfg, line: lineCfg });
-
-    return new H3HexagonLayer({
-      id: `${layer.id}-inline-h3`,
-      data,
-      getHexagon: (d: any) => d.hex,
-      highPrecision: true,
-      pickable: true,
-      stroked,
-      filled,
-      extruded,
-      opacity,
-      coverage,
-      lineWidthMinPixels,
-      elevationScale,
-      ...(extruded && elevationProperty ? { getElevation: (d: any) => Number(d?.[elevationProperty] ?? 0) } : {}),
-      ...(getFillColor ? { getFillColor } : {}),
-      ...(getLineColor ? { getLineColor } : {}),
-      updateTriggers: {
-        getFillColor: colorTrigger,
-        getLineColor: colorTrigger,
-      },
-    });
-  });
 }
 
 export function createHexTileOverlay(
@@ -1044,7 +990,7 @@ export function createHexTileOverlay(
   const hoverInfoRef = { current: null as any };
 
   const overlay = new deck.MapboxOverlay({
-    interleaved: false,
+    interleaved: true,
     useDevicePixels: true,
     layers: build(),
     onHover: (info: any) => {

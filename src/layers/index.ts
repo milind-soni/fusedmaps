@@ -66,13 +66,9 @@ export function addAllLayers(
         if (hexLayer.isTileLayer) {
           // Tile layers are handled by Deck.gl overlay
         } else if (hexLayer.data?.length) {
-          // If Deck.gl is available, inline hex data is rendered by H3HexagonLayer in the overlay
-          // Otherwise fall back to Mapbox GL GeoJSON (no lineWidthMinPixels support)
-          if (!(window as any).deck) {
-            const geojson = hexToGeoJSON(hexLayer.data);
-            setLayerGeoJSON(layer.id, geojson);
-            addStaticHexLayer(map, hexLayer, geojson, visible);
-          }
+          const geojson = hexToGeoJSON(hexLayer.data);
+          setLayerGeoJSON(layer.id, geojson);
+          addStaticHexLayer(map, hexLayer, geojson, visible);
         }
         break;
       }
@@ -164,7 +160,7 @@ export function addSingleLayer(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (!hexLayer.isTileLayer && hexLayer.data?.length && !(window as any).deck) {
+      if (!hexLayer.isTileLayer && hexLayer.data?.length) {
         const geojson = hexToGeoJSON(hexLayer.data);
         setLayerGeoJSON(layer.id, geojson);
         addStaticHexLayer(map, hexLayer, geojson, visible);
@@ -562,11 +558,7 @@ export function setLayerVisibility(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      const isInlineDeck = !hexLayer.isTileLayer
-        && Array.isArray((hexLayer as any).data)
-        && (hexLayer as any).data.length > 0;
-      if (hexLayer.isTileLayer || isInlineDeck) {
-        // Both tile and inline-data hex layers use the Deck.gl overlay — rebuild it
+      if (hexLayer.isTileLayer) {
         const state = (deckOverlay as any)?.__fused_hex_tiles__;
         try {
           state?.rebuild?.(visibilityState);

@@ -8,8 +8,8 @@
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
-import { setLayerFilterRange, binHistogram, binHistogramInline, getFilterableLayerInfos } from './layers/hex-tiles';
-import { setupFilterPanel, updateFilterHistograms } from './ui/filter-panel';
+import { setLayerFilterRange, getFilterableLayerInfos } from './layers/hex-tiles';
+import { setupFilterPanel, initFilterMinMax } from './ui/filter-panel';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
@@ -238,30 +238,30 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     };
     window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
 
-    // Histogram refresh for filter panel (debounced)
+    // Init filter min/max once when data is available (no repeated computation)
     if (filterInfos.length > 0) {
-      let histTimer: any = null;
-      const refreshHistograms = () => {
-        if (histTimer) clearTimeout(histTimer);
-        histTimer = setTimeout(() => {
-          const tileState = (overlayRef.current as any)?.__fused_hex_tiles__;
-          const runtime = tileState?.getTileData?.();
-          updateFilterHistograms(filterInfos, (tileUrl, attr, info) => {
-            if (info?.isInline) {
-              const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
-              const data = (layerCfg as any)?.data;
-              if (Array.isArray(data) && data.length > 0) return binHistogramInline(data, attr);
-              return null;
-            }
-            if (!runtime) return null;
-            return binHistogram({ cache: runtime }, tileUrl, attr);
-          });
-        }, 250);
+      const tryInitFilter = () => {
+        const tileState = (overlayRef.current as any)?.__fused_hex_tiles__;
+        const runtime = tileState?.getTileData?.();
+        initFilterMinMax(filterInfos, (info) => {
+          if (info.isInline) {
+            const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
+            const data = (layerCfg as any)?.data;
+            return Array.isArray(data) ? data : null;
+          }
+          if (!runtime) return null;
+          const urlBase = info.tileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
+          const rows: any[] = [];
+          for (const [key, val] of runtime.entries()) {
+            if (key.startsWith(urlBase) && Array.isArray(val)) rows.push(...val);
+          }
+          return rows.length ? rows : null;
+        });
       };
-      window.addEventListener('fusedmaps:legend:update', refreshHistograms);
-      map.on('moveend', refreshHistograms);
-      // Initial histogram compute for inline layers (data already available)
-      setTimeout(refreshHistograms, 500);
+      // Inline layers: data available immediately
+      setTimeout(tryInitFilter, 300);
+      // Tiled layers: wait for first tiles to load
+      window.addEventListener('fusedmaps:legend:update', tryInitFilter);
     }
 
     // Setup tooltip (needs deckOverlay for tile layers)

@@ -1,12 +1,12 @@
 /**
- * Data filter panel – per-layer dual-range slider with mini histogram.
- * Renders as a separate dropdown widget (like layers / legend).
+ * Data filter panel – per-layer dual-range slider.
+ * No histogram; min/max computed once on init.
  */
 
 import type { WidgetPosition } from '../types';
 import { getWidgetContainer } from './widget-container';
 import { isLeftPosition } from '../types';
-import type { FilterableLayerInfo, HistogramBin } from '../layers/hex-tiles';
+import type { FilterableLayerInfo } from '../layers/hex-tiles';
 
 type FilterCallback = (layerId: string, range: [number, number] | null) => void;
 
@@ -14,14 +14,11 @@ let filterCallback: FilterCallback | null = null;
 let panelEl: HTMLElement | null = null;
 let clickInstalled = false;
 
-// Track current state per layer
 interface LayerFilterState {
   dataMin: number;
   dataMax: number;
   filterMin: number;
   filterMax: number;
-  bins: HistogramBin[];
-  total: number;
 }
 const filterStates: Record<string, LayerFilterState> = {};
 
@@ -35,37 +32,11 @@ function fmtNum(v: number): string {
   return v.toFixed(1);
 }
 
-function renderHistogramSVG(bins: HistogramBin[], filterMin: number, filterMax: number, dataMin: number, dataMax: number): string {
-  if (!bins.length) return '';
-  const maxCount = Math.max(...bins.map(b => b.count));
-  if (maxCount === 0) return '';
-
-  const w = 220;
-  const h = 48;
-  const barW = w / bins.length;
-  const range = dataMax - dataMin;
-
-  let bars = '';
-  for (let i = 0; i < bins.length; i++) {
-    const barH = (bins[i].count / maxCount) * h;
-    const x = i * barW;
-    const y = h - barH;
-    const midVal = (bins[i].min + bins[i].max) / 2;
-    const inRange = midVal >= filterMin && midVal <= filterMax;
-    const opacity = inRange ? '0.5' : '0.12';
-    bars += `<rect x="${x}" y="${y}" width="${barW - 0.5}" height="${barH}" rx="1" fill="var(--ui-muted, #aaa)" opacity="${opacity}"/>`;
-  }
-
-  return `<svg class="filter-histogram-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg>`;
-}
-
 function renderLayerFilter(info: FilterableLayerInfo): string {
   const state = filterStates[info.layerId];
   if (!state) return '';
 
-  const { dataMin, dataMax, filterMin, filterMax, bins } = state;
-  const histSvg = renderHistogramSVG(bins, filterMin, filterMax, dataMin, dataMax);
-
+  const { dataMin, dataMax, filterMin, filterMax } = state;
   const minPct = ((filterMin - dataMin) / (dataMax - dataMin)) * 100;
   const maxPct = ((filterMax - dataMin) / (dataMax - dataMin)) * 100;
 
@@ -75,16 +46,13 @@ function renderLayerFilter(info: FilterableLayerInfo): string {
         <span class="filter-layer-name">${info.layerName}</span>
         <span class="filter-attr-label">${info.attr}</span>
       </div>
-      <div class="filter-histogram-wrap">
-        ${histSvg}
-        <div class="filter-slider-wrap">
-          <input type="range" class="filter-range-min" data-layer="${info.layerId}"
-            min="0" max="1000" value="${Math.round(minPct * 10)}"
-            step="1">
-          <input type="range" class="filter-range-max" data-layer="${info.layerId}"
-            min="0" max="1000" value="${Math.round(maxPct * 10)}"
-            step="1">
-        </div>
+      <div class="filter-slider-wrap">
+        <input type="range" class="filter-range-min" data-layer="${info.layerId}"
+          min="0" max="1000" value="${Math.round(minPct * 10)}"
+          step="1">
+        <input type="range" class="filter-range-max" data-layer="${info.layerId}"
+          min="0" max="1000" value="${Math.round(maxPct * 10)}"
+          step="1">
       </div>
       <div class="filter-range-labels">
         <span class="filter-val-min">${fmtNum(filterMin)}</span>
@@ -112,7 +80,6 @@ function handlePanelInput(e: Event): void {
 
   if (isMin) {
     state.filterMin = Math.min(val, state.filterMax);
-    // Prevent crossing
     const maxSlider = target.parentElement?.querySelector('.filter-range-max') as HTMLInputElement | null;
     if (maxSlider && parseInt(target.value, 10) > parseInt(maxSlider.value, 10)) {
       target.value = maxSlider.value;
@@ -127,26 +94,11 @@ function handlePanelInput(e: Event): void {
     }
   }
 
-  // Update labels
   const section = target.closest('.filter-layer-section');
   const minLabel = section?.querySelector('.filter-val-min');
   const maxLabel = section?.querySelector('.filter-val-max');
   if (minLabel) minLabel.textContent = fmtNum(state.filterMin);
   if (maxLabel) maxLabel.textContent = fmtNum(state.filterMax);
-
-  // Update histogram bar highlighting
-  const svgEl = section?.querySelector('.filter-histogram-svg');
-  if (svgEl) {
-    const rects = svgEl.querySelectorAll('rect');
-    const bins = state.bins;
-    rects.forEach((rect, i) => {
-      if (i < bins.length) {
-        const midVal = (bins[i].min + bins[i].max) / 2;
-        const inRange = midVal >= state.filterMin && midVal <= state.filterMax;
-        rect.setAttribute('opacity', inRange ? '0.85' : '0.15');
-      }
-    });
-  }
 
   filterCallback?.(layerId, [state.filterMin, state.filterMax]);
 }
@@ -173,6 +125,29 @@ function renderFilterPanel(infos: FilterableLayerInfo[]): void {
   }
 
   list.innerHTML = html;
+}
+
+/**
+ * Compute min/max for a filterable layer from tile cache or inline data.
+ * Called once (or when data first arrives), not on every map move.
+ */
+function computeMinMax(
+  data: any[],
+  attr: string
+): { dataMin: number; dataMax: number } | null {
+  let min = Infinity, max = -Infinity;
+  for (const row of data) {
+    const p = row?.properties || row;
+    if (!p) continue;
+    const raw = p[attr];
+    const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
+    if (Number.isFinite(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return null;
+  return { dataMin: min, dataMax: max };
 }
 
 export function setupFilterPanel(
@@ -246,47 +221,32 @@ export function setupFilterPanel(
 }
 
 /**
- * Refresh histogram data for all filterable layers.
- * Call this on tile load events and map move.
+ * Initialize filter state for layers. Called once when data first becomes available.
+ * For tiled layers, call when tiles load. For inline, call on init.
  */
-export function updateFilterHistograms(
+export function initFilterMinMax(
   infos: FilterableLayerInfo[],
-  binFn: (tileUrl: string, attr: string, info?: FilterableLayerInfo) => ReturnType<typeof import('../layers/hex-tiles').binHistogram>
+  getDataFn: (info: FilterableLayerInfo) => any[] | null
 ): void {
   let anyNew = false;
 
   for (const info of infos) {
-    const result = binFn(info.tileUrl, info.attr, info);
-    if (!result) continue;
+    if (filterStates[info.layerId]) continue;
 
-    const existing = filterStates[info.layerId];
-    if (!existing) {
-      filterStates[info.layerId] = {
-        dataMin: result.dataMin,
-        dataMax: result.dataMax,
-        filterMin: result.dataMin,
-        filterMax: result.dataMax,
-        bins: result.bins,
-        total: result.total,
-      };
-      anyNew = true;
-    } else {
-      // Update bins and data range, keep user's filter if still valid
-      const oldRange = existing.dataMax - existing.dataMin;
-      const newRange = result.dataMax - result.dataMin;
+    const data = getDataFn(info);
+    if (!data || !data.length) continue;
 
-      existing.bins = result.bins;
-      existing.total = result.total;
+    const mm = computeMinMax(data, info.attr);
+    if (!mm) continue;
 
-      // Only expand data bounds, never shrink (prevents jarring slider jumps)
-      if (result.dataMin < existing.dataMin) { existing.dataMin = result.dataMin; anyNew = true; }
-      if (result.dataMax > existing.dataMax) { existing.dataMax = result.dataMax; anyNew = true; }
-
-      // Clamp filter to valid range
-      existing.filterMin = Math.max(existing.filterMin, existing.dataMin);
-      existing.filterMax = Math.min(existing.filterMax, existing.dataMax);
-    }
+    filterStates[info.layerId] = {
+      dataMin: mm.dataMin,
+      dataMax: mm.dataMax,
+      filterMin: mm.dataMin,
+      filterMax: mm.dataMax,
+    };
+    anyNew = true;
   }
 
-  renderFilterPanel(infos);
+  if (anyNew) renderFilterPanel(infos);
 }

@@ -66,9 +66,11 @@ export function addAllLayers(
         if (hexLayer.isTileLayer) {
           // Tile layers are handled by Deck.gl overlay
         } else if (hexLayer.data?.length) {
-          const geojson = hexToGeoJSON(hexLayer.data);
-          setLayerGeoJSON(layer.id, geojson);
-          addStaticHexLayer(map, hexLayer, geojson, visible);
+          if (!(window as any).deck) {
+            const geojson = hexToGeoJSON(hexLayer.data);
+            setLayerGeoJSON(layer.id, geojson);
+            addStaticHexLayer(map, hexLayer, geojson, visible);
+          }
         }
         break;
       }
@@ -160,7 +162,7 @@ export function addSingleLayer(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (!hexLayer.isTileLayer && hexLayer.data?.length) {
+      if (!hexLayer.isTileLayer && hexLayer.data?.length && !(window as any).deck) {
         const geojson = hexToGeoJSON(hexLayer.data);
         setLayerGeoJSON(layer.id, geojson);
         addStaticHexLayer(map, hexLayer, geojson, visible);
@@ -558,7 +560,10 @@ export function setLayerVisibility(
   switch (layer.layerType) {
     case 'hex': {
       const hexLayer = layer as HexLayerConfig;
-      if (hexLayer.isTileLayer) {
+      const isInlineDeck = !hexLayer.isTileLayer
+        && Array.isArray((hexLayer as any).data)
+        && (hexLayer as any).data.length > 0;
+      if (hexLayer.isTileLayer || isInlineDeck) {
         const state = (deckOverlay as any)?.__fused_hex_tiles__;
         try {
           state?.rebuild?.(visibilityState);

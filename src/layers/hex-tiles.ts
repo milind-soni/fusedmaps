@@ -1044,7 +1044,7 @@ export function createHexTileOverlay(
   const hoverInfoRef = { current: null as any };
 
   const overlay = new deck.MapboxOverlay({
-    interleaved: true,
+    interleaved: false,
     useDevicePixels: true,
     layers: build(),
     onHover: (info: any) => {

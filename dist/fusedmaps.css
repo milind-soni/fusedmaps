@@ -1286,3 +1286,129 @@ html[data-theme="light"] .layer-group-header:hover {
   min-width: 32px;
   text-align: right;
 }
+
+/* ─── Filter Panel ─────────────────────────────────────── */
+
+#filter-panel .fm-dropdown-panel {
+  min-width: 260px;
+}
+
+.filter-layer-section {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.filter-layer-section:last-child {
+  border-bottom: none;
+}
+
+.filter-layer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.filter-layer-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+.filter-attr-label {
+  font-size: 10px;
+  color: var(--ui-muted);
+  background: var(--ui-border);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.filter-histogram-wrap {
+  position: relative;
+  height: 48px;
+  margin-bottom: 2px;
+}
+.filter-histogram-svg {
+  display: block;
+  width: 100%;
+  height: 48px;
+}
+
+.filter-slider-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.filter-range-min,
+.filter-range-max {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+}
+.filter-range-min {
+  z-index: 1;
+}
+.filter-range-max {
+  z-index: 2;
+}
+
+.filter-range-min::-webkit-slider-thumb,
+.filter-range-max::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ui-text, #fff);
+  border: 2px solid var(--ui-accent, #4dabf7);
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  position: relative;
+  z-index: 3;
+}
+.filter-range-min::-moz-range-thumb,
+.filter-range-max::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ui-text, #fff);
+  border: 2px solid var(--ui-accent, #4dabf7);
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.filter-range-min::-webkit-slider-runnable-track,
+.filter-range-max::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.filter-range-min::-moz-range-track,
+.filter-range-max::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+
+.filter-range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--ui-muted);
+  padding: 0 2px;
+}
+
+.filter-empty {
+  padding: 16px 12px;
+  font-size: 12px;
+  color: var(--ui-muted);
+  text-align: center;
+}

@@ -8,6 +8,8 @@
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
+import { setLayerFilterRange, binHistogram, getFilterableLayerInfos } from './layers/hex-tiles';
+import { setupFilterPanel, updateFilterHistograms } from './ui/filter-panel';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
@@ -200,6 +202,17 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     });
   }
   
+  // Filter panel (data range filter with histogram)
+  const filterInfos = getFilterableLayerInfos(store.getAllConfigs());
+  let filterHandle: { destroy: () => void } | null = null;
+  if (filterInfos.length > 0 && layersPos !== false) {
+    filterHandle = setupFilterPanel((layerId, range) => {
+      setLayerFilterRange(layerId, range);
+      const state = (overlayRef.current as any)?.__fused_hex_tiles__;
+      try { state?.rebuild?.(store.getVisibilityState()); } catch {}
+    }, layersPos as any);
+  }
+
   // Track tile loading cleanup function
   let cleanupTileLoading: (() => void) | null = null;
 
@@ -230,6 +243,24 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       updateLegend(store.getAllConfigs(), getVisibilityState(), store.getAllGeoJSONs(), getTileData());
     };
     window.addEventListener('fusedmaps:legend:update', legendUpdateHandler);
+
+    // Histogram refresh for filter panel (debounced)
+    if (filterInfos.length > 0) {
+      let histTimer: any = null;
+      const refreshHistograms = () => {
+        if (histTimer) clearTimeout(histTimer);
+        histTimer = setTimeout(() => {
+          const tileState = (overlayRef.current as any)?.__fused_hex_tiles__;
+          const runtime = tileState?.getTileData?.();
+          if (!runtime) return;
+          updateFilterHistograms(filterInfos, (tileUrl, attr) =>
+            binHistogram({ cache: runtime }, tileUrl, attr)
+          );
+        }, 250);
+      };
+      window.addEventListener('fusedmaps:legend:update', refreshHistograms);
+      map.on('moveend', refreshHistograms);
+    }
 
     // Setup tooltip (needs deckOverlay for tile layers)
     if (config.ui?.tooltip !== false) {
@@ -555,6 +586,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       try { duckHandle?.destroy?.(); } catch {}
       try { geocoderHandle?.destroy?.(); } catch {}
       try { cleanupTileLoading?.(); } catch {}
+      try { filterHandle?.destroy?.(); } catch {}
 
       map.remove?.();
     }

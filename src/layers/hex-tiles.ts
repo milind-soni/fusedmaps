@@ -746,8 +746,23 @@ function buildHexTileDeckLayers(
           ? { ...lineCfg, domain: lineCfg._dynamicDomain }
           : lineCfg;
 
-      const getFillColor = buildColorAccessor(runtime, layer, fillCfgEffective);
+      const baseFillColor = buildColorAccessor(runtime, layer, fillCfgEffective) as ((obj: any) => any) | null;
       const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
+
+      // Wrap fill color accessor with filter range check
+      const filterAttr = (fillCfgEffective && typeof fillCfgEffective === 'object') ? fillCfgEffective.attr : null;
+      const getFillColor = baseFillColor && filterAttr
+        ? (obj: any) => {
+            const fr = layerFilterRanges[layer.id];
+            if (fr) {
+              const p = obj?.properties || obj || {};
+              const raw = p[filterAttr];
+              const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
+              if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
+            }
+            return baseFillColor(obj);
+          }
+        : baseFillColor;
 
       // IMPORTANT: When autoDomain updates, we must force TileLayer + its sublayers to fully update.
       // Otherwise, some already-loaded tiles can keep old attribute buffers and colors don't update.
@@ -803,7 +818,7 @@ function buildHexTileDeckLayers(
         pickable: true,
         autoHighlight: true,
         visible,
-        updateTriggers: { renderSubLayers: [colorTrigger, opacity] },
+        updateTriggers: { renderSubLayers: [colorTrigger, opacity, JSON.stringify(layerFilterRanges[layer.id] ?? null)] },
         ...(beforeId ? { beforeId } : {}),
 
         // Tile lifecycle callbacks (like live-map)
@@ -1158,4 +1173,88 @@ export function createHexTileOverlay(
   return { overlay, rebuild, pickObject, getHoverInfo, getTileData, destroy };
 }
 
+// ─── Data Filter ────────────────────────────────────────────────────────
 
+const layerFilterRanges: Record<string, [number, number] | null> = {};
+
+export function setLayerFilterRange(layerId: string, range: [number, number] | null): void {
+  if (range) layerFilterRanges[layerId] = range;
+  else delete layerFilterRanges[layerId];
+}
+
+export function getLayerFilterRange(layerId: string): [number, number] | null {
+  return layerFilterRanges[layerId] ?? null;
+}
+
+export interface HistogramBin { min: number; max: number; count: number; }
+
+export function binHistogram(
+  runtime: { cache: Map<string, any[]> },
+  layerTileUrl: string,
+  attr: string,
+  numBins: number = 24
+): { bins: HistogramBin[]; dataMin: number; dataMax: number; total: number } | null {
+  const urlBase = layerTileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
+  const values: number[] = [];
+
+  for (const [cacheKey, rows] of runtime.cache.entries()) {
+    const parts = cacheKey.split('|');
+    if (parts.length < 2) continue;
+    if (!parts[0].startsWith(urlBase)) continue;
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      const p = row?.properties || row;
+      if (!p) continue;
+      const raw = p[attr];
+      const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
+      if (Number.isFinite(v)) values.push(v);
+    }
+  }
+
+  if (values.length < 2) return null;
+
+  let dataMin = values[0], dataMax = values[0];
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] < dataMin) dataMin = values[i];
+    if (values[i] > dataMax) dataMax = values[i];
+  }
+  if (dataMin === dataMax) { dataMin -= 1; dataMax += 1; }
+
+  const binWidth = (dataMax - dataMin) / numBins;
+  const bins: HistogramBin[] = [];
+  for (let i = 0; i < numBins; i++) {
+    bins.push({ min: dataMin + i * binWidth, max: dataMin + (i + 1) * binWidth, count: 0 });
+  }
+
+  for (const v of values) {
+    let idx = Math.floor((v - dataMin) / binWidth);
+    if (idx >= numBins) idx = numBins - 1;
+    if (idx < 0) idx = 0;
+    bins[idx].count++;
+  }
+
+  return { bins, dataMin, dataMax, total: values.length };
+}
+
+export interface FilterableLayerInfo {
+  layerId: string;
+  layerName: string;
+  attr: string;
+  tileUrl: string;
+}
+
+export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[] {
+  const result: FilterableLayerInfo[] = [];
+  for (const l of layers) {
+    if (l.layerType !== 'hex') continue;
+    const hex = l as HexLayerConfig;
+    if (!hex.isTileLayer || !hex.tileUrl) continue;
+    const fc: any = hex.hexLayer?.getFillColor;
+    if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
+    if (fc['@@function'] !== 'colorContinuous') continue;
+    const attr = fc.attr;
+    if (!attr) continue;
+    result.push({ layerId: l.id, layerName: l.name, attr, tileUrl: hex.tileUrl });
+  }
+  return result;
+}

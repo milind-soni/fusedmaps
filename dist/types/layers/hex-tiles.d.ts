@@ -22,3 +22,25 @@ export interface DeckTileOverlayState {
     destroy: () => void;
 }
 export declare function createHexTileOverlay(map: mapboxgl.Map, layers: LayerConfig[], visibility: Record<string, boolean>, beforeIds?: Record<string, string | undefined>): DeckTileOverlayState | null;
+export declare function setLayerFilterRange(layerId: string, range: [number, number] | null): void;
+export declare function getLayerFilterRange(layerId: string): [number, number] | null;
+export interface HistogramBin {
+    min: number;
+    max: number;
+    count: number;
+}
+export declare function binHistogram(runtime: {
+    cache: Map<string, any[]>;
+}, layerTileUrl: string, attr: string, numBins?: number): {
+    bins: HistogramBin[];
+    dataMin: number;
+    dataMax: number;
+    total: number;
+} | null;
+export interface FilterableLayerInfo {
+    layerId: string;
+    layerName: string;
+    attr: string;
+    tileUrl: string;
+}
+export declare function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[];

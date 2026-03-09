@@ -926,6 +926,7 @@ function buildHexTileDeckLayers(
             id: `${props.id}-h3`,
             data,
             getHexagon: (d: any) => d.hex,
+            highPrecision: true,
             pickable: true,
             stroked,
             filled,
@@ -937,7 +938,6 @@ function buildHexTileDeckLayers(
             ...(extruded && elevationProperty ? { getElevation: (d: any) => Number(d?.[elevationProperty] ?? 0) } : {}),
             ...(getFillColor ? { getFillColor } : {}),
             ...(getLineColor ? { getLineColor } : {}),
-            // Update triggers force deck.gl to re-evaluate accessors when colors change
             updateTriggers: {
               getFillColor: colorTrigger,
               getLineColor: colorTrigger,
@@ -996,6 +996,7 @@ function buildInlineHexDeckLayers(
       id: `${layer.id}-inline-h3`,
       data,
       getHexagon: (d: any) => d.hex,
+      highPrecision: true,
       pickable: true,
       stroked,
       filled,

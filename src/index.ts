@@ -58,6 +58,10 @@ function _applyVectorCategoricalFilter(
   selected: Set<string> | null
 ): void {
   if (!info.sublayerIds) return;
+
+  // Mapbox GL ['in'] does strict type comparison. The filter stores values as
+  // strings, but GeoJSON properties may be numbers. Include both string and
+  // numeric representations so the match works regardless of property type.
   for (const subId of info.sublayerIds) {
     if (!map.getLayer(subId)) continue;
     if (!_originalMapboxFilters[subId]) {
@@ -67,9 +71,15 @@ function _applyVectorCategoricalFilter(
     if (!selected) {
       map.setFilter(subId, base);
     } else {
+      const typedValues: (string | number)[] = [];
+      for (const v of selected) {
+        typedValues.push(v);
+        const n = Number(v);
+        if (Number.isFinite(n) && String(n) === v) typedValues.push(n);
+      }
       map.setFilter(subId, ['all',
         ...(Array.isArray(base) && base[0] === 'all' ? base.slice(1) : [base]),
-        ['in', ['get', info.attr], ['literal', [...selected]]],
+        ['in', ['get', info.attr], ['literal', typedValues]],
       ]);
     }
   }

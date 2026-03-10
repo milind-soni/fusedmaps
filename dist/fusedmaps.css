@@ -816,6 +816,15 @@ html[data-theme="light"] .fm-dropdown-close:hover {
   border-radius: 1px;
 }
 
+.legend-static-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 .legend-layer .legend-gradient {
   height: 10px;
   border-radius: 2px;

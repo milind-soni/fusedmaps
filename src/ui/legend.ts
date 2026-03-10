@@ -12,6 +12,19 @@ type WidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 const LEGEND_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="4" height="3" rx="0.5"/><rect x="9" y="5" width="12" height="3" rx="0.5"/><rect x="3" y="10.5" width="4" height="3" rx="0.5"/><rect x="9" y="10.5" width="9" height="3" rx="0.5"/><rect x="3" y="16" width="4" height="3" rx="0.5"/><rect x="9" y="16" width="6" height="3" rx="0.5"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
+function _detectGeometryKind(layer: LayerConfig): 'point' | 'line' | 'polygon' | 'unknown' {
+  const gj = (layer as any).geojson;
+  if (gj?.features?.length) {
+    const t = gj.features[0]?.geometry?.type || '';
+    if (t === 'Point' || t === 'MultiPoint') return 'point';
+    if (t === 'LineString' || t === 'MultiLineString') return 'line';
+    if (t === 'Polygon' || t === 'MultiPolygon') return 'polygon';
+  }
+  const style: any = (layer as any).style || {};
+  if (style.pointRadiusMinPixels || style.pointRadius) return 'point';
+  return 'unknown';
+}
+
 function isRgbAccessor(colorCfg: any): boolean {
   if (typeof colorCfg !== 'string') return false;
   if (!colorCfg.startsWith('@@=')) return false;
@@ -261,7 +274,22 @@ function buildLayerLegend(
   }
 
   let fnType = colorCfg?.type;
-  if (!colorCfg?.attr) return '';
+  if (!colorCfg?.attr) {
+    // Static color — show a simple swatch with the layer name
+    const style: any = (layer as any).style || {};
+    const staticFill = style.fillColor;
+    const staticLine = style.lineColor;
+    const color = Array.isArray(staticFill) ? staticFill : Array.isArray(staticLine) ? staticLine : null;
+    if (color) {
+      const rgba = `rgba(${color[0]},${color[1]},${color[2]},${color.length > 3 ? color[3] / 255 : 1})`;
+      const isPoint = _detectGeometryKind(layer) === 'point';
+      const shape = isPoint
+        ? `<span class="legend-static-swatch" style="background:${rgba};border-radius:50%;"></span>`
+        : `<span class="legend-static-swatch" style="background:${rgba};border-radius:2px;"></span>`;
+      return `<div class="legend-layer"><div class="legend-title">${shape}${layer.name}</div></div>`;
+    }
+    return '';
+  }
   // Infer type when not explicitly set
   if (!fnType) {
     if (colorCfg.categories) fnType = 'categorical';

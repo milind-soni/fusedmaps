@@ -61,8 +61,17 @@ export function buildColorExpr(
   }
   
   // Handle color functions - support both new format (type) and legacy (@@function)
-  const fnType = (cfg as any).type || (cfg as any)['@@function'];
+  let fnType = (cfg as any).type || (cfg as any)['@@function'];
   const attr = (cfg as any).attr;
+  
+  // Infer type from config shape when not explicitly set
+  if (!fnType && attr) {
+    if ((cfg as any).categories) {
+      fnType = 'categorical';
+    } else if ((cfg as any).domain || (cfg as any).colors) {
+      fnType = 'continuous';
+    }
+  }
   
   if (!fnType || !attr) return null;
   

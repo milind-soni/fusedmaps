@@ -461,7 +461,8 @@ function boundsIntersect(a: any, b: any) {
 function wantsAutoDomain(layer: HexLayerConfig): { enabled: boolean; attr: string | null } {
   const fc: any = layer.style?.fillColor;
   if (!fc || typeof fc !== 'object' || Array.isArray(fc)) return { enabled: false, attr: null };
-  if (fc.type !== 'continuous') return { enabled: false, attr: null };
+  const isContinuous = fc.type === 'continuous' || (!fc.type && (fc.domain || fc.colors || fc.palette) && !fc.categories);
+  if (!isContinuous) return { enabled: false, attr: null };
   const attr = fc.attr || null;
   if (!attr) return { enabled: false, attr: null };
   if ((layer as any).fillDomainFromUser === true || (fc as any).fillDomainFromUser === true) {
@@ -1287,9 +1288,21 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
 
     const fc: any = style.fillColor;
     if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
-    if (fc.type !== 'continuous' && fc.type !== 'categorical') continue;
     const attr = fc.attr;
     if (!attr) continue;
+
+    // Infer type when not explicitly set
+    let colorType: 'continuous' | 'categorical' = fc.type;
+    if (!colorType) {
+      if (fc.categories || fc.palette === 'Bold' || fc['@@function'] === 'colorCategories') {
+        colorType = 'categorical';
+      } else if (fc.domain || fc.colors || fc.palette || fc['@@function'] === 'colorContinuous') {
+        colorType = 'continuous';
+      } else {
+        continue;
+      }
+    }
+    if (colorType !== 'continuous' && colorType !== 'categorical') continue;
 
     if (l.layerType === 'hex') {
       const hex = l as HexLayerConfig;
@@ -1304,8 +1317,8 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         tileUrl: hex.tileUrl || '',
         isInline: !!isInline,
         layerType: 'hex',
-        colorType: fc.type,
-        palette: fc.palette,
+        colorType,
+        palette: fc.palette || fc.colors,
       });
     } else if (l.layerType === 'vector') {
       const vec = l as any;
@@ -1331,9 +1344,9 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         tileUrl: '',
         isInline: true,
         layerType: 'vector',
-        colorType: fc.type,
+        colorType,
         sublayerIds,
-        palette: fc.palette,
+        palette: fc.palette || fc.colors,
       });
     }
   }

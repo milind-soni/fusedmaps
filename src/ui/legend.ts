@@ -232,7 +232,12 @@ function buildLayerLegend(
     const fillOpacity = style.opacity ?? 1;
     const isFillTransparent = fillOpacity < 0.1 || style.filled === false;
 
-    const hasColorFn = (cfg: any) => cfg?.type === 'continuous' || cfg?.type === 'categorical';
+    const hasColorFn = (cfg: any) => {
+      if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return false;
+      if (cfg.type === 'continuous' || cfg.type === 'categorical') return true;
+      if (cfg.attr && (cfg.domain || cfg.colors || cfg.categories)) return true;
+      return false;
+    };
 
     if (isFillTransparent && hasColorFn(style.lineColor)) {
       colorCfg = style.lineColor;
@@ -255,11 +260,16 @@ function buildLayerLegend(
     }
   }
 
-  const fnType = colorCfg?.type;
-  if (!fnType || !colorCfg?.attr) return '';
+  let fnType = colorCfg?.type;
+  if (!colorCfg?.attr) return '';
+  // Infer type when not explicitly set
+  if (!fnType) {
+    if (colorCfg.categories) fnType = 'categorical';
+    else if (colorCfg.domain || colorCfg.colors) fnType = 'continuous';
+  }
   if (fnType !== 'continuous' && fnType !== 'categorical') return '';
   
-  const paletteName = colorCfg.palette || (fnType === 'categorical' ? 'Bold' : 'TealGrn');
+  const paletteName = colorCfg.palette || colorCfg.colors || (fnType === 'categorical' ? 'Bold' : 'TealGrn');
   
   if (fnType === 'categorical') {
     try {

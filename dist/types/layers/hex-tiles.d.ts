@@ -24,6 +24,8 @@ export interface DeckTileOverlayState {
 export declare function createHexTileOverlay(map: mapboxgl.Map, layers: LayerConfig[], visibility: Record<string, boolean>, beforeIds?: Record<string, string | undefined>): DeckTileOverlayState | null;
 export declare function setLayerFilterRange(layerId: string, range: [number, number] | null): void;
 export declare function getLayerFilterRange(layerId: string): [number, number] | null;
+export declare function setLayerCategoricalFilter(layerId: string, selected: Set<string> | null): void;
+export declare function getLayerCategoricalFilter(layerId: string): Set<string> | null;
 export interface HistogramBin {
     min: number;
     max: number;
@@ -43,6 +45,10 @@ export interface FilterableLayerInfo {
     attr: string;
     tileUrl: string;
     isInline?: boolean;
+    layerType: 'hex' | 'vector';
+    colorType: 'continuous' | 'categorical';
+    sublayerIds?: string[];
+    palette?: string;
 }
 export declare function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[];
 export declare function binHistogramInline(data: any[], attr: string, numBins?: number): {

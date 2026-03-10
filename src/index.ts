@@ -8,8 +8,8 @@
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
 import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
-import { setLayerFilterRange, getFilterableLayerInfos } from './layers/hex-tiles';
-import { setupFilterPanel, initFilterMinMax } from './ui/filter-panel';
+import { setLayerFilterRange, setLayerCategoricalFilter, getFilterableLayerInfos } from './layers/hex-tiles';
+import { setupFilterPanel, initFilterMinMax, initCategoricalFilter, setAllFilterInfos } from './ui/filter-panel';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
 import { setupLegend, updateLegend } from './ui/legend';
 import { setupTooltip } from './ui/tooltip';
@@ -24,6 +24,56 @@ import { createLayerStore, LayerStore } from './state';
 import { trackMapboxTileLoading } from './ui/tile-loader';
 
 const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
+
+// Store original Mapbox GL filters set during addVectorLayer so we can compose with them
+const _originalMapboxFilters: Record<string, any> = {};
+
+function _applyVectorContinuousFilter(
+  map: mapboxgl.Map,
+  info: { layerId: string; attr: string; sublayerIds?: string[] },
+  range: [number, number] | null
+): void {
+  if (!info.sublayerIds) return;
+  for (const subId of info.sublayerIds) {
+    if (!map.getLayer(subId)) continue;
+    if (!_originalMapboxFilters[subId]) {
+      _originalMapboxFilters[subId] = map.getFilter(subId) || ['all'];
+    }
+    const base = _originalMapboxFilters[subId];
+    if (!range) {
+      map.setFilter(subId, base);
+    } else {
+      map.setFilter(subId, ['all',
+        ...(Array.isArray(base) && base[0] === 'all' ? base.slice(1) : [base]),
+        ['>=', ['to-number', ['get', info.attr], 0], range[0]],
+        ['<=', ['to-number', ['get', info.attr], 0], range[1]],
+      ]);
+    }
+  }
+}
+
+function _applyVectorCategoricalFilter(
+  map: mapboxgl.Map,
+  info: { layerId: string; attr: string; sublayerIds?: string[] },
+  selected: Set<string> | null
+): void {
+  if (!info.sublayerIds) return;
+  for (const subId of info.sublayerIds) {
+    if (!map.getLayer(subId)) continue;
+    if (!_originalMapboxFilters[subId]) {
+      _originalMapboxFilters[subId] = map.getFilter(subId) || ['all'];
+    }
+    const base = _originalMapboxFilters[subId];
+    if (!selected) {
+      map.setFilter(subId, base);
+    } else {
+      map.setFilter(subId, ['all',
+        ...(Array.isArray(base) && base[0] === 'all' ? base.slice(1) : [base]),
+        ['in', ['get', info.attr], ['literal', [...selected]]],
+      ]);
+    }
+  }
+}
 
 function validateLayerConfig(config: any): { valid: boolean; error?: string } {
   if (!config || typeof config !== 'object') {
@@ -198,10 +248,23 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
   const filterCfg = parseWidgetConfig(widgetCfg.filter, false);
   const filterPos = filterCfg.position;
   const filterInfos = getFilterableLayerInfos(store.getAllConfigs());
+  setAllFilterInfos(filterInfos);
   let filterHandle: { destroy: () => void } | null = null;
   if (filterInfos.length > 0 && filterPos !== false) {
     filterHandle = setupFilterPanel((layerId, range) => {
       setLayerFilterRange(layerId, range);
+      const info = filterInfos.find(i => i.layerId === layerId);
+      if (info?.layerType === 'vector' && info.sublayerIds) {
+        _applyVectorContinuousFilter(map, info, range);
+      }
+      const state = (overlayRef.current as any)?.__fused_hex_tiles__;
+      try { state?.rebuild?.(store.getVisibilityState()); } catch {}
+    }, (layerId, selected) => {
+      setLayerCategoricalFilter(layerId, selected);
+      const info = filterInfos.find(i => i.layerId === layerId);
+      if (info?.layerType === 'vector' && info.sublayerIds) {
+        _applyVectorCategoricalFilter(map, info, selected);
+      }
       const state = (overlayRef.current as any)?.__fused_hex_tiles__;
       try { state?.rebuild?.(store.getVisibilityState()); } catch {}
     }, filterPos as any, filterCfg.expanded);
@@ -240,27 +303,35 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
 
     // Init filter min/max once when data is available (no repeated computation)
     if (filterInfos.length > 0) {
-      const tryInitFilter = () => {
+      const getDataForFilter = (info: typeof filterInfos[0]) => {
+        if (info.layerType === 'vector') {
+          const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
+          const geojson = (layerCfg as any)?.geojson;
+          if (geojson?.features?.length) {
+            return geojson.features.map((f: any) => f?.properties || {});
+          }
+          return null;
+        }
+        if (info.isInline) {
+          const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
+          const data = (layerCfg as any)?.data;
+          return Array.isArray(data) ? data : null;
+        }
         const tileState = (overlayRef.current as any)?.__fused_hex_tiles__;
         const runtime = tileState?.getTileData?.();
-        initFilterMinMax(filterInfos, (info) => {
-          if (info.isInline) {
-            const layerCfg = store.getAllConfigs().find(l => l.id === info.layerId);
-            const data = (layerCfg as any)?.data;
-            return Array.isArray(data) ? data : null;
-          }
-          if (!runtime) return null;
-          const urlBase = info.tileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
-          const rows: any[] = [];
-          for (const [key, val] of runtime.entries()) {
-            if (key.startsWith(urlBase) && Array.isArray(val)) rows.push(...val);
-          }
-          return rows.length ? rows : null;
-        });
+        if (!runtime) return null;
+        const urlBase = info.tileUrl.replace(/\/?\{z\}\/?\{x\}\/?\{y\}.*$/, '');
+        const rows: any[] = [];
+        for (const [key, val] of runtime.entries()) {
+          if (key.startsWith(urlBase) && Array.isArray(val)) rows.push(...val);
+        }
+        return rows.length ? rows : null;
       };
-      // Inline layers: data available immediately
+      const tryInitFilter = () => {
+        initFilterMinMax(filterInfos.filter(i => i.colorType === 'continuous'), getDataForFilter);
+        initCategoricalFilter(filterInfos.filter(i => i.colorType === 'categorical'), getDataForFilter);
+      };
       setTimeout(tryInitFilter, 300);
-      // Tiled layers: wait for first tiles to load
       window.addEventListener('fusedmaps:legend:update', tryInitFilter);
     }
 

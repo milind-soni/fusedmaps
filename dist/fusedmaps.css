@@ -1444,3 +1444,59 @@ html[data-theme="light"] .filter-range-max::-moz-range-thumb {
   color: var(--ui-muted);
   text-align: center;
 }
+
+/* Categorical filter */
+.filter-cat-controls {
+  margin-bottom: 6px;
+}
+.filter-cat-toggle {
+  background: none;
+  border: none;
+  color: var(--ui-muted);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.filter-cat-toggle:hover {
+  color: var(--ui-text);
+}
+.filter-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.filter-cat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--ui-text);
+}
+.filter-cat-item:hover {
+  opacity: 0.85;
+}
+.filter-cat-check {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--ui-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.filter-cat-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.filter-cat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -745,17 +745,19 @@ function buildHexTileDeckLayers(
       const baseFillColor = buildColorAccessor(runtime, layer, fillCfgEffective) as ((obj: any) => any) | null;
       const getLineColor = buildColorAccessor(runtime, layer, lineCfgEffective);
 
-      // Wrap fill color accessor with filter range check (always return RGBA for consistent buffer size)
+      // Wrap fill color accessor with filter check (continuous range + categorical)
       const filterAttr = (fillCfgEffective && typeof fillCfgEffective === 'object') ? fillCfgEffective.attr : null;
       const getFillColor = baseFillColor && filterAttr
         ? (obj: any) => {
+            const p = obj?.properties || obj || {};
+            const raw = p[filterAttr];
             const fr = layerFilterRanges[layer.id];
             if (fr) {
-              const p = obj?.properties || obj || {};
-              const raw = p[filterAttr];
               const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
               if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
             }
+            const cf = layerCategoricalFilters[layer.id];
+            if (cf && !cf.has(String(raw ?? ''))) return [0, 0, 0, 0];
             const c = baseFillColor(obj);
             return Array.isArray(c) && c.length === 3 ? [c[0], c[1], c[2], 255] : c;
           }
@@ -815,7 +817,7 @@ function buildHexTileDeckLayers(
         pickable: true,
         autoHighlight: true,
         visible,
-        updateTriggers: { renderSubLayers: [colorTrigger, opacity, JSON.stringify(layerFilterRanges[layer.id] ?? null)] },
+        updateTriggers: { renderSubLayers: [colorTrigger, opacity, JSON.stringify(layerFilterRanges[layer.id] ?? null), JSON.stringify(layerCategoricalFilters[layer.id] ? [...layerCategoricalFilters[layer.id]!] : null)] },
         ...(beforeId ? { beforeId } : {}),
 
         // Tile lifecycle callbacks (like live-map)
@@ -952,7 +954,7 @@ function buildHexTileDeckLayers(
             ...(getFillColor ? { getFillColor } : {}),
             ...(getLineColor ? { getLineColor } : {}),
             updateTriggers: {
-              getFillColor: [colorTrigger, JSON.stringify(layerFilterRanges[layer.id] ?? null)],
+              getFillColor: [colorTrigger, JSON.stringify(layerFilterRanges[layer.id] ?? null), JSON.stringify(layerCategoricalFilters[layer.id] ? [...layerCategoricalFilters[layer.id]!] : null)],
               getLineColor: colorTrigger,
             },
           });
@@ -994,13 +996,15 @@ function buildInlineHexDeckLayers(
     const filterAttr = (fillCfg && typeof fillCfg === 'object') ? fillCfg.attr : null;
     const getFillColor = baseFillColor && filterAttr
       ? (obj: any) => {
+          const p = obj?.properties || obj || {};
+          const raw = p[filterAttr];
           const fr = layerFilterRanges[layer.id];
           if (fr) {
-            const p = obj?.properties || obj || {};
-            const raw = p[filterAttr];
             const v = typeof raw === 'number' ? raw : (typeof raw === 'string' ? parseFloat(raw) : NaN);
             if (Number.isFinite(v) && (v < fr[0] || v > fr[1])) return [0, 0, 0, 0];
           }
+          const cf = layerCategoricalFilters[layer.id];
+          if (cf && !cf.has(String(raw ?? ''))) return [0, 0, 0, 0];
           const c = baseFillColor(obj);
           return Array.isArray(c) && c.length === 3 ? [c[0], c[1], c[2], 255] : c;
         }
@@ -1037,7 +1041,7 @@ function buildInlineHexDeckLayers(
       ...(getFillColor ? { getFillColor } : {}),
       ...(getLineColor ? { getLineColor } : {}),
       updateTriggers: {
-        getFillColor: [colorTrigger, JSON.stringify(layerFilterRanges[layer.id] ?? null)],
+        getFillColor: [colorTrigger, JSON.stringify(layerFilterRanges[layer.id] ?? null), JSON.stringify(layerCategoricalFilters[layer.id] ? [...layerCategoricalFilters[layer.id]!] : null)],
         getLineColor: colorTrigger,
       },
     });
@@ -1198,6 +1202,17 @@ export function getLayerFilterRange(layerId: string): [number, number] | null {
   return layerFilterRanges[layerId] ?? null;
 }
 
+const layerCategoricalFilters: Record<string, Set<string> | null> = {};
+
+export function setLayerCategoricalFilter(layerId: string, selected: Set<string> | null): void {
+  if (selected) layerCategoricalFilters[layerId] = selected;
+  else delete layerCategoricalFilters[layerId];
+}
+
+export function getLayerCategoricalFilter(layerId: string): Set<string> | null {
+  return layerCategoricalFilters[layerId] ?? null;
+}
+
 export interface HistogramBin { min: number; max: number; count: number; }
 
 export function binHistogram(
@@ -1254,30 +1269,73 @@ export interface FilterableLayerInfo {
   attr: string;
   tileUrl: string;
   isInline?: boolean;
+  layerType: 'hex' | 'vector';
+  colorType: 'continuous' | 'categorical';
+  sublayerIds?: string[];
+  palette?: string;
 }
 
 export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[] {
   const result: FilterableLayerInfo[] = [];
   for (const l of layers) {
-    if (l.layerType !== 'hex') continue;
-    const hex = l as HexLayerConfig;
-    const fc: any = hex.style?.fillColor;
+    const style: any = l.layerType === 'hex'
+      ? (l as HexLayerConfig).style
+      : l.layerType === 'vector'
+        ? (l as any).style
+        : null;
+    if (!style) continue;
+
+    const fc: any = style.fillColor;
     if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
-    if (fc.type !== 'continuous') continue;
+    if (fc.type !== 'continuous' && fc.type !== 'categorical') continue;
     const attr = fc.attr;
     if (!attr) continue;
 
-    const isTile = hex.isTileLayer && hex.tileUrl;
-    const isInline = !hex.isTileLayer && Array.isArray((hex as any).data) && (hex as any).data.length > 0;
-    if (!isTile && !isInline) continue;
+    if (l.layerType === 'hex') {
+      const hex = l as HexLayerConfig;
+      const isTile = hex.isTileLayer && hex.tileUrl;
+      const isInline = !hex.isTileLayer && Array.isArray((hex as any).data) && (hex as any).data.length > 0;
+      if (!isTile && !isInline) continue;
 
-    result.push({
-      layerId: l.id,
-      layerName: l.name,
-      attr,
-      tileUrl: hex.tileUrl || '',
-      isInline: !!isInline,
-    });
+      result.push({
+        layerId: l.id,
+        layerName: l.name,
+        attr,
+        tileUrl: hex.tileUrl || '',
+        isInline: !!isInline,
+        layerType: 'hex',
+        colorType: fc.type,
+        palette: fc.palette,
+      });
+    } else if (l.layerType === 'vector') {
+      const vec = l as any;
+      const geojson = vec.geojson;
+      if (!geojson?.features?.length) continue;
+
+      const sublayerIds: string[] = [];
+      let hasPoly = false, hasPoint = false, hasLine = false;
+      for (const f of geojson.features) {
+        const t = f.geometry?.type;
+        if (t === 'Point' || t === 'MultiPoint') hasPoint = true;
+        if (t === 'Polygon' || t === 'MultiPolygon') hasPoly = true;
+        if (t === 'LineString' || t === 'MultiLineString') hasLine = true;
+      }
+      if (hasPoly) { sublayerIds.push(`${l.id}-fill`); sublayerIds.push(`${l.id}-outline`); }
+      if (hasLine) { sublayerIds.push(`${l.id}-line`); }
+      if (hasPoint) { sublayerIds.push(`${l.id}-circle`); }
+
+      result.push({
+        layerId: l.id,
+        layerName: l.name,
+        attr,
+        tileUrl: '',
+        isInline: true,
+        layerType: 'vector',
+        colorType: fc.type,
+        sublayerIds,
+        palette: fc.palette,
+      });
+    }
   }
   return result;
 }

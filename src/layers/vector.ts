@@ -187,6 +187,22 @@ export function addMVTLayer(
     layout: { visibility: visible ? 'visible' : 'none' }
   });
   
+  const pointRadius = Math.max(style.pointRadius || style.pointRadiusMinPixels || 5, 1);
+  map.addLayer({
+    id: `${layer.id}-circle`,
+    type: 'circle',
+    source: layer.id,
+    'source-layer': sourceLayer,
+    paint: {
+      'circle-radius': pointRadius,
+      'circle-color': fillColorExpr as any,
+      'circle-stroke-color': lineColorExpr as any,
+      'circle-stroke-width': style.stroked !== false ? lineWidth : 0,
+      'circle-opacity': fillOpacity
+    },
+    layout: { visibility: visible ? 'visible' : 'none' }
+  });
+
   if (style.extruded) {
     map.addLayer({
       id: `${layer.id}-extrusion`,

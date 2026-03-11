@@ -45,10 +45,11 @@ export interface FilterableLayerInfo {
     attr: string;
     tileUrl: string;
     isInline?: boolean;
-    layerType: 'hex' | 'vector';
+    layerType: 'hex' | 'vector' | 'mvt';
     colorType: 'continuous' | 'categorical';
     sublayerIds?: string[];
     palette?: string;
+    categories?: string[];
 }
 export declare function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[];
 export declare function binHistogramInline(data: any[], attr: string, numBins?: number): {

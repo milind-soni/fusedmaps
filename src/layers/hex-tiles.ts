@@ -1270,10 +1270,11 @@ export interface FilterableLayerInfo {
   attr: string;
   tileUrl: string;
   isInline?: boolean;
-  layerType: 'hex' | 'vector';
+  layerType: 'hex' | 'vector' | 'mvt';
   colorType: 'continuous' | 'categorical';
   sublayerIds?: string[];
   palette?: string;
+  categories?: string[];
 }
 
 export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerInfo[] {
@@ -1281,7 +1282,7 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
   for (const l of layers) {
     const style: any = l.layerType === 'hex'
       ? (l as HexLayerConfig).style
-      : l.layerType === 'vector'
+      : (l.layerType === 'vector' || l.layerType === 'mvt')
         ? (l as any).style
         : null;
     if (!style) continue;
@@ -1353,6 +1354,10 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         `${l.id}-fill`, `${l.id}-line`, `${l.id}-circle`,
       ];
 
+      const configCategories: string[] | undefined = Array.isArray(fc.categories)
+        ? fc.categories.map((c: any) => typeof c === 'object' ? String(c.value) : String(c))
+        : undefined;
+
       result.push({
         layerId: l.id,
         layerName: l.name,
@@ -1363,6 +1368,7 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         colorType,
         sublayerIds,
         palette: fc.palette || fc.colors,
+        categories: configCategories,
       });
     }
   }

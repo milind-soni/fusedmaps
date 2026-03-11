@@ -409,13 +409,18 @@ export function initCategoricalFilter(
   for (const info of infos) {
     if (categoricalStates[info.layerId]) continue;
 
-    const data = getDataFn(info);
-    if (!data || !data.length) continue;
+    let values: string[] = [];
 
-    const values = extractUniqueValues(data, info.attr);
+    // For MVT layers, use categories from config since tile data isn't scannable
+    if ((info as any).categories?.length) {
+      values = (info as any).categories;
+    } else {
+      const data = getDataFn(info);
+      if (!data || !data.length) continue;
+      values = extractUniqueValues(data, info.attr);
+    }
     if (!values.length) continue;
 
-    // Get palette from the layer's fillColor config
     const palette = (info as any).palette || 'Bold';
 
     categoricalStates[info.layerId] = {

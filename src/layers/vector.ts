@@ -161,12 +161,17 @@ export function addMVTLayer(
   const fillOpacity = style.opacity ?? 0.8;
   const lineWidth = style.lineWidth ?? 1;
   
+  const polyFilter: any = ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']];
+  const lineFilter: any = ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'MultiLineString']];
+  const pointFilter: any = ['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']];
+
   if (style.filled !== false) {
     map.addLayer({
       id: `${layer.id}-fill`,
       type: 'fill',
       source: layer.id,
       'source-layer': sourceLayer,
+      filter: polyFilter,
       paint: {
         'fill-color': fillColorExpr as any,
         'fill-opacity': fillOpacity
@@ -180,6 +185,7 @@ export function addMVTLayer(
     type: 'line',
     source: layer.id,
     'source-layer': sourceLayer,
+    filter: ['any', polyFilter, lineFilter],
     paint: {
       'line-color': lineColorExpr as any,
       'line-width': lineWidth
@@ -187,12 +193,13 @@ export function addMVTLayer(
     layout: { visibility: visible ? 'visible' : 'none' }
   });
   
-  const pointRadius = Math.max(style.pointRadius || style.pointRadiusMinPixels || 5, 1);
+  const pointRadius = Math.max(style.pointRadius || (style as any).pointRadiusMinPixels || 5, 1);
   map.addLayer({
     id: `${layer.id}-circle`,
     type: 'circle',
     source: layer.id,
     'source-layer': sourceLayer,
+    filter: pointFilter,
     paint: {
       'circle-radius': pointRadius,
       'circle-color': fillColorExpr as any,

@@ -1348,6 +1348,22 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         sublayerIds,
         palette: fc.palette || fc.colors,
       });
+    } else if (l.layerType === 'mvt') {
+      const sublayerIds: string[] = [
+        `${l.id}-fill`, `${l.id}-line`, `${l.id}-circle`,
+      ];
+
+      result.push({
+        layerId: l.id,
+        layerName: l.name,
+        attr,
+        tileUrl: (l as any).tileUrl || '',
+        isInline: false,
+        layerType: 'mvt',
+        colorType,
+        sublayerIds,
+        palette: fc.palette || fc.colors,
+      });
     }
   }
   return result;

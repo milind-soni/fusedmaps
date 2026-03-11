@@ -264,7 +264,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     filterHandle = setupFilterPanel((layerId, range) => {
       setLayerFilterRange(layerId, range);
       const info = filterInfos.find(i => i.layerId === layerId);
-      if (info?.layerType === 'vector' && info.sublayerIds) {
+      if ((info?.layerType === 'vector' || info?.layerType === 'mvt') && info.sublayerIds) {
         _applyVectorContinuousFilter(map, info, range);
       }
       const state = (overlayRef.current as any)?.__fused_hex_tiles__;
@@ -272,7 +272,7 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     }, (layerId, selected) => {
       setLayerCategoricalFilter(layerId, selected);
       const info = filterInfos.find(i => i.layerId === layerId);
-      if (info?.layerType === 'vector' && info.sublayerIds) {
+      if ((info?.layerType === 'vector' || info?.layerType === 'mvt') && info.sublayerIds) {
         _applyVectorCategoricalFilter(map, info, selected);
       }
       const state = (overlayRef.current as any)?.__fused_hex_tiles__;

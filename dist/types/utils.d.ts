@@ -39,6 +39,7 @@ export declare const LAYER_ID_SUFFIXES: {
     readonly mvt: {
         readonly fill: "-fill";
         readonly line: "-line";
+        readonly circle: "-circle";
         readonly extrusion: "-extrusion";
     };
     readonly raster: {

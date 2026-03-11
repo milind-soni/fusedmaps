@@ -79,6 +79,7 @@ export const LAYER_ID_SUFFIXES = {
   mvt: {
     fill: '-fill',
     line: '-line',
+    circle: '-circle',
     extrusion: '-extrusion',
   },
   raster: {
@@ -140,6 +141,7 @@ export function getMapboxLayerIds(
     case 'mvt': {
       ids.push(`${layer.id}${LAYER_ID_SUFFIXES.mvt.fill}`);
       ids.push(`${layer.id}${LAYER_ID_SUFFIXES.mvt.line}`);
+      ids.push(`${layer.id}${LAYER_ID_SUFFIXES.mvt.circle}`);
       ids.push(`${layer.id}${LAYER_ID_SUFFIXES.mvt.extrusion}`);
       break;
     }

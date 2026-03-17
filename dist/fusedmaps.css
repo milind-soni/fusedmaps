@@ -115,11 +115,11 @@ body { background: var(--ui-bg); }
   position: fixed;
   top: 12px;
   left: 12px;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   background: var(--ui-float-bg);
   border: none;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -132,7 +132,7 @@ body { background: var(--ui-bg); }
 }
 #debug-toggle:hover { background: var(--ui-surface); }
 #debug-toggle.active { left: var(--debug-panel-w, 280px); margin-left: 8px; }
-#debug-toggle svg { width: 16px; height: 16px; opacity: 0.8; }
+#debug-toggle svg { width: 14px; height: 14px; opacity: 0.7; }
 #debug-content {
   flex: 1;
   overflow-y: auto;

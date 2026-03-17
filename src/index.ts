@@ -180,11 +180,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     scaleUnit
   });
 
-  // Sidebar panel (inspector)
-  // - sidebar undefined => do not mount (no toggle)
-  // - sidebar 'show'|'hide' => mount
-  // Back-compat: debug=true => sidebar 'show'
-  const sidebarMode = (normalizedConfig as any).sidebar || ((normalizedConfig as any).debug ? 'show' : null);
+  // Sidebar panel (inspector) — always mounted, default collapsed
+  // sidebar 'show' opens it, sidebar false suppresses it entirely
+  const sidebarExplicit = (normalizedConfig as any).sidebar;
+  const sidebarMode = sidebarExplicit === false ? null
+    : (sidebarExplicit || ((normalizedConfig as any).debug ? 'show' : 'hide'));
   const debugHandle = sidebarMode ? setupDebugPanel(map, normalizedConfig) : null;
   
   // Deck.gl overlay (for tile layers) - use object ref to avoid stale closures

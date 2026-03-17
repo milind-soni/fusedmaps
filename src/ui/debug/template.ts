@@ -8,6 +8,8 @@ export type SidebarMode = 'show' | 'hide' | null;
 
 export const DEBUG_SHELL_ID = 'debug-shell';
 
+const SETTINGS_ICON_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
 export function getDebugShellHtml(): string {
   // NOTE: Keep IDs stable; many callers query by id.
   return `
@@ -236,7 +238,6 @@ export function getDebugShellHtml(): string {
         </div>
         <div id="debug-resize-handle" title="Drag to resize"></div>
       </div>
-      <div id="debug-toggle" title="Toggle sidebar">&#x2039;</div>
   `;
 }
 
@@ -257,11 +258,20 @@ export function ensureDebugShell(): DebugShell {
   }
 
   const panel = document.getElementById('debug-panel') as HTMLElement | null;
-  const toggle = document.getElementById('debug-toggle') as HTMLElement | null;
   const resizeHandle = document.getElementById('debug-resize-handle') as HTMLElement | null;
 
+  let toggle = document.getElementById('debug-toggle') as HTMLElement | null;
+  if (!toggle) {
+    toggle = document.createElement('button');
+    toggle.id = 'debug-toggle';
+    (toggle as HTMLButtonElement).type = 'button';
+    toggle.title = 'Inspector';
+    toggle.setAttribute('aria-label', 'Toggle inspector panel');
+    toggle.innerHTML = SETTINGS_ICON_SVG;
+    document.body.appendChild(toggle);
+  }
+
   if (!panel || !toggle || !resizeHandle) {
-    // Should never happen unless template IDs were changed.
     throw new Error('[FusedMaps] Debug panel DOM missing expected elements');
   }
 

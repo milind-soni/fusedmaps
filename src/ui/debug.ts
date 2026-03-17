@@ -24,11 +24,12 @@ function isEditingInputs(root: HTMLElement) {
   return !!a.closest?.('#debug-panel') && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
 }
 
-function updateDebugTogglePosition(shell: HTMLElement, panel: HTMLElement, toggle: HTMLElement) {
+function updateDebugTogglePosition(_shell: HTMLElement, panel: HTMLElement, toggle: HTMLElement) {
   try {
+    const collapsed = panel.classList.contains('collapsed');
     const w = panel.getBoundingClientRect().width || 280;
-    shell.style.setProperty('--debug-panel-w', `${w}px`);
-    toggle.style.left = panel.classList.contains('collapsed') ? '0px' : `var(--debug-panel-w, ${w}px)`;
+    document.documentElement.style.setProperty('--debug-panel-w', `${w}px`);
+    toggle.classList.toggle('active', !collapsed);
   } catch {}
 }
 
@@ -131,10 +132,8 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   try {
     if (sidebarMode === 'hide') {
       panel.classList.add('collapsed');
-      toggle.innerHTML = '&#x203A;';
     } else {
       panel.classList.remove('collapsed');
-      toggle.innerHTML = '&#x2039;';
     }
     updateDebugTogglePosition(shell!, panel, toggle);
   } catch (_) {}
@@ -841,8 +840,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
   };
 
   const onToggle = () => {
-    const collapsed = panel.classList.toggle('collapsed');
-    toggle.innerHTML = collapsed ? '&#x203A;' : '&#x2039;';
+    panel.classList.toggle('collapsed');
     updateDebugTogglePosition(shell!, panel, toggle);
   };
 

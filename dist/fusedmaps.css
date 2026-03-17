@@ -114,23 +114,25 @@ body { background: var(--ui-bg); }
 #debug-toggle {
   position: fixed;
   top: 12px;
-  width: 24px;
-  height: 24px;
-  background: var(--ui-float-bg-2);
-  border: 1px solid var(--ui-border);
-  border-left: none;
-  border-radius: 0 6px 6px 0;
+  left: 12px;
+  width: 30px;
+  height: 30px;
+  background: var(--ui-float-bg);
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ui-muted);
-  font-size: 14px;
+  color: var(--ui-text);
   z-index: 200;
-  transition: background 0.15s, color 0.15s;
-  left: var(--debug-panel-w, 280px);
+  transition: background 0.15s, color 0.15s, left 0.2s ease;
+  box-shadow: 0 2px 8px var(--ui-shadow);
+  padding: 0;
 }
-#debug-toggle:hover { background: var(--ui-float-bg); color: var(--ui-text); }
+#debug-toggle:hover { background: var(--ui-surface); }
+#debug-toggle.active { left: var(--debug-panel-w, 280px); margin-left: 8px; }
+#debug-toggle svg { width: 16px; height: 16px; opacity: 0.8; }
 #debug-content {
   flex: 1;
   overflow-y: auto;

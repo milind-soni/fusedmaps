@@ -125,7 +125,7 @@ const DEFAULT_VECTOR_STYLE: any = {
 };
 
 export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): DebugHandle {
-  const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : null);
+  const sidebarMode = (config as any).sidebar || ((config as any).debug ? 'show' : 'hide');
   const { shell, panel, toggle, resizeHandle } = ensureDebugShell();
 
   // Initial open/closed state (only relevant when mounted)

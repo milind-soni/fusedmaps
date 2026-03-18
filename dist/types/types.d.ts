@@ -111,6 +111,8 @@ export interface MarkerLayer extends BaseLayer {
         attr?: string;
         icons?: Record<string, {
             color: string;
+            icon?: string;
+            iconSvg?: string;
             iconUrl?: string;
         }>;
         defaultColor?: string;

@@ -163,7 +163,7 @@ export interface MarkerLayer extends BaseLayer {
   style?: LayerStyle;
   markerConfig?: {
     attr?: string;
-    icons?: Record<string, { color: string; iconUrl?: string }>;
+    icons?: Record<string, { color: string; icon?: string; iconSvg?: string; iconUrl?: string }>;
     defaultColor?: string;
     size?: number;
   };

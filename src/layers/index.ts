@@ -101,7 +101,9 @@ export function addAllLayers(
         const markerLayer = layer as MarkerLayerConfig;
         if (markerLayer.geojson) {
           setLayerGeoJSON(layer.id, markerLayer.geojson);
-          addMarkerLayer(map, markerLayer, visible);
+          addMarkerLayer(map, markerLayer, visible).catch(e => {
+            console.error('[FusedMaps] Failed to add marker layer:', e);
+          });
         }
         break;
       }
@@ -205,7 +207,9 @@ export function addSingleLayer(
       const markerLayer = layer as MarkerLayerConfig;
       if (markerLayer.geojson) {
         setLayerGeoJSON(layer.id, markerLayer.geojson);
-        addMarkerLayer(map, markerLayer, visible);
+        addMarkerLayer(map, markerLayer, visible).catch(e => {
+          console.error('[FusedMaps] Failed to add marker layer:', e);
+        });
       }
       break;
     }
@@ -470,7 +474,7 @@ export function updateLayerStyleInPlace(
   if (after.layerType === 'marker') {
     const a = after as MarkerLayerConfig;
     removeMarkerLayer(a.id);
-    addMarkerLayer(map, a, visible);
+    addMarkerLayer(map, a, visible).catch(() => {});
     return true;
   }
 

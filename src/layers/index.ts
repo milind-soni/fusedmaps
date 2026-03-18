@@ -9,7 +9,7 @@ import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, Ra
 import { hexToGeoJSON, addStaticHexLayer, setHexLayerVisibility } from './hex';
 import { addVectorLayer, addMVTLayer, setVectorLayerVisibility } from './vector';
 import { addRasterLayer, setRasterLayerVisibility } from './raster';
-import { addMarkerLayer, setMarkerLayerVisibility } from './marker';
+import { addMarkerLayer, removeMarkerLayer, setMarkerLayerVisibility } from './marker';
 import { createHexTileOverlay } from './hex-tiles';
 import { addPMTilesLayers, updatePMTilesVisibility, removePMTilesLayers, buildPMTilesColorExpression } from './pmtiles';
 import { buildColorExpr } from '../color/expressions';
@@ -101,9 +101,7 @@ export function addAllLayers(
         const markerLayer = layer as MarkerLayerConfig;
         if (markerLayer.geojson) {
           setLayerGeoJSON(layer.id, markerLayer.geojson);
-          addMarkerLayer(map, markerLayer, visible).catch(e => {
-            console.error('[FusedMaps] Failed to add marker layer:', e);
-          });
+          addMarkerLayer(map, markerLayer, visible);
         }
         break;
       }
@@ -207,9 +205,7 @@ export function addSingleLayer(
       const markerLayer = layer as MarkerLayerConfig;
       if (markerLayer.geojson) {
         setLayerGeoJSON(layer.id, markerLayer.geojson);
-        addMarkerLayer(map, markerLayer, visible).catch(e => {
-          console.error('[FusedMaps] Failed to add marker layer:', e);
-        });
+        addMarkerLayer(map, markerLayer, visible);
       }
       break;
     }
@@ -228,6 +224,13 @@ export function addSingleLayer(
  * Remove a single layer from the map
  */
 export function removeSingleLayer(map: mapboxgl.Map, layer: LayerConfig): void {
+  // Handle marker layers (DOM-based, no Mapbox layers/sources)
+  if (layer.layerType === 'marker') {
+    removeMarkerLayer(layer.id);
+    clearLayerGeoJSON(layer.id);
+    return;
+  }
+
   // Handle PMTiles layers specially
   if (layer.layerType === 'pmtiles') {
     removePMTilesLayers(map, layer.id);
@@ -462,15 +465,12 @@ export function updateLayerStyleInPlace(
   }
 
   // ------------------------------------------------------------------
-  // Marker: update source data in place
+  // Marker: re-create DOM markers
   // ------------------------------------------------------------------
   if (after.layerType === 'marker') {
     const a = after as MarkerLayerConfig;
-    if (a.geojson) {
-      const ok = setGeoJSONSourceData(map, a.id, a.geojson as any);
-      if (!ok) return false;
-    }
-    setMarkerLayerVisibility(map, a.id, visible);
+    removeMarkerLayer(a.id);
+    addMarkerLayer(map, a, visible);
     return true;
   }
 

@@ -1,6 +1,6 @@
 /**
  * Marker layer rendering — uses mapboxgl.Marker with custom HTML pin elements.
- * Supports built-in icons (corn, leaf, wheat, etc.) and custom inline SVG.
+ * Supports built-in icons, custom SVG, and image URLs.
  */
 
 import type { MarkerLayerConfig } from '../types';
@@ -10,67 +10,59 @@ const FALLBACK_COLORS = [
   '#00BCD4', '#FF9800', '#795548', '#607D8B', '#E91E63',
 ];
 
-// Built-in icons — white SVG paths centered at (14, 13) inside 28x36 pin
+// Built-in white icon paths (24x24 viewBox, rendered at center of pin)
 const BUILTIN_ICONS: Record<string, string> = {
-  corn: `<g transform="translate(14,13)" fill="white" stroke="white" stroke-width="0.3">
-    <ellipse rx="4" ry="6.5" fill="#fff" opacity="0.9"/>
-    <line x1="-3" y1="-2" x2="3" y2="-2" stroke="#D4911E" stroke-width="1" opacity="0.7"/>
-    <line x1="-3.2" y1="0.5" x2="3.2" y2="0.5" stroke="#D4911E" stroke-width="1" opacity="0.7"/>
-    <line x1="-3" y1="3" x2="3" y2="3" stroke="#D4911E" stroke-width="1" opacity="0.7"/>
-    <path d="M0-6.5Q-3-3 0-2" fill="none" stroke="#5a8a32" stroke-width="1.2"/>
-    <path d="M0-6.5Q3-3 0-2" fill="none" stroke="#5a8a32" stroke-width="1.2"/>
-  </g>`,
+  corn: `<path fill="white" d="M12 2c-1.5 0-3 1.5-3 5s1 6 1.5 8h3c.5-2 1.5-4 1.5-8s-1.5-5-3-5zm-1 3.5a.5.5 0 011 0v1a.5.5 0 01-1 0v-1zm0 3a.5.5 0 011 0v1a.5.5 0 01-1 0v-1zm-1.5-1.5a.5.5 0 01.5-.5h.5a.5.5 0 010 1H10a.5.5 0 01-.5-.5zm3 0a.5.5 0 01.5-.5h.5a.5.5 0 010 1H14a.5.5 0 01-.5-.5zM10 16c-.3 1.3-.5 2.5-.5 3.5 0 1.5.5 2.5 2.5 2.5s2.5-1 2.5-2.5c0-1-.2-2.2-.5-3.5h-4z"/>`,
 
-  leaf: `<g transform="translate(14,13)">
-    <path d="M0-7C-5-2-5 4 0 7 5 4 5-2 0-7z" fill="white" opacity="0.9"/>
-    <line x1="0" y1="-5" x2="0" y2="6" stroke="#4a8c3f" stroke-width="0.8" opacity="0.6"/>
-    <path d="M0-2Q-3 0 0 1" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-    <path d="M0-2Q3 0 0 1" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-    <path d="M0 1Q-3 3 0 4" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-    <path d="M0 1Q3 3 0 4" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-  </g>`,
+  leaf: `<path fill="white" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66S8 16 17 8zm-6.18 7.66c-1.72 1.82-3.32 4.06-4.32 6.34l1.89.66c.84-1.88 2.14-3.86 3.73-5.6l-1.3-1.4z"/>`,
 
-  soybean: `<g transform="translate(14,13)">
-    <path d="M0-7C-5-2-5 4 0 7 5 4 5-2 0-7z" fill="white" opacity="0.9"/>
-    <line x1="0" y1="-5" x2="0" y2="6" stroke="#4a8c3f" stroke-width="0.8" opacity="0.6"/>
-    <path d="M0-2Q-3 0 0 1" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-    <path d="M0-2Q3 0 0 1" fill="none" stroke="#4a8c3f" stroke-width="0.6" opacity="0.5"/>
-  </g>`,
+  soybean: `<path fill="white" d="M12 3C7.03 3 3 7.03 3 12c0 2.76 1.24 5.23 3.19 6.89l.71-.71C5.12 16.74 4 14.5 4 12c0-4.41 3.59-8 8-8 2.5 0 4.74 1.12 6.18 2.9l.71-.71C17.23 4.24 14.76 3 12 3zm0 4a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>`,
 
-  wheat: `<g transform="translate(14,13)" fill="white">
-    <ellipse cx="0" cy="-3" rx="2" ry="3.5" opacity="0.9"/>
-    <ellipse cx="-2.5" cy="-1" rx="1.8" ry="3" transform="rotate(-20,-2.5,-1)" opacity="0.8"/>
-    <ellipse cx="2.5" cy="-1" rx="1.8" ry="3" transform="rotate(20,2.5,-1)" opacity="0.8"/>
-    <line x1="0" y1="1" x2="0" y2="7" stroke="white" stroke-width="1.2" opacity="0.9"/>
-  </g>`,
+  wheat: `<path fill="white" d="M12 1.5l-2 4h4l-2-4zm-3 5l-1.5 3H9l1-2 1 2h1.5l-1.5-3h-2zm6 0l-1.5 3H15l1-2 1 2h1.5l-1.5-3h-2zm-3 4l-2 4h4l-2-4zm0 5.5V22h1v-6h-1z"/>`,
 
-  circle: `<circle cx="14" cy="13" r="5" fill="white" opacity="0.9"/>`,
-
-  pin: `<circle cx="14" cy="13" r="5" fill="white" opacity="0.9"/>`,
+  circle: '',
+  pin: '',
 };
 
-// Store active markers per layer for cleanup and visibility toggling
 const _activeMarkers: Record<string, mapboxgl.Marker[]> = {};
 
-function pinHtml(fill: string, size: number, iconContent?: string): string {
-  const w = Math.round(28 * size);
-  const h = Math.round(36 * size);
-  const inner = iconContent || '<circle cx="14" cy="13" r="5" fill="white" opacity="0.9"/>';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36" style="display:block;cursor:pointer;">
-    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.27 21.73 0 14 0z"
-          fill="${fill}" stroke="rgba(0,0,0,0.25)" stroke-width="1"/>
-    ${inner}
-  </svg>`;
+/**
+ * Build a pin marker SVG. If iconPath is provided, it replaces the white dot
+ * with the icon rendered inside a white circle background.
+ */
+function pinHtml(fill: string, size: number, iconPath?: string, iconUrl?: string): string {
+  const w = Math.round(32 * size);
+  const h = Math.round(40 * size);
+
+  let inner: string;
+  if (iconUrl) {
+    inner = `<circle cx="16" cy="14" r="7" fill="white"/>
+      <image href="${iconUrl}" x="9" y="7" width="14" height="14" clip-path="circle(7px at 7px 7px)"/>`;
+  } else if (iconPath) {
+    inner = `<circle cx="16" cy="14" r="7" fill="white"/>
+      <g transform="translate(9.5,7.5) scale(0.55)">${iconPath}</g>`;
+  } else {
+    inner = `<circle cx="16" cy="14" r="5.5" fill="white" opacity="0.9"/>`;
+  }
+
+  return `<div style="width:${w}px;height:${h}px;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.3))">
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 32 40">
+      <path d="M16 0C7.16 0 0 7.16 0 16c0 12 16 24 16 24s16-12 16-24C32 7.16 24.84 0 16 0z"
+            fill="${fill}"/>
+      ${inner}
+    </svg>
+  </div>`;
 }
 
-function resolveIcon(iconCfg?: { icon?: string; iconSvg?: string; iconUrl?: string }): string | undefined {
-  if (!iconCfg) return undefined;
-  if (iconCfg.iconSvg) return iconCfg.iconSvg;
-  if (iconCfg.icon && BUILTIN_ICONS[iconCfg.icon]) return BUILTIN_ICONS[iconCfg.icon];
-  if (iconCfg.iconUrl) {
-    return `<image href="${iconCfg.iconUrl}" x="7" y="6" width="14" height="14" style="border-radius:50%"/>`;
+function resolveIcon(cfg?: { icon?: string; iconSvg?: string; iconUrl?: string }): { path?: string; url?: string } {
+  if (!cfg) return {};
+  if (cfg.iconSvg) return { path: cfg.iconSvg };
+  if (cfg.icon) {
+    const builtin = BUILTIN_ICONS[cfg.icon.toLowerCase()];
+    if (builtin) return { path: builtin };
   }
-  return undefined;
+  if (cfg.iconUrl) return { url: cfg.iconUrl };
+  return {};
 }
 
 export function addMarkerLayer(
@@ -90,16 +82,15 @@ export function addMarkerLayer(
   const defaultColor = mc.defaultColor || '#E8A735';
   const size = mc.size || 1;
 
-  // Build color + icon maps
   const colorMap: Record<string, string> = {};
-  const iconMap: Record<string, string | undefined> = {};
-  if (attr) {
-    if (mc.icons) {
-      for (const [key, val] of Object.entries(mc.icons)) {
-        colorMap[key] = val.color;
-        iconMap[key] = resolveIcon(val as any);
-      }
+  const iconCfgMap: Record<string, { path?: string; url?: string }> = {};
+  if (attr && mc.icons) {
+    for (const [key, val] of Object.entries(mc.icons)) {
+      colorMap[key] = val.color;
+      iconCfgMap[key] = resolveIcon(val as any);
     }
+  }
+  if (attr) {
     const uniqueValues = new Set<string>();
     for (const f of geojson.features) {
       const v = f.properties?.[attr];
@@ -117,7 +108,7 @@ export function addMarkerLayer(
   removeMarkerLayer(layer.id);
 
   const markers: mapboxgl.Marker[] = [];
-  const mapboxgl = (window as any).mapboxgl;
+  const mbgl = (window as any).mapboxgl;
 
   for (const feature of geojson.features) {
     const geom = feature.geometry;
@@ -130,13 +121,13 @@ export function addMarkerLayer(
     for (const coord of coords) {
       const val = attr ? String(feature.properties?.[attr] ?? '') : '';
       const color = attr ? (colorMap[val] || defaultColor) : defaultColor;
-      const icon = attr ? iconMap[val] : undefined;
+      const iconCfg = attr ? (iconCfgMap[val] || {}) : {};
 
       const el = document.createElement('div');
-      el.innerHTML = pinHtml(color, size, icon);
+      el.innerHTML = pinHtml(color, size, iconCfg.path, iconCfg.url);
       el.style.display = visible ? '' : 'none';
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new mbgl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat(coord)
         .addTo(map);
 
@@ -148,7 +139,7 @@ export function addMarkerLayer(
           .map((k: string) => `<tr><td style="font-weight:600;padding:2px 8px 2px 0;color:#888;font-size:11px">${k}</td><td style="font-size:11px">${props[k]}</td></tr>`)
           .join('');
         if (rows) {
-          const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
+          const popup = new mbgl.Popup({ offset: 25, closeButton: false })
             .setHTML(`<table style="border-collapse:collapse">${rows}</table>`);
           marker.setPopup(popup);
         }

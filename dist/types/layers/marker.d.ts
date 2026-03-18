@@ -1,6 +1,6 @@
 /**
  * Marker layer rendering — uses mapboxgl.Marker with custom HTML pin elements.
- * Supports built-in icons (corn, leaf, wheat, etc.) and custom inline SVG.
+ * Supports built-in icons, custom SVG, and image URLs.
  */
 import type { MarkerLayerConfig } from '../types';
 export declare function addMarkerLayer(map: mapboxgl.Map, layer: MarkerLayerConfig, visible: boolean): void;

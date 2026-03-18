@@ -54,7 +54,11 @@ export async function addMarkerLayer(
   visible: boolean
 ): Promise<void> {
   const geojson = layer.geojson;
-  if (!geojson?.features?.length) return;
+  console.log('[FusedMaps:Marker] addMarkerLayer called', layer.id, 'features:', geojson?.features?.length, 'visible:', visible);
+  if (!geojson?.features?.length) {
+    console.warn('[FusedMaps:Marker] No features, skipping');
+    return;
+  }
 
   const mc = layer.markerConfig || {};
   const attr = mc.attr || (
@@ -107,26 +111,39 @@ export async function addMarkerLayer(
 
   const imagePrefix = `fm-pin-${layer.id}`;
 
+  console.log('[FusedMaps:Marker] uniqueColors:', uniqueColors.map(c => c[0]));
+  console.log('[FusedMaps:Marker] map.addImage exists:', typeof (map as any).addImage);
+  console.log('[FusedMaps:Marker] map.hasImage exists:', typeof (map as any).hasImage);
+
   for (const [key, color] of uniqueColors) {
     const imageName = `${imagePrefix}-${key}`;
-    if (map.hasImage(imageName)) continue;
+    if ((map as any).hasImage && (map as any).hasImage(imageName)) {
+      console.log('[FusedMaps:Marker] image already exists:', imageName);
+      continue;
+    }
 
     try {
       const svg = pinSvg(color);
+      console.log('[FusedMaps:Marker] rendering SVG for', key, 'color:', color);
       const imageData = await renderSvgToImageData(svg, renderW, renderH);
-      map.addImage(imageName, {
+      console.log('[FusedMaps:Marker] imageData ready', imageData.width, 'x', imageData.height, 'bytes:', imageData.data.length);
+      (map as any).addImage(imageName, {
         width: renderW,
         height: renderH,
         data: new Uint8Array(imageData.data.buffer),
       }, { pixelRatio });
+      console.log('[FusedMaps:Marker] addImage OK:', imageName);
     } catch (e) {
-      console.warn(`[FusedMaps] Failed to render pin image for "${key}":`, e);
+      console.error(`[FusedMaps:Marker] addImage FAILED for "${key}":`, e);
     }
   }
 
   // Add GeoJSON source
   if (!map.getSource(layer.id)) {
     map.addSource(layer.id, { type: 'geojson', data: geojson });
+    console.log('[FusedMaps:Marker] addSource OK:', layer.id);
+  } else {
+    console.log('[FusedMaps:Marker] source already exists:', layer.id);
   }
 
   // Build icon-image expression
@@ -147,7 +164,9 @@ export async function addMarkerLayer(
 
   // Add symbol layer
   const symbolLayerId = `${layer.id}-symbol`;
+  console.log('[FusedMaps:Marker] icon-image expr:', JSON.stringify(iconImageExpr));
   if (!map.getLayer(symbolLayerId)) {
+    console.log('[FusedMaps:Marker] adding symbol layer:', symbolLayerId);
     map.addLayer({
       id: symbolLayerId,
       type: 'symbol',

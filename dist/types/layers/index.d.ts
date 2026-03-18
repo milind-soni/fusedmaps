@@ -51,4 +51,5 @@ export declare function setLayerOpacity(map: mapboxgl.Map, layerId: string, opac
 export * from './hex';
 export * from './vector';
 export * from './raster';
+export * from './marker';
 export * from './pmtiles';

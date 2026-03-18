@@ -23,7 +23,7 @@ import { createLayerStore, LayerStore } from './state';
 // Config is used directly - no normalization needed
 import { trackMapboxTileLoading } from './ui/tile-loader';
 
-const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles'] as const;
+const VALID_LAYER_TYPES = ['hex', 'vector', 'mvt', 'raster', 'pmtiles', 'marker'] as const;
 
 // Store original Mapbox GL filters set during addVectorLayer so we can compose with them
 const _originalMapboxFilters: Record<string, any> = {};

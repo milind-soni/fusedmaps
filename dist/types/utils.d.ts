@@ -45,6 +45,9 @@ export declare const LAYER_ID_SUFFIXES: {
     readonly raster: {
         readonly raster: "-raster";
     };
+    readonly marker: {
+        readonly symbol: "-symbol";
+    };
     readonly pmtiles: {
         readonly fill: "-fill";
         readonly line: "-line";

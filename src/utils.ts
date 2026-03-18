@@ -85,6 +85,9 @@ export const LAYER_ID_SUFFIXES = {
   raster: {
     raster: '-raster',
   },
+  marker: {
+    symbol: '-symbol',
+  },
   pmtiles: {
     fill: '-fill',
     line: '-line',
@@ -148,6 +151,11 @@ export function getMapboxLayerIds(
 
     case 'raster': {
       ids.push(`${layer.id}${LAYER_ID_SUFFIXES.raster.raster}`);
+      break;
+    }
+
+    case 'marker': {
+      ids.push(`${layer.id}${LAYER_ID_SUFFIXES.marker.symbol}`);
       break;
     }
 
@@ -236,6 +244,9 @@ export function getFirstMapboxLayerId(layer: LayerConfig): string | null {
     case 'raster':
       return `${layer.id}${LAYER_ID_SUFFIXES.raster.raster}`;
 
+    case 'marker':
+      return `${layer.id}${LAYER_ID_SUFFIXES.marker.symbol}`;
+
     case 'pmtiles':
       return `${layer.id}${LAYER_ID_SUFFIXES.pmtiles.fill}`;
 
@@ -258,5 +269,6 @@ export function getRemovableLayerIds(layer: LayerConfig): string[] {
     `${id}-line`,
     `${id}-raster`,
     `${id}-circles`,
+    `${id}-symbol`,
   ];
 }

@@ -5,10 +5,11 @@
  * State is managed by LayerStore in state/layer-store.ts.
  */
 
-import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, RasterLayerConfig, PMTilesLayerConfig, FusedMapsConfig } from '../types';
+import type { LayerConfig, HexLayerConfig, VectorLayerConfig, MVTLayerConfig, RasterLayerConfig, PMTilesLayerConfig, MarkerLayerConfig, FusedMapsConfig } from '../types';
 import { hexToGeoJSON, addStaticHexLayer, setHexLayerVisibility } from './hex';
 import { addVectorLayer, addMVTLayer, setVectorLayerVisibility } from './vector';
 import { addRasterLayer, setRasterLayerVisibility } from './raster';
+import { addMarkerLayer, setMarkerLayerVisibility } from './marker';
 import { createHexTileOverlay } from './hex-tiles';
 import { addPMTilesLayers, updatePMTilesVisibility, removePMTilesLayers, buildPMTilesColorExpression } from './pmtiles';
 import { buildColorExpr } from '../color/expressions';
@@ -93,6 +94,17 @@ export function addAllLayers(
       case 'raster': {
         const rasterLayer = layer as RasterLayerConfig;
         addRasterLayer(map, rasterLayer, visible);
+        break;
+      }
+
+      case 'marker': {
+        const markerLayer = layer as MarkerLayerConfig;
+        if (markerLayer.geojson) {
+          setLayerGeoJSON(layer.id, markerLayer.geojson);
+          addMarkerLayer(map, markerLayer, visible).catch(e => {
+            console.error('[FusedMaps] Failed to add marker layer:', e);
+          });
+        }
         break;
       }
 
@@ -191,6 +203,17 @@ export function addSingleLayer(
       break;
     }
     
+    case 'marker': {
+      const markerLayer = layer as MarkerLayerConfig;
+      if (markerLayer.geojson) {
+        setLayerGeoJSON(layer.id, markerLayer.geojson);
+        addMarkerLayer(map, markerLayer, visible).catch(e => {
+          console.error('[FusedMaps] Failed to add marker layer:', e);
+        });
+      }
+      break;
+    }
+
     case 'pmtiles': {
       const pmLayer = layer as PMTilesLayerConfig;
       addPMTilesLayers(map, [pmLayer], { [layer.id]: visible }, config?.hasCustomView === true).catch(e => {
@@ -439,6 +462,19 @@ export function updateLayerStyleInPlace(
   }
 
   // ------------------------------------------------------------------
+  // Marker: update source data in place
+  // ------------------------------------------------------------------
+  if (after.layerType === 'marker') {
+    const a = after as MarkerLayerConfig;
+    if (a.geojson) {
+      const ok = setGeoJSONSourceData(map, a.id, a.geojson as any);
+      if (!ok) return false;
+    }
+    setMarkerLayerVisibility(map, a.id, visible);
+    return true;
+  }
+
+  // ------------------------------------------------------------------
   // PMTiles: update paint props for all prefix-based layers
   // ------------------------------------------------------------------
   if (after.layerType === 'pmtiles') {
@@ -551,6 +587,10 @@ export function setLayerVisibility(
     case 'mvt':
       setVectorLayerVisibility(map, layerId, visible);
       break;
+
+    case 'marker':
+      setMarkerLayerVisibility(map, layerId, visible);
+      break;
     
     case 'raster':
       setRasterLayerVisibility(map, layerId, visible);
@@ -607,6 +647,13 @@ export function setLayerOpacity(
       setPaintSafe(map, `${layerId}-circle`, 'circle-stroke-opacity', o);
       break;
 
+    case 'marker':
+      // Symbol layers don't have paint opacity; use icon-opacity
+      if (map.getLayer(`${layerId}-symbol`)) {
+        map.setPaintProperty(`${layerId}-symbol`, 'icon-opacity', o);
+      }
+      break;
+
     case 'raster':
       setPaintSafe(map, `${layerId}-raster`, 'raster-opacity', o);
       break;
@@ -630,4 +677,5 @@ export function setLayerOpacity(
 export * from './hex';
 export * from './vector';
 export * from './raster';
+export * from './marker';
 export * from './pmtiles';

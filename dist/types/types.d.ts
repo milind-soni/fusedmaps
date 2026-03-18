@@ -103,12 +103,27 @@ export interface PMTilesLayer extends BaseLayer {
     style?: LayerStyle;
     tile?: TileOptions;
 }
-export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer;
+export interface MarkerLayer extends BaseLayer {
+    layerType: 'marker';
+    geojson?: FeatureCollection;
+    style?: LayerStyle;
+    markerConfig?: {
+        attr?: string;
+        icons?: Record<string, {
+            color: string;
+            iconUrl?: string;
+        }>;
+        defaultColor?: string;
+        size?: number;
+    };
+}
+export type LayerConfig = HexLayer | VectorLayer | MVTLayer | RasterLayer | PMTilesLayer | MarkerLayer;
 export type HexLayerConfig = HexLayer;
 export type VectorLayerConfig = VectorLayer;
 export type MVTLayerConfig = MVTLayer;
 export type RasterLayerConfig = RasterLayer;
 export type PMTilesLayerConfig = PMTilesLayer;
+export type MarkerLayerConfig = MarkerLayer;
 export type TileLayerConfig = TileOptions;
 export type ColorContinuousConfig = ContinuousColor;
 export type ColorCategoriesConfig = CategoricalColor;

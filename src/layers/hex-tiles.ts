@@ -33,6 +33,35 @@ interface TileRuntime {
   catState: Record<string, Record<string, { lut: Map<string, number[]>; pairs: Array<{ value: string; label: string }>; next: number; debounce?: any }>>; // layerId -> attr -> state
 }
 
+const TILE_RETRY_COUNT = 3;
+const TILE_RETRY_BASE_MS = 300;
+
+async function fetchWithRetry(
+  url: string,
+  signal: AbortSignal | undefined,
+  maxRetries: number = TILE_RETRY_COUNT,
+  baseDelay: number = TILE_RETRY_BASE_MS
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      const res = await fetch(url, { signal });
+      if (res.ok) return res;
+      if (res.status === 404) throw new Error(`HTTP 404 for ${url}`);
+      lastError = new Error(`HTTP ${res.status} for ${url}`);
+    } catch (e: any) {
+      if (e.name === 'AbortError' || signal?.aborted) throw e;
+      lastError = e;
+    }
+    if (attempt < maxRetries - 1) {
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 100;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError ?? new Error(`Failed after ${maxRetries} retries: ${url}`);
+}
+
 // Custom refinement strategy - matches live-map's finestNoOverlap
 // Shows finest (highest zoom) tiles, hides ancestors to prevent overlap
 type Tile2DHeader = {
@@ -823,8 +852,9 @@ function buildHexTileDeckLayers(
 
         // Tile lifecycle callbacks (like live-map)
         onTileError: (error: Error) => {
-          console.warn('[tiles] Tile error:', error.message);
-          // deck.gl will retry failed tiles automatically
+          if (error?.name !== 'AbortError') {
+            console.warn('[tiles] Tile error (after retries):', error.message);
+          }
         },
         onViewportLoad: () => {
           // All tiles in viewport loaded - trigger any pending updates
@@ -855,12 +885,8 @@ function buildHexTileDeckLayers(
           onLoadingDelta(1);
           const p = (async () => {
             try {
-              const res = await fetch(url, { signal });
+              const res = await fetchWithRetry(url, signal);
               if (signal?.aborted) return null;
-              if (!res.ok) {
-                // Throw error so deck.gl knows to retry this tile
-                throw new Error(`HTTP ${res.status} for tile ${tileKey}`);
-              }
 
               const ct = (res.headers.get('Content-Type') || '').toLowerCase();
               let data: any;
@@ -873,7 +899,6 @@ function buildHexTileDeckLayers(
                   try {
                     hp = await ensureHyparquetLoaded();
                   } catch (e) {
-                    // Throw error so deck.gl knows to retry
                     throw new Error(`Failed to load hyparquet for tile ${tileKey}`);
                   }
                 }
@@ -922,7 +947,6 @@ function buildHexTileDeckLayers(
               return normalized;
             } catch (e) {
               if (signal?.aborted) return null;
-              // Re-throw error so deck.gl can handle retry via onTileError
               throw e;
             } finally {
               runtime.inflight.delete(cacheKey);

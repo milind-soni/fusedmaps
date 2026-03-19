@@ -923,8 +923,20 @@ def _normalize_color_config(color_cfg):
 
     cats = result.get("categories")
     if isinstance(cats, dict):
-        result["categories"] = list(cats.keys())
-        if "palette" not in result:
+        cat_names = list(cats.keys())
+        cat_colors = []
+        for name in cat_names:
+            v = cats[name]
+            if isinstance(v, (list, tuple)) and len(v) >= 3:
+                cat_colors.append(f"rgb({int(v[0])},{int(v[1])},{int(v[2])})")
+            elif isinstance(v, str):
+                cat_colors.append(v)
+            else:
+                cat_colors.append(None)
+        result["categories"] = cat_names
+        if all(c is not None for c in cat_colors):
+            result["_customColors"] = cat_colors
+        elif "palette" not in result:
             result["palette"] = "Bold"
 
     if "type" not in result:

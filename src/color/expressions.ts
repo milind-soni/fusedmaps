@@ -101,10 +101,16 @@ function buildCategoricalExpr(
   
   if (!catPairs.length) return 'rgba(128,128,128,0.5)';
   
-  const paletteName = cfg.palette || 'Bold';
-  let colors = getPaletteColors(paletteName, Math.max(catPairs.length, 3));
-  if (!colors || !colors.length) {
-    colors = FALLBACK_CATEGORICAL_COLORS;
+  const custom = (cfg as any)._customColors;
+  let colors: string[] | null = null;
+  if (Array.isArray(custom) && custom.length >= catPairs.length) {
+    colors = custom;
+  } else {
+    const paletteName = cfg.palette || 'Bold';
+    colors = getPaletteColors(paletteName, Math.max(catPairs.length, 3));
+    if (!colors || !colors.length) {
+      colors = FALLBACK_CATEGORICAL_COLORS;
+    }
   }
   
   const fallback = cfg.nullColor 

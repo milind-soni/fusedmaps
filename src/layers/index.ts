@@ -115,17 +115,17 @@ export function addAllLayers(
     }
   });
 
-  // Build beforeId map for hex tile layers
-  // For each hex tile layer, find the first Mapbox layer that should render ABOVE it
+  // Build beforeId map for hex layers (both tile and inline)
+  // For each hex layer, find the first Mapbox layer that should render ABOVE it
   const hexTileBeforeIds: Record<string, string | undefined> = {};
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
-    if (layer.layerType === 'hex' && (layer as any).isTileLayer) {
-      // Find the first non-tile layer at a lower index (visually above this layer)
+    if (layer.layerType === 'hex') {
+      // Find the first non-hex layer at a lower index (visually above this layer)
       for (let j = i - 1; j >= 0; j--) {
         const aboveLayer = layers[j];
-        // Skip other tile layers
-        if (aboveLayer.layerType === 'hex' && (aboveLayer as any).isTileLayer) continue;
+        // Skip other hex layers (handled by Deck.gl)
+        if (aboveLayer.layerType === 'hex') continue;
         // Get the first Mapbox layer ID for this layer
         const beforeId = getFirstMapboxLayerId(aboveLayer);
         if (beforeId) {

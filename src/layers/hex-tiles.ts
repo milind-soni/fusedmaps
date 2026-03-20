@@ -995,7 +995,8 @@ function buildHexTileDeckLayers(
 function buildInlineHexDeckLayers(
   layers: LayerConfig[],
   visibility: Record<string, boolean>,
-  runtime: TileRuntime
+  runtime: TileRuntime,
+  beforeIds?: Record<string, string | undefined>
 ): any[] {
   const deck = getDeck();
   if (!deck) return [];
@@ -1048,9 +1049,11 @@ function buildInlineHexDeckLayers(
       null;
 
     const colorTrigger = JSON.stringify({ fill: fillCfg, line: lineCfg });
+    const beforeId = beforeIds?.[layer.id];
 
     return new H3HexagonLayer({
       id: `${layer.id}-inline-h3`,
+      ...(beforeId ? { beforeId } : {}),
       data,
       getHexagon: (d: any) => d.hex,
       highPrecision: true,
@@ -1094,7 +1097,7 @@ export function createHexTileOverlay(
   const visibilityRef = { current: visibility };
   const build = () => [
     ...buildHexTileDeckLayers(layers, visibilityRef.current, runtime, onLoadingDelta, beforeIds),
-    ...buildInlineHexDeckLayers(layers, visibilityRef.current, runtime),
+    ...buildInlineHexDeckLayers(layers, visibilityRef.current, runtime, beforeIds),
   ];
 
   // Store last hovered info for tooltip access

@@ -4,7 +4,7 @@
  * Pure utilities used to generate "paste-back" Python snippets and compact config deltas.
  */
 /**
- * Convert a color config to the new clean format (no-op if already new format)
+ * Pass-through for color config (already in new format with type: 'continuous' | 'categorical')
  */
 export declare function colorToNewFormat(color: any): any;
 /**

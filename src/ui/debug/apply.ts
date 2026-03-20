@@ -207,9 +207,9 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
       const vecData = layer.geojson?.features?.map((f: any) => f?.properties || {}) || [];
       const fc = style.fillColor;
       const lc = style.lineColor;
-      const fillExpr = (fc && typeof fc === 'object' && !Array.isArray(fc) && (fc.type || fc['@@function']))
+      const fillExpr = (fc && typeof fc === 'object' && !Array.isArray(fc) && (fc.type))
         ? buildColorExpr(fc, vecData) : (Array.isArray(fc) ? `rgb(${fc[0]},${fc[1]},${fc[2]})` : (fc || '#0090ff'));
-      const lineExpr = (lc && typeof lc === 'object' && !Array.isArray(lc) && (lc.type || lc['@@function']))
+      const lineExpr = (lc && typeof lc === 'object' && !Array.isArray(lc) && (lc.type))
         ? buildColorExpr(lc, vecData) : (Array.isArray(lc) ? `rgb(${lc[0]},${lc[1]},${lc[2]})` : (lc || '#ffffff'));
       const fillOpacity = (style.filled === false) ? 0 : opClamped;
       const lineOpacity = (style.stroked === false) ? 0 : 1;
@@ -235,9 +235,9 @@ export function applyDebugUIToLayer(opts: ApplyDebugUIOpts): void {
       const fillOpacity = (style.filled === false) ? 0 : opClamped;
       const lineOpacity = (style.stroked === false) ? 0 : 1;
       const attr = (fc && typeof fc === 'object' && !Array.isArray(fc)) ? (fc.attr || 'value') : 'value';
-      const fillExpr = (fc && typeof fc === 'object' && !Array.isArray(fc) && (fc.type || fc['@@function']))
+      const fillExpr = (fc && typeof fc === 'object' && !Array.isArray(fc) && (fc.type))
         ? buildPMTilesColorExpression(fc, attr, '#ff8c00') : (Array.isArray(fc) ? `rgb(${fc[0]},${fc[1]},${fc[2]})` : (fc || '#ff8c00'));
-      const lineExpr = (lc && typeof lc === 'object' && !Array.isArray(lc) && (lc.type || lc['@@function']))
+      const lineExpr = (lc && typeof lc === 'object' && !Array.isArray(lc) && (lc.type))
         ? buildPMTilesColorExpression(lc, attr, '#ffffff') : (Array.isArray(lc) ? `rgb(${lc[0]},${lc[1]},${lc[2]})` : (lc || '#ffffff'));
       const effectiveLw = (style.stroked === false) ? 0 : lwClamped;
 

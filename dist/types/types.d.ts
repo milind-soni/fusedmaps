@@ -58,6 +58,7 @@ interface BaseLayer {
     tooltip?: string[];
     dataRef?: string;
     group?: string;
+    interactive?: boolean;
 }
 export interface HexLayer extends BaseLayer {
     layerType: 'hex';
@@ -155,6 +156,7 @@ export interface WidgetsConfig {
     layers?: WidgetSetting;
     legend?: WidgetSetting;
     geocoder?: WidgetSetting;
+    filter?: WidgetSetting;
 }
 export declare function isLeftPosition(pos: WidgetPosition | string | false): boolean;
 export interface MessagingConfig {

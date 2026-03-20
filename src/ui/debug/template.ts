@@ -58,7 +58,7 @@ export function getDebugShellHtml(): string {
             <div class="debug-row">
               <span class="debug-label">Function</span>
               <select class="debug-select" id="dbg-fill-fn">
-                <option value="colorContinuous">colorContinuous</option>
+                <option value="continuous">continuous</option>
                 <option value="static">Static Color</option>
                 <option value="expression">Expression</option>
               </select>
@@ -126,7 +126,7 @@ export function getDebugShellHtml(): string {
             <div class="debug-row">
               <span class="debug-label">Function</span>
               <select class="debug-select" id="dbg-line-fn">
-                <option value="colorContinuous">colorContinuous</option>
+                <option value="continuous">continuous</option>
                 <option value="static" selected>Static Color</option>
                 <option value="expression">Expression</option>
               </select>

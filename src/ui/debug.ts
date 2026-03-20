@@ -35,7 +35,7 @@ function updateDebugTogglePosition(_shell: HTMLElement, panel: HTMLElement, togg
 
 function ensureContinuousColorCfg(obj: any) {
   if (!obj || typeof obj !== 'object') return null;
-  if (obj.type !== 'continuous' && obj['@@function'] !== 'colorContinuous') return null;
+  if (obj.type !== 'continuous') return null;
   return obj;
 }
 
@@ -482,7 +482,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const updateFillFnOptions = () => {
     const fn = fillFnEl.value;
-    fillFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
+    fillFnOptions.style.display = fn === 'continuous' ? 'block' : 'none';
     fillStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
     fillExpressionInfo.style.display = fn === 'expression' ? 'block' : 'none';
     // Disable dropdown when expression is selected (read-only)
@@ -491,7 +491,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
   const updateLineFnOptions = () => {
     const fn = lineFnEl.value;
-    lineFnOptions.style.display = fn === 'colorContinuous' ? 'block' : 'none';
+    lineFnOptions.style.display = fn === 'continuous' ? 'block' : 'none';
     lineStaticOptions.style.display = fn === 'static' ? 'block' : 'none';
     lineExpressionInfo.style.display = fn === 'expression' ? 'block' : 'none';
     // Disable dropdown when expression is selected (read-only)
@@ -596,7 +596,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
       const cc = ensureContinuousColorCfg(fc);
       if (!isColorExpression(fc) && cc) {
-        fillFnEl.value = 'colorContinuous';
+        fillFnEl.value = 'continuous';
         if (cc.attr) fillAttrEl.value = String(cc.attr);
         const pal = cc.palette || cc.colors;
         if (pal) fillPaletteEl.value = String(pal);
@@ -631,7 +631,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
         fillStaticEl.value = hex;
         fillStaticLabel.textContent = hex;
       } else if (!isColorExpression(fc)) {
-        fillFnEl.value = 'colorContinuous';
+        fillFnEl.value = 'continuous';
         try { fillReverseEl.checked = false; } catch (_) {}
       }
     }
@@ -665,7 +665,7 @@ export function setupDebugPanel(map: mapboxgl.Map, config: FusedMapsConfig): Deb
 
       const lcCC = ensureContinuousColorCfg(lc);
       if (!isColorExpression(lc) && lcCC) {
-        lineFnEl.value = 'colorContinuous';
+        lineFnEl.value = 'continuous';
         if (lcCC.attr) lineAttrEl.value = String(lcCC.attr);
         const pal = lcCC.palette || lcCC.colors;
         if (pal) linePaletteEl.value = String(pal);

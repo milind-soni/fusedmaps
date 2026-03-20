@@ -677,6 +677,87 @@ export function setLayerOpacity(
   }
 }
 
+/**
+ * Reorder a layer in-place on the map using map.moveLayer, avoiding a full rebuild.
+ *
+ * @param map - The Mapbox GL map instance
+ * @param movedLayerId - The layer being moved
+ * @param allLayers - All layers in the DESIRED new order (ascending by store order,
+ *                    where index 0 renders on top). Must reflect the post-update store state.
+ * @returns true if the reorder was handled without a full rebuild, false if the caller
+ *          should fall back to addAllLayers (e.g. Deck.gl tile layers).
+ */
+export function reorderLayerOnMap(
+  map: mapboxgl.Map,
+  movedLayerId: string,
+  allLayers: LayerConfig[]
+): boolean {
+  const movedLayer = allLayers.find(l => l.id === movedLayerId);
+  if (!movedLayer) return false;
+
+  // Deck.gl tile layers are managed by the MapboxOverlay — caller handles overlay rebuild
+  if (movedLayer.layerType === 'hex' && (movedLayer as HexLayerConfig).isTileLayer) return false;
+
+  const idx = allLayers.findIndex(l => l.id === movedLayerId);
+
+  // Find beforeId: the first actual Mapbox GL layer belonging to whichever layer
+  // should render ABOVE the moved layer. Lower index = lower order = renders on top.
+  // map.moveLayer(id, beforeId) puts id just BELOW beforeId in the render stack.
+  const beforeId = _getBeforeIdForReorder(map, idx, allLayers);
+
+  if (movedLayer.layerType === 'pmtiles') {
+    // PMTiles creates layers with dynamic IDs — discover them via the layer ID prefix
+    const prefix = `${movedLayerId}-`;
+    const styleLayers = (map.getStyle()?.layers || []) as any[];
+    for (const sl of styleLayers) {
+      if (sl?.id?.startsWith(prefix)) {
+        try { map.moveLayer(sl.id, beforeId); } catch {}
+      }
+    }
+    return true;
+  }
+
+  // Standard Mapbox GL layers: move each sublayer.
+  // Moving in LAYER_ID_SUFFIXES order (fill first, then outline on top) means the
+  // final stack is [..., fill, outline, beforeId_layer, ...] — correct visual order.
+  const sublayerIds = getMapboxLayerIds(movedLayer, { includeAll: true });
+  for (const sublayerId of sublayerIds) {
+    if (map.getLayer(sublayerId)) {
+      try { map.moveLayer(sublayerId, beforeId); } catch {}
+    }
+  }
+  return true;
+}
+
+/**
+ * Find the Mapbox GL beforeId needed to position a layer just below its new "above neighbor".
+ * Skips tile layers (no standalone Mapbox GL IDs) when scanning for a usable anchor.
+ */
+function _getBeforeIdForReorder(
+  map: mapboxgl.Map,
+  movedIdx: number,
+  allLayers: LayerConfig[]
+): string | undefined {
+  for (let i = movedIdx - 1; i >= 0; i--) {
+    const layer = allLayers[i];
+
+    // Skip Deck.gl tile layers — they don't expose individual Mapbox layer IDs
+    if (layer.layerType === 'hex' && (layer as HexLayerConfig).isTileLayer) continue;
+
+    if (layer.layerType === 'pmtiles') {
+      const prefix = `${layer.id}-`;
+      const styleLayers = (map.getStyle()?.layers || []) as any[];
+      const found = styleLayers.find((sl: any) => sl?.id?.startsWith(prefix));
+      if (found) return (found as any).id;
+      continue;
+    }
+
+    const firstId = getFirstMapboxLayerId(layer);
+    if (firstId && map.getLayer(firstId)) return firstId;
+  }
+  return undefined; // No layer above → move to top of the Mapbox stack
+}
+
 // Re-export layer utilities
 export * from './hex';
 export * from './vector';

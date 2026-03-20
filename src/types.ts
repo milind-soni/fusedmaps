@@ -89,6 +89,7 @@ interface BaseLayer {
   tooltip?: string[];
   dataRef?: string;
   group?: string;  // Optional group name for layer organization
+  interactive?: boolean; // false disables click highlighting (default true)
 }
 
 export interface HexLayer extends BaseLayer {
@@ -221,6 +222,7 @@ export interface WidgetsConfig {
   layers?: WidgetSetting;         // layer visibility panel
   legend?: WidgetSetting;         // color legend
   geocoder?: WidgetSetting;       // location search bar
+  filter?: WidgetSetting;         // data range / categorical filter panel
 }
 
 // Helper to check if position is on left side

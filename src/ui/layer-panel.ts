@@ -14,6 +14,15 @@ import { getWidgetContainer } from './widget-container';
 type VisibilityCallback = (layerId: string, visible: boolean) => void;
 type OpacityCallback = (layerId: string, opacity: number) => void;
 
+function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let visibilityCallback: VisibilityCallback | null = null;
 let opacityCallback: OpacityCallback | null = null;
 let unsubscribeStore: (() => void) | null = null;
@@ -269,7 +278,7 @@ function renderLayerItem(layer: LayerConfig, visible: boolean, order: number, gr
          data-layer-id="${layer.id}"
          data-order="${order}"${groupAttr}
          style="--layer-strip: ${stripBg};">
-      <span class="layer-name">${layer.name}</span>
+      <span class="layer-name">${escapeHtml(layer.name)}</span>
       <span class="layer-opacity-btn" title="Adjust opacity">${OPACITY_ICON_SVG}</span>
       <span class="layer-eye" title="Toggle visibility">${eyeIcon}</span>
     </div>
@@ -477,9 +486,9 @@ function getLayerStripGradient(layer: LayerConfig): string {
       const rgba = toRgba(colorCfg, 1);
       if (rgba) stripBg = rgba;
     } else if (colorCfg && typeof colorCfg === 'object') {
-      const fn = colorCfg.type || colorCfg['@@function'];
-      if (fn === 'continuous' || fn === 'colorContinuous' || fn === 'categorical' || fn === 'colorCategories') {
-        const isCat = fn === 'categorical' || fn === 'colorCategories';
+      const fn = colorCfg.type;
+      if (fn === 'continuous' || fn === 'categorical') {
+        const isCat = fn === 'categorical';
         const paletteName = colorCfg.palette || colorCfg.colors || (isCat ? 'Bold' : 'TealGrn');
         let cols = getPaletteColors(paletteName, colorCfg.steps || 7);
         if (cols?.length) {

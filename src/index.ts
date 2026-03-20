@@ -7,7 +7,7 @@
 
 import type { FusedMapsAction, FusedMapsConfig, FusedMapsInstance, FusedMapsState, LayerConfig, LayerSummary, LngLatBoundsLike } from './types';
 import { initMap, applyViewState, getViewState } from './core/map';
-import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace } from './layers';
+import { addAllLayers, addSingleLayer, removeSingleLayer, setLayerVisibility, setLayerOpacity, getLayerGeoJSONs, updateLayerStyleInPlace, reorderLayerOnMap } from './layers';
 import { setLayerFilterRange, setLayerCategoricalFilter, getFilterableLayerInfos } from './layers/hex-tiles';
 import { setupFilterPanel, initFilterMinMax, initCategoricalFilter, setAllFilterInfos } from './ui/filter-panel';
 import { setupLayerPanel, updateLayerPanel } from './ui/layer-panel';
@@ -251,6 +251,16 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
       handleVisibilityChange(layerId, visible, map, store, overlayRef.current);
     }, store, layersPos as any, layersCfg.expanded, (layerId, opacity) => {
       setLayerOpacity(map, layerId, opacity, store.getAllConfigs(), overlayRef.current, store.getVisibilityState());
+      // Sync opacity into the store so it persists across future updateLayer calls
+      const layerState = store.get(layerId);
+      if (layerState) {
+        const cfg = layerState.config as any;
+        if (cfg.style !== undefined) {
+          store.update(layerId, { style: { ...cfg.style, opacity } } as any);
+        } else {
+          store.update(layerId, { opacity } as any);
+        }
+      }
     });
   }
   
@@ -341,7 +351,11 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
         initFilterMinMax(filterInfos.filter(i => i.colorType === 'continuous'), getDataForFilter);
         initCategoricalFilter(filterInfos.filter(i => i.colorType === 'categorical'), getDataForFilter);
       };
-      setTimeout(tryInitFilter, 300);
+      // Initialize immediately for vector/inline layers (data already available).
+      // Tile layers fire fusedmaps:legend:update when their first tiles load — that
+      // event is the reliable signal, not an arbitrary timeout.
+      const hasVectorOrInline = filterInfos.some(i => i.layerType === 'vector' || i.isInline);
+      if (hasVectorOrInline) tryInitFilter();
       window.addEventListener('fusedmaps:legend:update', tryInitFilter);
     }
 
@@ -394,6 +408,9 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     // Handle basemap style changes - re-add all layers after style switch
     // Note: This handler is set up AFTER initial load, so every style.load is a basemap switch
     map.on('style.load', () => {
+      // Clear stale filter cache - sublayer IDs are recreated fresh by addAllLayers
+      Object.keys(_originalMapboxFilters).forEach(k => delete _originalMapboxFilters[k]);
+
       // Re-add all layers after basemap change
       const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
       overlayRef.current = result.deckOverlay;
@@ -635,15 +652,25 @@ export function init(config: FusedMapsConfig): FusedMapsInstance {
     
     moveLayerUp: (layerId: string) => {
       store.moveUp(layerId);
-      // Re-render to update z-order (safe fallback for now)
-      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
-      overlayRef.current = result.deckOverlay;
+      const allLayers = store.getAllConfigs();
+      const handled = reorderLayerOnMap(map, layerId, allLayers);
+      if (!handled) {
+        // Deck.gl tile layer — rebuild only the overlay, not Mapbox GL layers
+        const result = addAllLayers(map, allLayers, getVisibilityState(), normalizedConfig);
+        overlayRef.current = result.deckOverlay;
+      }
+      refreshUI();
     },
 
     moveLayerDown: (layerId: string) => {
       store.moveDown(layerId);
-      const result = addAllLayers(map, store.getAllConfigs(), getVisibilityState(), normalizedConfig);
-      overlayRef.current = result.deckOverlay;
+      const allLayers = store.getAllConfigs();
+      const handled = reorderLayerOnMap(map, layerId, allLayers);
+      if (!handled) {
+        const result = addAllLayers(map, allLayers, getVisibilityState(), normalizedConfig);
+        overlayRef.current = result.deckOverlay;
+      }
+      refreshUI();
     },
     
     destroy: () => {

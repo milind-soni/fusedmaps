@@ -180,6 +180,8 @@ export function getMapboxLayerIds(
  * @returns Array of queryable Mapbox layer IDs
  */
 export function getQueryableLayerIds(layer: LayerConfig): string[] {
+  if ((layer as any).interactive === false) return [];
+
   // Skip tile layers - they're queried via Deck.gl pickObject
   if ((layer as any).isTileLayer) return [];
 

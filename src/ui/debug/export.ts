@@ -9,31 +9,9 @@ function isPlainObject(x: any) {
 }
 
 /**
- * Convert a color config to the new clean format (no-op if already new format)
+ * Pass-through for color config (already in new format with type: 'continuous' | 'categorical')
  */
 export function colorToNewFormat(color: any): any {
-  if (!color || typeof color !== 'object') return color;
-  if (Array.isArray(color)) return color;
-  // Already new format
-  if (color.type === 'continuous' || color.type === 'categorical') return color;
-  // Legacy @@function format - convert
-  const fn = color['@@function'];
-  if (fn === 'colorContinuous') {
-    const result: any = { type: 'continuous', attr: color.attr, palette: color.palette || color.colors };
-    if (color.domain) result.domain = color.domain;
-    if (typeof color.steps === 'number') result.steps = color.steps;
-    if (color.nullColor) result.nullColor = color.nullColor;
-    if (color.reverse) result.reverse = color.reverse;
-    return result;
-  }
-  if (fn === 'colorCategories') {
-    const result: any = { type: 'categorical', attr: color.attr };
-    if (color.palette || color.colors) result.palette = color.palette || color.colors;
-    if (color.categories) result.categories = color.categories;
-    if (color.labelAttr) result.labelAttr = color.labelAttr;
-    if (color.nullColor) result.nullColor = color.nullColor;
-    return result;
-  }
   return color;
 }
 

@@ -48,6 +48,17 @@ export declare function setLayerVisibility(map: mapboxgl.Map, layerId: string, v
  * Set opacity for a single layer across all its sublayers
  */
 export declare function setLayerOpacity(map: mapboxgl.Map, layerId: string, opacity: number, layers: LayerConfig[], deckOverlay: unknown, visibilityState?: Record<string, boolean>): void;
+/**
+ * Reorder a layer in-place on the map using map.moveLayer, avoiding a full rebuild.
+ *
+ * @param map - The Mapbox GL map instance
+ * @param movedLayerId - The layer being moved
+ * @param allLayers - All layers in the DESIRED new order (ascending by store order,
+ *                    where index 0 renders on top). Must reflect the post-update store state.
+ * @returns true if the reorder was handled without a full rebuild, false if the caller
+ *          should fall back to addAllLayers (e.g. Deck.gl tile layers).
+ */
+export declare function reorderLayerOnMap(map: mapboxgl.Map, movedLayerId: string, allLayers: LayerConfig[]): boolean;
 export * from './hex';
 export * from './vector';
 export * from './raster';

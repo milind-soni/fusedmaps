@@ -301,12 +301,12 @@ function buildColorAccessor(
   }
 
   // continuous / categorical color configs
-  if (typeof colorCfg === 'object' && (colorCfg.type || colorCfg['@@function'])) {
-    const fnType = colorCfg.type || colorCfg['@@function'];
+  if (typeof colorCfg === 'object' && colorCfg.type) {
+    const fnType = colorCfg.type;
     const attr = colorCfg.attr;
     if (!attr) return null;
 
-    if (fnType === 'continuous' || fnType === 'colorContinuous') {
+    if (fnType === 'continuous') {
       const dom = colorCfg.domain;
       if (!Array.isArray(dom) || dom.length < 2) return null;
       const d0 = Number(dom[0]);
@@ -365,7 +365,7 @@ function buildColorAccessor(
       };
     }
 
-    if (fnType === 'categorical' || fnType === 'colorCategories') {
+    if (fnType === 'categorical') {
       const categories: any[] = Array.isArray(colorCfg.categories)
         ? colorCfg.categories
         : [];
@@ -1319,9 +1319,9 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
     // Infer type when not explicitly set
     let colorType: 'continuous' | 'categorical' = fc.type;
     if (!colorType) {
-      if (fc.categories || fc.palette === 'Bold' || fc['@@function'] === 'colorCategories') {
+      if (fc.categories || fc.palette === 'Bold') {
         colorType = 'categorical';
-      } else if (fc.domain || fc.colors || fc.palette || fc['@@function'] === 'colorContinuous') {
+      } else if (fc.domain || fc.colors || fc.palette) {
         colorType = 'continuous';
       } else {
         continue;

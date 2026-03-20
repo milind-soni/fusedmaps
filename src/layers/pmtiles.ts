@@ -95,15 +95,25 @@ async function ensureMapboxPMTilesLoaded(): Promise<any> {
     return mapboxPmtilesLib;
   }
   
-  // Load via script tag (UMD build)
+  // Load via script tag (UMD build) with a 8s timeout to avoid hanging forever
+  // if the CDN is unreachable.
   mapboxPmtilesLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/mapbox-pmtiles@1.0.54/dist/mapbox-pmtiles.umd.min.js';
+    const timeout = setTimeout(() => {
+      script.onload = null;
+      script.onerror = null;
+      reject(new Error('Timed out loading mapbox-pmtiles library'));
+    }, 8000);
     script.onload = () => {
+      clearTimeout(timeout);
       mapboxPmtilesLib = (window as any).mapboxPmTiles;
       resolve(mapboxPmtilesLib);
     };
-    script.onerror = () => reject(new Error('Failed to load mapbox-pmtiles library'));
+    script.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('Failed to load mapbox-pmtiles library'));
+    };
     document.head.appendChild(script);
   }).finally(() => {
     mapboxPmtilesLoadPromise = null;
@@ -162,10 +172,10 @@ export function buildPMTilesColorExpression(
   if (typeof colorConfig === 'string') return colorConfig;
   if (Array.isArray(colorConfig)) return colorConfig;
   
-  const fn = colorConfig.type || colorConfig['@@function'];
+  const fn = colorConfig.type;
   const attr = colorConfig.attr || attribute;
-  
-  if (fn === 'continuous' || fn === 'colorContinuous') {
+
+  if (fn === 'continuous') {
     const domain = colorConfig.domain || [0, 100];
     const steps = colorConfig.steps || 7;
     const reverse = !!colorConfig.reverse;
@@ -206,7 +216,7 @@ export function buildPMTilesColorExpression(
     ];
   }
   
-  if (fn === 'categorical' || fn === 'colorCategories') {
+  if (fn === 'categorical') {
     const categories = colorConfig.categories || {};
     const fallback = colorConfig.othersColor || '#888888';
     

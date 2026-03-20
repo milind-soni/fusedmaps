@@ -11,6 +11,9 @@ export interface HighlightConfig {
  */
 export declare function registerOriginalGeoJSON(layerId: string, geojson: GeoJSON.FeatureCollection): void;
 /**
- * Setup click-to-highlight for all layers
+ * Setup click-to-highlight for all layers.
+ *
+ * Each call creates isolated closure state and namespaced Mapbox source/layer IDs,
+ * so multiple map instances on the same page work independently.
  */
 export declare function setupHighlight(map: mapboxgl.Map, layers: LayerConfig[], visibilityState: Record<string, boolean>, deckOverlay: unknown, config?: HighlightConfig): void;

@@ -238,7 +238,6 @@ def deckgl_layers(
         "layers": "top-right",       # layer visibility panel
         "legend": "bottom-right",    # color legend
         "geocoder": False,           # location search (disabled by default)
-        "filter": False,             # data range / categorical filter panel (disabled by default)
     }
     # Merge user overrides
     merged_widgets = {**default_widgets, **(widgets or {})}
@@ -284,7 +283,6 @@ def deckgl_layers(
         sql = layer_def.get("sql")
         data_ref = layer_def.get("data_ref") or layer_def.get("dataRef") or layer_def.get("data_var") or layer_def.get("dataVar")
         group = layer_def.get("group")  # Optional group for layer organization
-        interactive = layer_def.get("interactive", True)
         custom_legend = layer_def.get("legend") or config.get("legend")
         
         # Validate sources early so "missing data" doesn't silently render nothing.
@@ -414,7 +412,7 @@ def deckgl_layers(
             if processed:
                 processed_layers.append(processed)
     
-    # Attach custom legend and interactive flag to processed layers
+    # Attach custom legend, interactive flag, and filterAttrs to processed layers
     for p in processed_layers:
         layer_idx = int(p["id"].replace("layer-", "")) if p.get("id", "").startswith("layer-") else None
         if layer_idx is not None and layer_idx < len(layers):
@@ -426,6 +424,9 @@ def deckgl_layers(
                 p["customLegend"] = cl
             if orig.get("interactive") is False:
                 p["interactive"] = False
+            fa = orig.get("filterAttrs") or orig.get("filter_attrs") or orig.get("config", {}).get("filterAttrs") or orig.get("config", {}).get("filter_attrs")
+            if fa and isinstance(fa, (list, tuple)):
+                p["filterAttrs"] = list(fa)
 
     # Build initial view state
     if initialViewState:
@@ -485,7 +486,7 @@ def deckgl_layers(
                 if layer.get("layerType") == "hex" and parquet_url:
                     try:
                         extracted_schema = extract_schema(parquet_url)
-                    except Exception:
+                    except:
                         pass
                     break
 
@@ -643,7 +644,7 @@ def _process_vector_layer(idx: int, df, config: dict, name: str, visible: bool) 
     if hasattr(df, "crs") and df.crs and getattr(df.crs, "to_epsg", lambda: None)() != 4326:
         try:
             df = df.to_crs(epsg=4326)
-        except Exception:
+        except:
             pass
 
     df = _coerce_serializable(df)
@@ -832,7 +833,7 @@ def _process_marker_layer(idx: int, df, config: dict, name: str, visible: bool) 
     if hasattr(df, "crs") and df.crs and getattr(df.crs, "to_epsg", lambda: None)() != 4326:
         try:
             df = df.to_crs(epsg=4326)
-        except Exception:
+        except:
             pass
 
     # Auto-convert polygon/line geometry to centroids
@@ -1021,24 +1022,12 @@ def _to_hex_str(val) -> str:
 
 def _sanitize_value(val):
     """Sanitize a value for JSON serialization."""
-    import datetime
-    if val is None:
-        return None
-    if isinstance(val, float) and np.isnan(val):
+    if val is None or (isinstance(val, float) and np.isnan(val)):
         return None
     if isinstance(val, (np.integer, np.int64, np.uint64)):
         return int(val)
     if isinstance(val, np.floating):
-        v = float(val)
-        return None if np.isnan(v) else v
-    if isinstance(val, np.bool_):
-        return bool(val)
-    if isinstance(val, np.str_):
-        return str(val)
-    if isinstance(val, (datetime.date, datetime.datetime)):
-        return val.isoformat()
-    if isinstance(val, np.ndarray):
-        return val.tolist()
+        return float(val)
     return val
 
 
@@ -1137,7 +1126,7 @@ def _compute_center_from_hex(df) -> dict:
                 sample_hex = format(int(sample_hex), 'x')
             lat, lng = h3.cell_to_latlng(sample_hex)
             return {"longitude": lng, "latitude": lat}
-    except Exception:
+    except:
         pass
     return None
 
@@ -1148,6 +1137,6 @@ def _compute_center_from_gdf(gdf) -> dict:
         if hasattr(gdf, 'geometry') and len(gdf) > 0:
             centroid = gdf.geometry.unary_union.centroid
             return {"longitude": centroid.x, "latitude": centroid.y}
-    except Exception:
+    except:
         pass
     return None

@@ -1311,89 +1311,103 @@ export function getFilterableLayerInfos(layers: LayerConfig[]): FilterableLayerI
         : null;
     if (!style) continue;
 
+    // Collect attributes to filter: explicit filterAttrs or auto-detect from fillColor
+    const explicitAttrs: string[] = Array.isArray((l as any).filterAttrs) ? (l as any).filterAttrs : [];
     const fc: any = style.fillColor;
-    if (!fc || typeof fc !== 'object' || Array.isArray(fc)) continue;
-    const attr = fc.attr;
-    if (!attr) continue;
+    const fillAttr = (fc && typeof fc === 'object' && !Array.isArray(fc)) ? fc.attr : null;
 
-    // Infer type when not explicitly set
-    let colorType: 'continuous' | 'categorical' = fc.type;
-    if (!colorType) {
-      if (fc.categories || fc.palette === 'Bold') {
-        colorType = 'categorical';
-      } else if (fc.domain || fc.colors || fc.palette) {
-        colorType = 'continuous';
-      } else {
-        continue;
+    const attrsToProcess: Array<{ attr: string; colorType: 'continuous' | 'categorical'; palette?: string; categories?: string[] }> = [];
+
+    if (explicitAttrs.length > 0) {
+      for (const a of explicitAttrs) {
+        if (a === fillAttr && fc) {
+          let ct: 'continuous' | 'categorical' = fc.type;
+          if (!ct) ct = (fc.categories || fc.palette === 'Bold') ? 'categorical' : 'continuous';
+          attrsToProcess.push({ attr: a, colorType: ct, palette: fc.palette || fc.colors, categories: Array.isArray(fc.categories) ? fc.categories.map((c: any) => typeof c === 'object' ? String(c.value) : String(c)) : undefined });
+        } else {
+          attrsToProcess.push({ attr: a, colorType: 'continuous' });
+        }
       }
+    } else if (fillAttr) {
+      let colorType: 'continuous' | 'categorical' = fc.type;
+      if (!colorType) {
+        if (fc.categories || fc.palette === 'Bold') {
+          colorType = 'categorical';
+        } else if (fc.domain || fc.colors || fc.palette) {
+          colorType = 'continuous';
+        } else {
+          continue;
+        }
+      }
+      if (colorType !== 'continuous' && colorType !== 'categorical') continue;
+      attrsToProcess.push({ attr: fillAttr, colorType, palette: fc.palette || fc.colors, categories: Array.isArray(fc.categories) ? fc.categories.map((c: any) => typeof c === 'object' ? String(c.value) : String(c)) : undefined });
+    } else {
+      continue;
     }
-    if (colorType !== 'continuous' && colorType !== 'categorical') continue;
 
-    if (l.layerType === 'hex') {
-      const hex = l as HexLayerConfig;
-      const isTile = hex.isTileLayer && hex.tileUrl;
-      const isInline = !hex.isTileLayer && Array.isArray((hex as any).data) && (hex as any).data.length > 0;
-      if (!isTile && !isInline) continue;
+    for (const entry of attrsToProcess) {
+      if (l.layerType === 'hex') {
+        const hex = l as HexLayerConfig;
+        const isTile = hex.isTileLayer && hex.tileUrl;
+        const isInline = !hex.isTileLayer && Array.isArray((hex as any).data) && (hex as any).data.length > 0;
+        if (!isTile && !isInline) continue;
 
-      result.push({
-        layerId: l.id,
-        layerName: l.name,
-        attr,
-        tileUrl: hex.tileUrl || '',
-        isInline: !!isInline,
-        layerType: 'hex',
-        colorType,
-        palette: fc.palette || fc.colors,
-      });
-    } else if (l.layerType === 'vector') {
-      const vec = l as any;
-      const geojson = vec.geojson;
-      if (!geojson?.features?.length) continue;
+        result.push({
+          layerId: l.id,
+          layerName: l.name,
+          attr: entry.attr,
+          tileUrl: hex.tileUrl || '',
+          isInline: !!isInline,
+          layerType: 'hex',
+          colorType: entry.colorType,
+          palette: entry.palette,
+        });
+      } else if (l.layerType === 'vector') {
+        const vec = l as any;
+        const geojson = vec.geojson;
+        if (!geojson?.features?.length) continue;
 
-      const sublayerIds: string[] = [];
-      let hasPoly = false, hasPoint = false, hasLine = false;
-      for (const f of geojson.features) {
-        const t = f.geometry?.type;
-        if (t === 'Point' || t === 'MultiPoint') hasPoint = true;
-        if (t === 'Polygon' || t === 'MultiPolygon') hasPoly = true;
-        if (t === 'LineString' || t === 'MultiLineString') hasLine = true;
+        const sublayerIds: string[] = [];
+        let hasPoly = false, hasPoint = false, hasLine = false;
+        for (const f of geojson.features) {
+          const t = f.geometry?.type;
+          if (t === 'Point' || t === 'MultiPoint') hasPoint = true;
+          if (t === 'Polygon' || t === 'MultiPolygon') hasPoly = true;
+          if (t === 'LineString' || t === 'MultiLineString') hasLine = true;
+        }
+        if (hasPoly) { sublayerIds.push(`${l.id}-fill`); sublayerIds.push(`${l.id}-outline`); }
+        if (hasLine) { sublayerIds.push(`${l.id}-line`); }
+        if (hasPoint) { sublayerIds.push(`${l.id}-circle`); }
+
+        result.push({
+          layerId: l.id,
+          layerName: l.name,
+          attr: entry.attr,
+          tileUrl: '',
+          isInline: true,
+          layerType: 'vector',
+          colorType: entry.colorType,
+          sublayerIds,
+          palette: entry.palette,
+        });
+      } else if (l.layerType === 'mvt') {
+        const sublayerIds: string[] = [
+          `${l.id}-fill`, `${l.id}-line`, `${l.id}-circle`,
+        ];
+
+        result.push({
+          layerId: l.id,
+          layerName: l.name,
+          attr: entry.attr,
+          tileUrl: (l as any).tileUrl || '',
+          isInline: false,
+          layerType: 'mvt',
+          colorType: entry.colorType,
+          sublayerIds,
+          palette: entry.palette,
+          categories: entry.categories,
+        });
       }
-      if (hasPoly) { sublayerIds.push(`${l.id}-fill`); sublayerIds.push(`${l.id}-outline`); }
-      if (hasLine) { sublayerIds.push(`${l.id}-line`); }
-      if (hasPoint) { sublayerIds.push(`${l.id}-circle`); }
-
-      result.push({
-        layerId: l.id,
-        layerName: l.name,
-        attr,
-        tileUrl: '',
-        isInline: true,
-        layerType: 'vector',
-        colorType,
-        sublayerIds,
-        palette: fc.palette || fc.colors,
-      });
-    } else if (l.layerType === 'mvt') {
-      const sublayerIds: string[] = [
-        `${l.id}-fill`, `${l.id}-line`, `${l.id}-circle`,
-      ];
-
-      const configCategories: string[] | undefined = Array.isArray(fc.categories)
-        ? fc.categories.map((c: any) => typeof c === 'object' ? String(c.value) : String(c))
-        : undefined;
-
-      result.push({
-        layerId: l.id,
-        layerName: l.name,
-        attr,
-        tileUrl: (l as any).tileUrl || '',
-        isInline: false,
-        layerType: 'mvt',
-        colorType,
-        sublayerIds,
-        palette: fc.palette || fc.colors,
-        categories: configCategories,
-      });
     }
   }
   return result;
